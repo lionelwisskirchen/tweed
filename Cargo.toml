@@ -1,0 +1,7 @@
+[package]
+name = "inplace_wasm_interpreter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wat = "1.219.1"
