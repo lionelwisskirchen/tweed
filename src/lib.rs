@@ -119,14 +119,14 @@ impl<'a, 'c> Validator<'a, 'c> {
     pub fn validate(&mut self) -> Option<SideTable> {
         self.abstract_control_stack.push(ControlType::Func {
             instruction_pointer: self.reader.curr(),
-            func_type: self.signature
+            func_type: self.signature,
         });
         println!("Value Stack: {:?}", self.abstract_value_stack);
         println!("Control Stack: {:?}", self.abstract_control_stack);
         println!("Reader: {:?}", self.reader.bytecode);
         loop {
             let byte = self.reader.next().expect("Missing End statement");
-            println!("Byte: {}", byte);
+            // println!("Byte: {}", byte);
             match byte {
                 0x41 => {
                     // I32Const
@@ -157,7 +157,7 @@ impl<'a, 'c> Validator<'a, 'c> {
                         .reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");
-                    println!("Break depth: {}", depth);
+                    // println!("Break depth: {}", depth);
                     let stack_idx_length = self.abstract_control_stack.len() - 1;
                     if depth as usize > stack_idx_length {
                         panic!("Depth exceeds control depth.")
@@ -170,6 +170,7 @@ impl<'a, 'c> Validator<'a, 'c> {
                     let entry_idx = self.side_table.entries.len();
                     self.side_table.entries.push(SideTableEntry {
                         ip: self.reader.curr() as i32 - 1, // -1 Because of the depth
+                        stp: 0,
                         vals: 0,
                         pop: 0,
                     });
@@ -181,13 +182,14 @@ impl<'a, 'c> Validator<'a, 'c> {
                         ControlType::If { sidetable_idxs, .. } => {
                             sidetable_idxs.push(entry_idx);
                         }
-			_ => {panic!("Branching target not allowed")}
+                        _ => {
+                            panic!("Branching target not allowed")
+                        }
                     }
                 } // br
                 0x7c => {} // I64Add
 
                 0x02 => {
-                    println!("Block start");
                     let func_idx = self
                         .reader
                         .next_leb128_u32()
@@ -202,8 +204,7 @@ impl<'a, 'c> Validator<'a, 'c> {
                                 .expect("No func idx for sig"),
                         )
                     };
-		    
-		    
+
                     self.abstract_control_stack.push(ControlType::Block {
                         instruction_pointer: self.reader.curr(),
                         func_type: signature,
@@ -218,7 +219,7 @@ impl<'a, 'c> Validator<'a, 'c> {
                     match control_type {
                         ControlType::Func {
                             instruction_pointer,
-                            func_type
+                            func_type,
                         } => {
                             // $\frac{C \vdash \mathit{instr}^\ast: [] \rightarrow [t'^\ast] \qquad \vdash [t'^\ast] \leq [t^\ast]}{C \vdash \mathit{instr}^\ast \mathsf{end}: [t^\ast]}$
                             let result_stack_types =
@@ -238,17 +239,22 @@ impl<'a, 'c> Validator<'a, 'c> {
                             sidetable_idxs,
                         } => {
                             let abs_target_pos = self.reader.curr();
-                            for entry_index in sidetable_idxs {
+                            for entry_index in sidetable_idxs.iter() {
+                                // println!("\nComplete Sidetable: {:#?}", self.side_table.entries);
+                                // println!("Current Sidetable index: {entry_index}\n");
+
+                                let sidetable_offset =
+                                    self.side_table.entries.len() as i32 - *entry_index as i32;
+
                                 let entry = self
                                     .side_table
                                     .entries
-                                    .get_mut(entry_index)
+                                    .get_mut(*entry_index)
                                     .expect("Sidetable entry does not exist.");
                                 let abs_start_pos = entry.ip;
                                 let mut rel_offset = abs_target_pos as i32 - abs_start_pos;
                                 rel_offset += 1; // We don't want to index the end instr, but rather the following isntruction
-                                println!("Absolute position of end: {abs_target_pos}");
-                                println!("Absolute position of start: {abs_start_pos}");
+                                entry.stp = sidetable_offset;
                                 entry.ip = rel_offset;
                             }
                         }
@@ -283,8 +289,8 @@ impl<'a, 'c> Validator<'a, 'c> {
                 } // Call
                 _ => panic!("Undefined opcode {}", byte),
             };
-            println!("Value Stack:{:?}", self.abstract_value_stack);
-            println!("Control Stack: {:?}", self.abstract_control_stack);
+            // println!("Value Stack:{:?}", self.abstract_value_stack);
+            // println!("Control Stack: {:?}", self.abstract_control_stack);
         }
         println!("Value Stack:{:?}", self.abstract_value_stack);
         println!("Control Stack: {:?}", self.abstract_control_stack);
@@ -306,7 +312,7 @@ enum ValType {
 enum ControlType<'a> {
     Func {
         instruction_pointer: usize,
-        func_type: &'a FuncType
+        func_type: &'a FuncType,
     },
     Block {
         instruction_pointer: usize,
@@ -340,6 +346,7 @@ struct FuncType {
 struct Module {
     typesec: Vec<FuncType>,
     funcsec: Vec<FuncDecl>,
+    functions: Vec<Function>,
 }
 
 #[derive(Debug, Clone)]
@@ -350,14 +357,14 @@ struct SideTable {
 #[derive(Debug, Clone)]
 struct SideTableEntry {
     ip: i32,
+    stp: i32,
     vals: usize,
     pop: usize,
 }
 
 #[derive(Debug)]
-struct Function<'a> {
+struct Function {
     locals: Vec<ValType>,
-    signature: &'a FuncType,
     start: usize,
     end: usize,
     side_table: SideTable,
@@ -383,18 +390,15 @@ fn run(input: &[u8]) {
 
     loop {
         if let Some(section_code) = reader.next() {
-            println!("Section Code: {section_code:?}");
             match section_code {
                 0x00 => break,
                 0x01 => {
-                    let ssize = reader.next_leb128_u32().expect("No Section size found");
+                    reader.next_leb128_u32().expect("No Section size found");
                     // Size is not required for decoding, so just check if size is present
-                    println!("Section size: {ssize}");
                     let mut function_types = Vec::new();
                     let number_of_types = reader
                         .next_leb128_u32()
                         .expect("No type defined in type section");
-                    println!("Number of types: {number_of_types:?}");
 
                     for _ in 0..number_of_types {
                         reader
@@ -403,7 +407,6 @@ fn run(input: &[u8]) {
                         let number_of_params = reader
                             .next_leb128_u32()
                             .expect("No number of params defined");
-                        println!("Number of params: {number_of_params:?}");
                         let params = reader
                             .next_chunk(number_of_params as usize)
                             .expect("Can't get defined amount of params")
@@ -413,7 +416,6 @@ fn run(input: &[u8]) {
                         let number_of_results = reader
                             .next_leb128_u32()
                             .expect("No number of results defined");
-                        println!("Number of results: {number_of_results:?}");
                         let results = reader
                             .next_chunk(number_of_results as usize)
                             .expect("Can't get defined amount of results")
@@ -435,7 +437,6 @@ fn run(input: &[u8]) {
                         .expect("No function defined in Function section");
 
                     let mut function_decls = Vec::new();
-                    println!("{number_of_functions:?}");
                     for i in 0..number_of_functions {
                         let decl = FuncDecl {
                             index: i,
@@ -457,13 +458,10 @@ fn run(input: &[u8]) {
                             .next_leb128_u32()
                             .expect("No function body size in Code section");
                         let end_pos = reader.calculate_offset(func_body_size as usize);
-                        println!("End position {}", end_pos);
                         let number_of_locals = reader
                             .next_leb128_u32()
                             .expect("No number of locals in Code section");
                         let mut locals = Vec::new();
-
-                        println!("Number of locals {}", number_of_locals);
 
                         for _ in 0..number_of_locals {
                             let count = reader
@@ -485,26 +483,31 @@ fn run(input: &[u8]) {
                             .typesec
                             .get(sig_index as usize)
                             .expect("Function Mapping failed.");
+
                         let start_pos = reader.curr() + 1;
-                        let span = reader
+
+                        let instruction_reader = reader
                             .get_slice(start_pos, end_pos)
                             .expect("given start and end pos invalid");
-                        let mut validator =
-                            Validator::new(&locals, &signature, span, &module.typesec);
+
+                        let mut validator = Validator::new(
+                            &locals,
+                            &signature,
+                            instruction_reader,
+                            &module.typesec,
+                        );
 
                         let side_table = validator.validate().expect("Validation failed");
 
                         let function = Function {
                             locals,
-                            signature: &signature,
                             start: start_pos,
                             end: end_pos,
                             side_table,
                         };
                         reader.seek(end_pos);
-                        println!("Function: {:?}", function);
+                        module.functions.push(function);
                     }
-                    println!("Rest: {:?}", reader.rest())
                 }
                 _ => {}
             }
@@ -512,7 +515,7 @@ fn run(input: &[u8]) {
             break;
         };
     }
-    println!("{module:?}");
+    println!("{module:#?}");
 }
 
 #[cfg(test)]
@@ -523,16 +526,19 @@ mod tests {
         let wasm = wat::parse_str(
             "(module
               (func (param i32)
-                 block $label
-                   block 
-                     br $label
+                 block $label0
+                   block $label1
+                     block $label2
+                        br $label0
+                     end
+                       br $label1
                    end
+                     br $label0
                  end
               )
              )",
         )
         .unwrap();
-        println!("{wasm:?}");
         let mut reader = run(&wasm);
         // let mut reader = WasmReader::new(&[10, 2]);
         // println!("{}",reader.next_leb128_u32().unwrap());
