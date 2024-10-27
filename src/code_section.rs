@@ -1,7 +1,4 @@
-use crate::{
-    wasm_reader::WasmReader,
-    FuncCode, Module, ValType,
-};
+use crate::{wasm_reader::WasmReader, FuncCode, Module, ValType};
 
 pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<FuncCode> {
     reader.next_leb128_u32().expect("No Section size found");
@@ -15,15 +12,15 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
         let func_body_size = reader
             .next_leb128_u32()
             .expect("No function body size in Code section");
-        println!("{}", reader.current_index());
+        println!("Func body Size{}", func_body_size);
 
-        let end_pos = reader.calculate_offset(func_body_size as usize);
+        let position_of_last_instruction = reader.calculate_offset(func_body_size as usize);
 
         let number_of_locals = reader
             .next_leb128_u32()
             .expect("No number of locals in Code section");
         let mut locals = Vec::new();
-
+        println!("number of locals:{}", number_of_locals);
         for _ in 0..number_of_locals {
             let count = reader
                 .next_leb128_u32()
@@ -48,20 +45,19 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
             signature: signature.clone(),
             locals,
             start: reader.current_index() + 1,
-            end: end_pos,
+            end: position_of_last_instruction,
         };
 
         aggregated_functions.push(function);
-        reader.seek(end_pos);
+        reader.seek(position_of_last_instruction + 1);
     }
     aggregated_functions
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
-    use crate::{ FuncDecl, FuncType};
+    use crate::{FuncDecl, FuncType};
 
     use super::*;
     #[test]
@@ -83,11 +79,10 @@ mod tests {
                 result: vec![ValType::I32],
             }],
             funcsec: vec![FuncDecl {
-                index: 0,
                 sig_index: 0,
             }],
             codesec: Vec::new(),
-	    sidetables: vec![]
+            sidetables: vec![],
         };
         let actual_functions = process_code_section(&mut reader, &module);
         let expected_functions = vec![FuncCode {

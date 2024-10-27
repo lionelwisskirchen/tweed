@@ -51,21 +51,12 @@ enum ControlType {
 
 pub struct Validator<'a, 'b> {
     reader: &'a mut WasmReader,
-    funcsec: &'b Vec<FuncDecl>,
     typesec: &'b Vec<FuncType>,
 }
 
 impl<'a, 'b> Validator<'a, 'b> {
-    pub fn new(
-        reader: &'a mut WasmReader,
-        funcsec: &'b Vec<FuncDecl>,
-        typesec: &'b Vec<FuncType>,
-    ) -> Self {
-        Validator {
-            reader,
-            funcsec,
-            typesec,
-        }
+    pub fn new(reader: &'a mut WasmReader, typesec: &'b Vec<FuncType>) -> Self {
+        Validator { reader, typesec }
     }
 
     pub fn validate(&mut self, function: &FuncCode) -> SideTable {
@@ -143,14 +134,46 @@ impl<'a, 'b> Validator<'a, 'b> {
                     };
                     abstract_value_stack.push(ValType::I32);
                 } // lt_s
-                0x7c => {} // I64Add
-
+                0x0f => {
+                    let return_scope = abstract_control_stack
+                        .last()
+                        .expect("Return is not in valid scope");
+                    match return_scope {
+                        ControlType::Block { func_type, .. }
+                        | ControlType::If { func_type, .. } => {
+                            if let Some(func_sig) = func_type {
+                                values_are_on_top_of_stack(
+                                    &mut abstract_value_stack,
+                                    &func_sig.result,
+                                );
+                                abstract_value_stack
+                                    .drain(0..abstract_value_stack.len() - func_sig.result.len());
+                            } else {
+                                abstract_value_stack.drain(..);
+                            }
+                        }
+                        ControlType::Func { func_type, .. } => {
+                            values_are_on_top_of_stack(
+                                &mut abstract_value_stack,
+                                &func_type.result,
+                            );
+                            abstract_value_stack
+                                .drain(0..abstract_value_stack.len() - func_type.result.len());
+                        }
+                    }
+                } // return
                 0x02 => validate_block(
                     self.reader,
                     &mut abstract_value_stack,
                     &mut abstract_control_stack,
                     self.typesec,
                 ), // Block
+                0x0d => validate_br_if(
+                    self.reader,
+                    &mut abstract_value_stack,
+                    &mut abstract_control_stack,
+                    &mut side_table,
+                ), // br
                 0x0c => validate_br(
                     self.reader,
                     &mut abstract_value_stack,
@@ -162,10 +185,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .pop()
                         .expect("End needs start control value");
                     match control_type {
-                        ControlType::Func {
-                            instruction_pointer,
-                            func_type,
-                        } => {
+                        ControlType::Func { func_type, .. } => {
                             let result_stack_types = zip(&func_type.result, &abstract_value_stack);
                             for (stack_type, result_type) in result_stack_types {
                                 if stack_type != result_type {
@@ -177,9 +197,9 @@ impl<'a, 'b> Validator<'a, 'b> {
                             break;
                         }
                         ControlType::Block {
-                            instruction_pointer,
                             func_type,
                             sidetable_idxs,
+                            ..
                         } => end_block(
                             self.reader,
                             &mut abstract_value_stack,
@@ -188,7 +208,6 @@ impl<'a, 'b> Validator<'a, 'b> {
                             func_type,
                         ),
                         ControlType::If {
-                            instruction_pointer,
                             func_type,
                             sidetable_idxs,
                             ..
@@ -266,7 +285,7 @@ fn end_block(
     side_table_indices: &Vec<usize>,
     func_type: Option<FuncType>,
 ) {
-        println!("AVS: {:?}", abstract_value_stack);
+    println!("AVS: {:?}", abstract_value_stack);
 
     if let Some(func_type) = func_type {
         if func_type.result != *abstract_value_stack {
@@ -314,10 +333,10 @@ fn validate_else(
     });
     match control_type {
         ControlType::If {
-            instruction_pointer,
             func_type,
             sidetable_idxs,
             side_table_entry,
+            ..
         } => {
             sidetable_idxs.push(entry_idx);
             let side_table_len = side_table.entries.len();
@@ -380,6 +399,49 @@ fn validate_if(
     });
 }
 
+fn validate_br_if(
+    reader: &mut WasmReader,
+    abstract_value_stack: &mut Vec<ValType>,
+    abstract_control_stack: &mut Vec<ControlType>,
+    side_table: &mut SideTable,
+) {
+    let bool_val = abstract_value_stack
+        .pop()
+        .expect("Br_if requires val on stack");
+    if bool_val != ValType::I32 {
+        panic!("Br_if requires I32 on top of stack")
+    }
+
+    side_table.entries.push(SideTableEntry {
+        ip: reader.current_index() as i32,
+        stp: 0,
+        vals: 0,
+        pop: 0,
+    });
+    let index_of_sidetable_entry = side_table.entries.len() - 1;
+    let target_control = get_target_control_structure(reader, abstract_control_stack);
+    match target_control {
+        ControlType::Block {
+            sidetable_idxs,
+            func_type,
+            ..
+        }
+        | ControlType::If {
+            sidetable_idxs,
+            func_type,
+            ..
+        } => {
+            if let Some(func_sig) = func_type {
+                values_are_on_top_of_stack(abstract_value_stack, &func_sig.result);
+            }
+            sidetable_idxs.push(index_of_sidetable_entry);
+        }
+        _ => {
+            panic!("Branching target not allowed")
+        }
+    }
+}
+
 fn validate_br(
     reader: &mut WasmReader,
     abstract_value_stack: &mut Vec<ValType>,
@@ -399,13 +461,8 @@ fn validate_br(
             sidetable_idxs,
             func_type,
             ..
-        } => {
-            if let Some(func_sig) = func_type {
-                values_are_on_top_of_stack(abstract_value_stack, &func_sig.result);
-            }
-            sidetable_idxs.push(index_of_sidetable_entry);
         }
-        ControlType::If {
+        | ControlType::If {
             sidetable_idxs,
             func_type,
             ..
@@ -483,7 +540,7 @@ fn lookup_signature(func_idx: u32, type_section: &Vec<FuncType>) -> Option<FuncT
 #[cfg(test)]
 mod tests {
 
-    use crate::{validator::SideTable, FuncDecl, FuncType};
+    use crate::{validator::SideTable, FuncType};
 
     use super::*;
     #[test]
@@ -499,10 +556,6 @@ mod tests {
             0x0b, // Terminal
         ];
         let mut reader = WasmReader::new(bytes.to_vec());
-        let funcsec = vec![FuncDecl {
-            index: 0,
-            sig_index: 0,
-        }];
         let typesec = vec![FuncType {
             parameter: vec![ValType::I32, ValType::I32],
             result: vec![ValType::I32],
@@ -517,7 +570,7 @@ mod tests {
             end: 18,
         };
 
-        let mut validator = Validator::new(&mut reader, &funcsec, &typesec);
+        let mut validator = Validator::new(&mut reader, &typesec);
         let actual_sidetable = validator.validate(&code);
         let expected_sidetable = SideTable::new();
         assert_eq!(actual_sidetable, expected_sidetable);
@@ -550,10 +603,6 @@ mod tests {
                 result: vec![ValType::I32],
             },
         ];
-        let funcsec = vec![FuncDecl {
-            index: 0,
-            sig_index: 0,
-        }];
         let code = FuncCode {
             signature: FuncType {
                 parameter: vec![],
@@ -563,7 +612,7 @@ mod tests {
             start: 29,
             end: 40,
         };
-        let mut validator = Validator::new(&mut reader, &funcsec, &typesec);
+        let mut validator = Validator::new(&mut reader, &typesec);
         let actual_sidetable = validator.validate(&code);
         let expected_sidetable = SideTable::new();
         assert_eq!(actual_sidetable, expected_sidetable);
@@ -594,10 +643,6 @@ mod tests {
             parameter: vec![],
             result: vec![],
         }];
-        let funcsec = vec![FuncDecl {
-            index: 0,
-            sig_index: 0,
-        }];
         let code = FuncCode {
             signature: FuncType {
                 parameter: vec![],
@@ -607,7 +652,7 @@ mod tests {
             start: 23,
             end: 41,
         };
-        let mut validator = Validator::new(&mut reader, &funcsec, &typesec);
+        let mut validator = Validator::new(&mut reader, &typesec);
         let actual_sidetable = validator.validate(&code);
         let expected_sidetable = SideTable {
             entries: vec![
@@ -656,10 +701,6 @@ mod tests {
             parameter: vec![],
             result: vec![ValType::I32],
         }];
-        let funcsec = vec![FuncDecl {
-            index: 0,
-            sig_index: 0,
-        }];
         let code = FuncCode {
             signature: FuncType {
                 parameter: vec![],
@@ -669,7 +710,7 @@ mod tests {
             start: 24,
             end: 34,
         };
-        let mut validator = Validator::new(&mut reader, &funcsec, &typesec);
+        let mut validator = Validator::new(&mut reader, &typesec);
         let actual_sidetable = validator.validate(&code);
         let expected_sidetable = SideTable {
             entries: vec![
@@ -691,7 +732,8 @@ mod tests {
     }
     #[test]
     fn test_validation_with_if_else_and_branches() {
-        let bytes = wat::parse_str("
+        let bytes = wat::parse_str(
+            "
 (module
   (func (result i32)
     (block $label1 (result i32)
@@ -717,10 +759,6 @@ mod tests {
             parameter: vec![],
             result: vec![ValType::I32],
         }];
-        let funcsec = vec![FuncDecl {
-            index: 0,
-            sig_index: 0,
-        }];
         let code = FuncCode {
             signature: FuncType {
                 parameter: vec![],
@@ -730,7 +768,7 @@ mod tests {
             start: 24,
             end: 34,
         };
-        let mut validator = Validator::new(&mut reader, &funcsec, &typesec);
+        let mut validator = Validator::new(&mut reader, &typesec);
         let actual_sidetable = validator.validate(&code);
         let expected_sidetable = SideTable {
             entries: vec![
@@ -746,24 +784,100 @@ mod tests {
                     vals: 0,
                     pop: 0,
                 },
-		SideTableEntry {
+                SideTableEntry {
                     ip: 5,
                     stp: 2,
                     vals: 0,
                     pop: 0,
                 },
-		SideTableEntry {
+                SideTableEntry {
                     ip: 2,
                     stp: 1,
                     vals: 0,
                     pop: 0,
                 },
-		SideTableEntry {
+                SideTableEntry {
                     ip: 2,
                     stp: 1,
                     vals: 0,
                     pop: 0,
-                }, 
+                },
+            ],
+        };
+        assert_eq!(actual_sidetable, expected_sidetable);
+    }
+
+    #[test]
+    fn test_validation_with_if_else_and_conditional_branches() {
+        let bytes = wat::parse_str(
+            "
+(module
+  (func)
+  (func (param i32) (result i32)
+    (block $label1 (result i32)
+      (local.get 0)
+      (if (result i32)
+        (then
+          (call 0)
+          i32.const 1
+        )
+        (else
+          (call 0)
+          i32.const 0
+        )
+      )
+      i32.const 2
+      (br_if 0)
+      i32.const 3
+      return
+    )
+  )
+)",
+        )
+        .unwrap();
+        let mut reader = WasmReader::new(bytes.to_vec());
+        let typesec = vec![
+            FuncType {
+                parameter: vec![],
+                result: vec![],
+            },
+            FuncType {
+                parameter: vec![ValType::I32],
+                result: vec![ValType::I32],
+            },
+        ];
+
+        let code = FuncCode {
+            signature: FuncType {
+                parameter: vec![ValType::I32],
+                result: vec![ValType::I32],
+            },
+            locals: vec![],
+            start: 32,
+            end: 49,
+        };
+        let mut validator = Validator::new(&mut reader, &typesec);
+        let actual_sidetable = validator.validate(&code);
+        let expected_sidetable = SideTable {
+            entries: vec![
+                SideTableEntry {
+                    ip: 7,
+                    stp: 2,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 5,
+                    stp: 1,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 5,
+                    stp: 1,
+                    vals: 0,
+                    pop: 0,
+                },
             ],
         };
         assert_eq!(actual_sidetable, expected_sidetable);

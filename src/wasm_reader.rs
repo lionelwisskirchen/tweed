@@ -85,6 +85,21 @@ impl WasmReader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_next_chunk() {
+        let bytes = [0x04, 0x03, 0x05];
+        let mut reader = WasmReader::new(bytes.to_vec());
+        reader.next();
+        assert_eq!(*reader.next_chunk(0).unwrap(), vec![]);
+    }
+    #[test]
+    fn test_calculate_offset() {
+        let bytes = [0x04, 0x03, 0x05];
+        let mut reader = WasmReader::new(bytes.to_vec());
+        reader.next();
+        reader.next();
+        assert_eq!(reader.calculate_offset(1), 2);
+    }
 
     #[test]
     fn test_pointer_movement() {

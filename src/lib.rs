@@ -1,12 +1,9 @@
 pub mod code_section;
+pub mod type_section;
 pub mod validator;
 pub mod wasm_reader;
-pub mod type_section;
 use code_section::process_code_section;
-use std::{
-    collections::HashMap,
-    iter::{zip, Map},
-};
+use std::{collections::HashMap, iter::zip};
 use validator::{SideTable, Validator};
 use wasm_reader::WasmReader;
 
@@ -20,7 +17,6 @@ pub struct FuncCode {
 }
 #[derive(Debug)]
 struct FuncDecl {
-    index: u32,
     sig_index: u32,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,13 +46,9 @@ pub struct Module {
     typesec: Vec<FuncType>,
     funcsec: Vec<FuncDecl>,
     codesec: Vec<FuncCode>,
-    sidetables: Vec<SideTable>
+    sidetables: Vec<SideTable>,
 }
 
-fn retrieve_section_content<'a>(reader: &'a mut WasmReader) -> Option<&'a [u8]> {
-    let section_size = reader.next_leb128_u32().expect("No Section size found");
-    reader.next_chunk(section_size as usize)
-}
 
 fn run(input: &[u8]) {
     let mut reader = WasmReader::new(input.to_vec());
@@ -75,7 +67,7 @@ fn run(input: &[u8]) {
             match section_code {
                 0x00 => break,
                 0x01 => {
-		    module.typesec = process_type_section(&mut reader, &mut module);
+                    module.typesec = process_type_section(&mut reader);
                 }
                 0x03 => {
                     reader.next_leb128_u32().expect("No Section size found");
@@ -85,9 +77,8 @@ fn run(input: &[u8]) {
                         .expect("No function defined in Function section");
 
                     let mut function_decls = Vec::new();
-                    for i in 0..number_of_functions {
+                    for _ in 0..number_of_functions {
                         let decl = FuncDecl {
-                            index: i,
                             sig_index: reader.next_leb128_u32().expect("No sig index given"),
                         };
                         function_decls.push(decl);
@@ -97,18 +88,18 @@ fn run(input: &[u8]) {
                 0x0a => {
                     let functions = process_code_section(&mut reader, &mut module);
                     let mut validator =
-                        Validator::new(&mut reader, &module.funcsec, &module.typesec);
+                        Validator::new(&mut reader, &module.typesec);
                     let mut side_tables = Vec::new();
-		    
-		        println!("\n\nCreated Module: \n {functions:#?}");
-		    println!("\n\nCreated Module: \n {module:#?}");
+
+                    println!("\n\nCreated Module: \n {functions:#?}");
+                    println!("\n\nCreated Module: \n {module:#?}");
 
                     for fun in &functions {
                         let side_table = validator.validate(&fun);
                         side_tables.push(side_table);
                     }
                     module.sidetables = side_tables;
-		    module.codesec = functions;
+                    module.codesec = functions;
                 }
                 _ => {}
             }
@@ -122,23 +113,30 @@ fn run(input: &[u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // #[test]
-    // fn test_if() {
-    //     let wasm = wat::parse_str(
-    //         "(module
-    //           (func (result i32)
-    //             i32.const 0
-    //             (if (result i32)
-    //              (then
-    //               i32.const 1
-    //              )
-    //             (else
-    //              i32.const 0
-    //             )
-    //           )
-    //          )
-    //         )").unwrap();
-    //     let mut reader = run(&wasm);
-    //     println!("{:?}", &wasm[24..39]);
-    // }
+    #[test]
+    fn test_if() {
+        let wasm = wat::parse_str(
+            "
+(module
+  (func)
+  (func (param i32) (result i32)
+    (block $label1 (result i32)
+      (local.get 0)
+      (if (result i32)
+        (then
+          (call 0)
+          i32.const 1
+        )
+        (else
+          (call 0)
+          i32.const 0
+        )
+      )
+    )
+  )
+)",
+        )
+        .unwrap();
+        run(&wasm);
+    }
 }
