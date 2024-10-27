@@ -60,16 +60,18 @@ impl<'a, 'b> Validator<'a, 'b> {
     }
 
     pub fn validate(&mut self, function: &FuncCode) -> SideTable {
+
+	println!("\n\n-----Starting Validation Algorithm-----\n\n");
+
         let mut abstract_control_stack = Vec::new();
         let mut abstract_value_stack = Vec::new();
         let mut side_table = SideTable::new();
-        println!("function: {:?}", function);
         let mut locals = Vec::new();
 
         locals.append(&mut function.signature.parameter.clone());
         locals.append(&mut function.locals.clone());
 
-        println!("Locals: {:?}", locals);
+
         self.reader.seek(function.start);
 
         let signature = &function.signature;
@@ -78,9 +80,9 @@ impl<'a, 'b> Validator<'a, 'b> {
             instruction_pointer: self.reader.current_index(),
             func_type: signature.clone(),
         });
-        // println!("Value Stack: {:?}", abstract_value_stack);
-        // println!("Control Stack: {:?}", abstract_control_stack);
         loop {
+	    println!("\n---- Abstract Value Stack----\n\n {:?}", abstract_value_stack);
+	    println!("\n---- Abstract Control Stack----\n\n {:?} \n\n\n\n", abstract_control_stack);
             let byte = self.reader.next().expect("Missing End statement");
             match byte {
                 0x41 => {
@@ -244,6 +246,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                 _ => panic!("Undefined opcode {}", byte),
             };
         }
+	println!("\n---- Abstract Value Stack----\n\n {:?}", abstract_value_stack);
+	println!("\n---- Abstract Control Stack----\n\n {:?} \n\n\n\n", abstract_control_stack);
+	println!("\n\n-----Finished Validation Algorithm-----\n\n");
+
         side_table
     }
 }
@@ -285,8 +291,6 @@ fn end_block(
     side_table_indices: &Vec<usize>,
     func_type: Option<FuncType>,
 ) {
-    println!("AVS: {:?}", abstract_value_stack);
-
     if let Some(func_type) = func_type {
         if func_type.result != *abstract_value_stack {
             panic!("Invalid return type");

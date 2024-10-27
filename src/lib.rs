@@ -49,9 +49,25 @@ pub struct Module {
     sidetables: Vec<SideTable>,
 }
 
-
-fn run(input: &[u8]) {
+pub fn run(input: &[u8]){
     let mut reader = WasmReader::new(input.to_vec());
+    let mut module = create_module(&mut reader);
+    validate(&mut reader, &mut module);
+    println!("----- Created and validated Module -----\n {:#?}", module);
+}
+
+fn validate(reader: &mut WasmReader, module: &mut Module) {
+    let mut validator = Validator::new(reader, &module.typesec);
+    let mut side_tables = Vec::new();
+
+    for fun in &module.codesec {
+        let side_table = validator.validate(&fun);
+        side_tables.push(side_table);
+    }
+    module.sidetables = side_tables;
+}
+
+fn create_module(mut reader: &mut WasmReader) -> Module {
     let mut module = Module {
         ..Default::default()
     };
@@ -87,18 +103,6 @@ fn run(input: &[u8]) {
                 }
                 0x0a => {
                     let functions = process_code_section(&mut reader, &mut module);
-                    let mut validator =
-                        Validator::new(&mut reader, &module.typesec);
-                    let mut side_tables = Vec::new();
-
-                    println!("\n\nCreated Module: \n {functions:#?}");
-                    println!("\n\nCreated Module: \n {module:#?}");
-
-                    for fun in &functions {
-                        let side_table = validator.validate(&fun);
-                        side_tables.push(side_table);
-                    }
-                    module.sidetables = side_tables;
                     module.codesec = functions;
                 }
                 _ => {}
@@ -107,21 +111,23 @@ fn run(input: &[u8]) {
             break;
         };
     }
-    println!("\n\nCreated Module: \n {module:#?}");
+    module
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn test_if() {
+    fn example() {
         let wasm = wat::parse_str(
             "
 (module
+
   (func)
-  (func (param i32) (result i32)
+  
+  (func (param $x i32) (result i32)
     (block $label1 (result i32)
-      (local.get 0)
+      (local.get $x)
       (if (result i32)
         (then
           (call 0)
@@ -132,11 +138,18 @@ mod tests {
           i32.const 0
         )
       )
+      i32.const 2
+      (br_if $label1)
+      i32.const 3
+      return
     )
   )
-)",
+)
+",
         )
-        .unwrap();
+            .unwrap();
         run(&wasm);
+
+	
     }
 }

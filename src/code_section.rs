@@ -12,7 +12,6 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
         let func_body_size = reader
             .next_leb128_u32()
             .expect("No function body size in Code section");
-        println!("Func body Size{}", func_body_size);
 
         let position_of_last_instruction = reader.calculate_offset(func_body_size as usize);
 
@@ -20,7 +19,6 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
             .next_leb128_u32()
             .expect("No number of locals in Code section");
         let mut locals = Vec::new();
-        println!("number of locals:{}", number_of_locals);
         for _ in 0..number_of_locals {
             let count = reader
                 .next_leb128_u32()
@@ -95,6 +93,5 @@ mod tests {
             end: 18,
         }];
         assert_eq!(actual_functions, expected_functions);
-        println!("{:?}", actual_functions);
-    }
+     }
 }
