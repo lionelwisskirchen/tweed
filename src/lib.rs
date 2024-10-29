@@ -123,27 +123,20 @@ mod tests {
             "
 (module
 
-  (func)
-  
-  (func (param $x i32) (result i32)
-    (block $label1 (result i32)
-      (local.get $x)
-      (if (result i32)
-        (then
-          (call 0)
-          i32.const 1
-        )
-        (else
-          (call 0)
-          i32.const 0
-        )
-      )
-      i32.const 2
-      (br_if $label1)
-      i32.const 3
-      return
+(func
+      (local $i i32)
+      (loop $my_loop
+      local.get $i
+      i32.const 1
+      i32.add
+      local.set $i
+
+      local.get $i
+      i32.const 10
+      i32.lt_s
+      br_if $my_loop
     )
-  )
+ )
 )
 ",
         )
