@@ -1,23 +1,10 @@
+use self::binary::{code_section::FuncCode, type_section::FuncType};
+use self::core::values::*;
+use crate::validation::control_types::ControlType;
+use crate::validation::side_table::SideTableEntry;
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SideTable {
-    pub entries: Vec<SideTableEntry>,
-}
-impl SideTable {
-    pub fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SideTableEntry {
-    ip: i32,
-    stp: i32,
-    vals: usize,
-    pop: usize,
-}
+use super::side_table::SideTable;
 
 fn shorthand_lookup(val: u32) -> Option<FuncType> {
     let lookup_map = HashMap::from([(
@@ -28,30 +15,6 @@ fn shorthand_lookup(val: u32) -> Option<FuncType> {
         },
     )]);
     lookup_map.get(&val).cloned()
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum ControlType {
-    Func {
-        instruction_pointer: usize,
-        func_type: FuncType,
-    },
-    Block {
-        instruction_pointer: usize,
-        func_type: Option<FuncType>,
-        sidetable_idxs: Vec<usize>,
-    },
-    If {
-        instruction_pointer: usize,
-        func_type: Option<FuncType>,
-        sidetable_idxs: Vec<usize>,
-        side_table_entry: usize,
-    },
-    For {
-        instruction_pointer: usize,
-        func_type: Option<FuncType>,
-        side_table_entry: usize,
-    },
 }
 
 pub struct Validator<'a, 'b> {
@@ -92,7 +55,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 "\n---- Abstract Control Stack----\n\n {:?} \n\n\n\n",
                 abstract_control_stack
             );
-            let byte = self.reader.next().expect("Missing End statement");
+            let byte = self.reader.next_byte().expect("Missing End statement");
             match byte {
                 0x41 => {
                     // I32Const
@@ -281,19 +244,17 @@ impl<'a, 'b> Validator<'a, 'b> {
 }
 fn end_if(
     reader: &mut WasmReader,
-    abstract_value_stack: &mut Vec<ValType>,
+    abstract_value_stack: &mut [ValType],
     side_table: &mut SideTable,
-    side_table_indices: &Vec<usize>,
+    side_table_indices: &[usize],
     func_type: Option<FuncType>,
 ) {
     if let Some(func_type) = func_type {
         if func_type.result != *abstract_value_stack {
             panic!("Invalid return type");
         }
-    } else {
-        if !abstract_value_stack.is_empty() {
-            panic!("Too many return types");
-        }
+    } else if !abstract_value_stack.is_empty() {
+        panic!("Too many return types");
     }
 
     let abs_target_pos = reader.current_index();
@@ -311,33 +272,29 @@ fn end_if(
     }
 }
 
-fn end_for(abstract_value_stack: &mut Vec<ValType>, func_type: Option<FuncType>) {
+fn end_for(abstract_value_stack: &mut [ValType], func_type: Option<FuncType>) {
     if let Some(func_type) = func_type {
         if func_type.result != *abstract_value_stack {
             panic!("Invalid return type");
         }
-    } else {
-        if !abstract_value_stack.is_empty() {
-            panic!("Too many return types");
-        }
+    } else if !abstract_value_stack.is_empty() {
+        panic!("Too many return types");
     }
 }
 
 fn end_block(
     reader: &mut WasmReader,
-    abstract_value_stack: &mut Vec<ValType>,
+    abstract_value_stack: &mut [ValType],
     side_table: &mut SideTable,
-    side_table_indices: &Vec<usize>,
+    side_table_indices: &[usize],
     func_type: Option<FuncType>,
 ) {
     if let Some(func_type) = func_type {
         if func_type.result != *abstract_value_stack {
             panic!("Invalid return type");
         }
-    } else {
-        if !abstract_value_stack.is_empty() {
-            panic!("Too many return types");
-        }
+    } else if !abstract_value_stack.is_empty() {
+        panic!("Too many return types");
     }
 
     let abs_target_pos = reader.current_index();
@@ -356,7 +313,7 @@ fn end_block(
 }
 fn validate_else(
     reader: &mut WasmReader,
-    abstract_control_stack: &mut Vec<ControlType>,
+    abstract_control_stack: &mut [ControlType],
     abstract_value_stack: &mut Vec<ValType>,
     side_table: &mut SideTable,
 ) {
@@ -386,7 +343,7 @@ fn validate_else(
 
             if let Some(function_type) = func_type {
                 // Reset like we didnt validated the if block
-                *abstract_value_stack = function_type.parameter.clone();
+                abstract_value_stack.clone_from(&function_type.parameter)
             } else {
                 *abstract_value_stack = vec![];
             }
@@ -396,7 +353,7 @@ fn validate_else(
                 .get_mut(*side_table_entry)
                 .expect("Sidetable entry for if not found");
 
-            entry.ip = abs_target_pos as i32 - entry.ip as i32;
+            entry.ip = abs_target_pos as i32 - entry.ip;
             entry.stp = side_table_len as i32 - *side_table_entry as i32;
         }
         _ => {
@@ -409,7 +366,7 @@ fn validate_if(
     reader: &mut WasmReader,
     abstract_value_stack: &mut Vec<ValType>,
     abstract_control_stack: &mut Vec<ControlType>,
-    type_section: &Vec<FuncType>,
+    type_section: &[FuncType],
     side_table: &mut SideTable,
 ) {
     let start_index = reader.current_index();
@@ -445,7 +402,7 @@ fn validate_if(
 fn validate_br_if(
     reader: &mut WasmReader,
     abstract_value_stack: &mut Vec<ValType>,
-    abstract_control_stack: &mut Vec<ControlType>,
+    abstract_control_stack: &mut [ControlType],
     side_table: &mut SideTable,
 ) {
     let bool_val = abstract_value_stack
@@ -464,8 +421,8 @@ fn validate_br_if(
 
 fn validate_br(
     reader: &mut WasmReader,
-    abstract_value_stack: &mut Vec<ValType>,
-    abstract_control_stack: &mut Vec<ControlType>,
+    abstract_value_stack: &mut [ValType],
+    abstract_control_stack: &mut [ControlType],
     side_table: &mut SideTable,
 ) {
     let instruction_index = reader.current_index() as i32;
@@ -517,7 +474,7 @@ fn validate_br(
 
 fn branch_to_for(
     func_type: &Option<FuncType>,
-    abstract_value_stack: &mut Vec<ValType>,
+    abstract_value_stack: &mut [ValType],
     side_table: &mut SideTable,
     side_table_entry: &mut usize,
     instruction_pointer: &mut usize,
@@ -545,7 +502,7 @@ fn branch_to_for(
 
 fn get_target_control_structure<'a>(
     reader: &mut WasmReader,
-    abstract_control_stack: &'a mut Vec<ControlType>,
+    abstract_control_stack: &'a mut [ControlType],
 ) -> &'a mut ControlType {
     let depth = reader.next_leb128_u32().expect("Error parsing break depth");
 
@@ -563,7 +520,7 @@ fn validate_for(
     reader: &mut WasmReader,
     abstract_value_stack: &mut Vec<ValType>,
     abstract_control_stack: &mut Vec<ControlType>,
-    type_section: &Vec<FuncType>,
+    type_section: &[FuncType],
     side_table: &mut SideTable,
 ) {
     let func_idx = reader
@@ -586,7 +543,7 @@ fn validate_block(
     reader: &mut WasmReader,
     abstract_value_stack: &mut Vec<ValType>,
     abstract_control_stack: &mut Vec<ControlType>,
-    type_section: &Vec<FuncType>,
+    type_section: &[FuncType],
 ) {
     let func_idx = reader
         .next_leb128_u32()
@@ -603,7 +560,7 @@ fn validate_block(
         sidetable_idxs: Vec::new(),
     });
 }
-fn values_are_on_top_of_stack(abstract_value_stack: &mut Vec<ValType>, values: &Vec<ValType>) {
+fn values_are_on_top_of_stack(abstract_value_stack: &mut [ValType], values: &[ValType]) {
     let actual_values = abstract_value_stack
         .get(abstract_value_stack.len() - values.len()..abstract_value_stack.len())
         .expect("Params are not compatible to if signature");
@@ -611,7 +568,7 @@ fn values_are_on_top_of_stack(abstract_value_stack: &mut Vec<ValType>, values: &
         panic!("Params are not compatible to if signature");
     }
 }
-fn lookup_signature(func_idx: u32, type_section: &Vec<FuncType>) -> Option<FuncType> {
+fn lookup_signature(func_idx: u32, type_section: &[FuncType]) -> Option<FuncType> {
     if func_idx == 0x40 {
         return None;
     }
@@ -628,8 +585,6 @@ fn lookup_signature(func_idx: u32, type_section: &Vec<FuncType>) -> Option<FuncT
 
 #[cfg(test)]
 mod tests {
-
-    use crate::{validator::SideTable, FuncType};
 
     use super::*;
     #[test]
@@ -1028,7 +983,6 @@ mod tests {
         let bytes = wat::parse_str(
             "
 (module
-
 (func
       (local $i i32)
       (loop $my_loop

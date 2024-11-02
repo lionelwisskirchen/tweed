@@ -10,7 +10,7 @@ impl WasmReader {
             byte_pointer: 0,
         }
     }
-    pub fn next(&mut self) -> Option<&u8> {
+    pub fn next_byte(&mut self) -> Option<&u8> {
         let curr = self.bytecode.get(self.byte_pointer);
         self.byte_pointer += 1;
         curr
@@ -24,7 +24,7 @@ impl WasmReader {
     pub fn next_leb128_u32(&mut self) -> Option<u32> {
         let mut result: u32 = 0;
         let mut shift = 0;
-        while let Some(byte) = self.next() {
+        while let Some(byte) = self.next_byte() {
             let low = (byte & 0x7f) as u32; // 0111 1111 Mask -> MSB signals next byte is also relevant
 
             result |= low << shift;
@@ -42,7 +42,7 @@ impl WasmReader {
     pub fn next_leb128_i32(&mut self) -> Option<i32> {
         let mut result: i32 = 0;
         let mut shift = 0;
-        while let Some(byte) = self.next() {
+        while let Some(byte) = self.next_byte() {
             let low = (byte & 0x7f) as i32; // 0111 1111 Mask -> MSB signals next byte is also relevant
 
             result |= low << shift;
@@ -89,15 +89,15 @@ mod tests {
     fn test_next_chunk() {
         let bytes = [0x04, 0x03, 0x05];
         let mut reader = WasmReader::new(bytes.to_vec());
-        reader.next();
+        reader.next_byte();
         assert_eq!(*reader.next_chunk(0).unwrap(), vec![]);
     }
     #[test]
     fn test_calculate_offset() {
         let bytes = [0x04, 0x03, 0x05];
         let mut reader = WasmReader::new(bytes.to_vec());
-        reader.next();
-        reader.next();
+        reader.next_byte();
+        reader.next_byte();
         assert_eq!(reader.calculate_offset(1), 2);
     }
 
@@ -106,13 +106,13 @@ mod tests {
         let bytes = [0x04, 0x03, 0x05];
         let mut reader = WasmReader::new(bytes.to_vec());
         assert_eq!(reader.current_index(), 0);
-        assert_eq!(*reader.next().unwrap(), 0x04);
+        assert_eq!(*reader.next_byte().unwrap(), 0x04);
         assert_eq!(reader.current_index(), 0);
 
-        assert_eq!(*reader.next().unwrap(), 0x03);
+        assert_eq!(*reader.next_byte().unwrap(), 0x03);
         assert_eq!(reader.current_index(), 1);
 
-        assert_eq!(*reader.next().unwrap(), 0x05);
+        assert_eq!(*reader.next_byte().unwrap(), 0x05);
         assert_eq!(reader.current_index(), 2);
 
         reader.seek(0);

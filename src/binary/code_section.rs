@@ -1,4 +1,16 @@
-use crate::{wasm_reader::WasmReader, FuncCode, Module, ValType};
+use crate::core::{values::ValType, wasm_reader::WasmReader};
+
+use self::{module::Module, type_section::FuncType};
+
+use super::*;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FuncCode {
+    pub signature: FuncType,
+    pub locals: Vec<ValType>,
+    pub start: usize,
+    pub end: usize,
+}
 
 pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<FuncCode> {
     reader.next_leb128_u32().expect("No Section size found");
@@ -23,7 +35,7 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
             let count = reader
                 .next_leb128_u32()
                 .expect("No local decl count in Code section");
-            let local_type = ValType::lookup(reader.next().expect("No local type decl"));
+            let local_type = ValType::lookup(reader.next_byte().expect("No local type decl"));
             for _ in 0..count {
                 locals.push(local_type);
             }
@@ -55,7 +67,7 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
 #[cfg(test)]
 mod tests {
 
-    use crate::{FuncDecl, FuncType};
+    use code_section::function_section::FuncDecl;
 
     use super::*;
     #[test]
@@ -76,9 +88,7 @@ mod tests {
                 parameter: vec![ValType::I32, ValType::I32],
                 result: vec![ValType::I32],
             }],
-            funcsec: vec![FuncDecl {
-                sig_index: 0,
-            }],
+            funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: Vec::new(),
             sidetables: vec![],
         };
@@ -93,5 +103,5 @@ mod tests {
             end: 18,
         }];
         assert_eq!(actual_functions, expected_functions);
-     }
+    }
 }

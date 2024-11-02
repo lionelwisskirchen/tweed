@@ -1,4 +1,11 @@
-use crate::{wasm_reader::WasmReader,  FuncType, ValType};
+use crate::core::{values::ValType, wasm_reader::WasmReader};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FuncType {
+    pub parameter: Vec<ValType>,
+    pub result: Vec<ValType>,
+}
+
 pub fn process_type_section(reader: &mut WasmReader) -> Vec<FuncType> {
     reader.next_leb128_u32().expect("No Section size found");
     // Size is not required for decoding, so just check if size is present
