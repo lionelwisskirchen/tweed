@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct WasmReader {
     bytecode: Vec<u8>,
     byte_pointer: usize,

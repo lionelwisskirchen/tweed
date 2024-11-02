@@ -174,6 +174,9 @@ impl<'a, 'b> Validator<'a, 'b> {
                                     panic!("Invalid return type");
                                 }
                             }
+			    if abstract_value_stack.len() <  func_type.result.len(){
+				panic!("Result values of function does not match values on stack");
+			    }
                             abstract_value_stack
                                 .drain(0..abstract_value_stack.len() - func_type.result.len());
                             break;

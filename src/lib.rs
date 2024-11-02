@@ -1,7 +1,7 @@
 pub mod binary;
 pub mod core;
 pub mod validation;
-
+pub mod execution;
 use binary::module::{create_module, Module};
 use std::{collections::HashMap, iter::zip};
 use validation::validator::Validator;
