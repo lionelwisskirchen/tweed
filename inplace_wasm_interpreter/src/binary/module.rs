@@ -1,4 +1,5 @@
 use crate::{core::wasm_reader::WasmReader, validation::side_table::SideTable};
+use alloc::vec::Vec;
 
 use super::{
     code_section::{process_code_section, FuncCode},

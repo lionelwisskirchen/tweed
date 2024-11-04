@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 #[derive(Debug)]
 pub struct WasmReader {
     bytecode: Vec<u8>,

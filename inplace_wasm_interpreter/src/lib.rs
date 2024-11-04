@@ -1,18 +1,27 @@
+#![cfg_attr(not(test), no_std)]
+#[macro_use]
+extern crate alloc;
+
 pub mod binary;
 pub mod core;
-pub mod validation;
 pub mod execution;
+pub mod validation;
+use crate::core::wasm_reader::WasmReader;
+use crate::instance::Value;
+use alloc::vec::Vec;
 use binary::module::{create_module, Module};
-use std::{collections::HashMap, iter::zip};
+use execution::instance;
 use validation::validator::Validator;
 
-use crate::core::wasm_reader::WasmReader;
-
-pub fn run(input: &[u8]) {
+pub fn run(input: &[u8]) -> Vec<Value> {
     let mut reader = WasmReader::new(input.to_vec());
     let mut module = create_module(&mut reader);
     validate(&mut reader, &mut module);
+    #[cfg(test)]
     println!("----- Created and validated Module -----\n {:#?}", module);
+    let mut instance = instance::instantiate(module, &mut reader);
+
+    instance.call(0, vec![]).unwrap().to_vec()
 }
 
 fn validate(reader: &mut WasmReader, module: &mut Module) {
@@ -29,6 +38,7 @@ fn validate(reader: &mut WasmReader, module: &mut Module) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn example() {
         let wasm = wat::parse_str(

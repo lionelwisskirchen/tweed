@@ -1,4 +1,5 @@
 use crate::core::wasm_reader::WasmReader;
+use alloc::vec::Vec;
 
 #[derive(Debug)]
 pub struct FuncDecl {

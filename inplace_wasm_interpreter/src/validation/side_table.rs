@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SideTable {
     pub entries: Vec<SideTableEntry>,

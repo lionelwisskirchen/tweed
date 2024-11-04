@@ -1,13 +1,17 @@
+use ::core::iter::zip;
+
 use self::binary::{code_section::FuncCode, type_section::FuncType};
 use self::core::values::*;
 use crate::validation::control_types::ControlType;
 use crate::validation::side_table::SideTableEntry;
 use crate::*;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
 use super::side_table::SideTable;
 
 fn shorthand_lookup(val: u32) -> Option<FuncType> {
-    let lookup_map = HashMap::from([(
+    let lookup_map = BTreeMap::from([(
         0x7f,
         FuncType {
             parameter: Vec::new(),
@@ -28,6 +32,7 @@ impl<'a, 'b> Validator<'a, 'b> {
     }
 
     pub fn validate(&mut self, function: &FuncCode) -> SideTable {
+        #[cfg(test)]
         println!("\n\n-----Starting Validation Algorithm-----\n\n");
 
         let mut abstract_control_stack = Vec::new();
@@ -47,10 +52,12 @@ impl<'a, 'b> Validator<'a, 'b> {
             func_type: signature.clone(),
         });
         loop {
+            #[cfg(test)]
             println!(
                 "\n---- Abstract Value Stack----\n\n {:?}",
                 abstract_value_stack
             );
+            #[cfg(test)]
             println!(
                 "\n---- Abstract Control Stack----\n\n {:?} \n\n\n\n",
                 abstract_control_stack
@@ -174,9 +181,9 @@ impl<'a, 'b> Validator<'a, 'b> {
                                     panic!("Invalid return type");
                                 }
                             }
-			    if abstract_value_stack.len() <  func_type.result.len(){
-				panic!("Result values of function does not match values on stack");
-			    }
+                            if abstract_value_stack.len() < func_type.result.len() {
+                                panic!("Result values of function does not match values on stack");
+                            }
                             abstract_value_stack
                                 .drain(0..abstract_value_stack.len() - func_type.result.len());
                             break;
@@ -232,14 +239,17 @@ impl<'a, 'b> Validator<'a, 'b> {
                 _ => panic!("Undefined opcode {}", byte),
             };
         }
+        #[cfg(test)]
         println!(
             "\n---- Abstract Value Stack----\n\n {:?}",
             abstract_value_stack
         );
+        #[cfg(test)]
         println!(
             "\n---- Abstract Control Stack----\n\n {:?} \n\n\n\n",
             abstract_control_stack
         );
+        #[cfg(test)]
         println!("\n\n-----Finished Validation Algorithm-----\n\n");
 
         side_table
@@ -489,6 +499,7 @@ fn branch_to_for(
     let number_of_side_table_entries = side_table.entries.len() as i32;
     let sidetable_offset = *side_table_entry as i32 - number_of_side_table_entries;
     let instruction_offset = *instruction_pointer as i32 - reader.current_index() as i32;
+    #[cfg(test)]
     println!(
         "Sidetable Offset: {}\n Instruction Offset: {}",
         sidetable_offset, instruction_offset

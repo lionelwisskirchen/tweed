@@ -1,4 +1,5 @@
-use std::iter::zip;
+use alloc::vec::Vec;
+use core::iter::zip;
 
 use crate::{
     binary::{module::Module, type_section::FuncType},
@@ -12,7 +13,7 @@ pub enum Value {
     I64(i64),
 }
 
-impl std::ops::Add for Value {
+impl core::ops::Add for Value {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
@@ -102,7 +103,9 @@ impl<'a> Instance<'a> {
 
         while self.reader.current_index() < current_frame.end {
             let instruction = self.reader.next_byte().expect("No next byte for frame");
+            #[cfg(test)]
             println!("Instruction: {:#01x}", instruction);
+            #[cfg(test)]
             println!("Value Stack: {:?}", self.stack);
             match instruction {
                 0x41 => {
@@ -182,7 +185,6 @@ impl<'a> Instance<'a> {
                         .locals
                         .get(self.reader.next_leb128_u32().unwrap() as usize)
                         .expect("Local get on invalid index");
-                    println!("LocalGet: {:?}", local);
                     self.stack.push(*local);
                 } // LocalGet
                 0x21 => {
@@ -192,7 +194,6 @@ impl<'a> Instance<'a> {
                         .expect("Local get on invalid index");
                     let new_value = self.stack.pop().expect("LocalSet needs value on stack");
                     *local = new_value;
-                    println!("LocalSet: {:?}", local);
                 } // LocalSet
                 0x6a => {
                     let (right, left) = (self.stack.pop().unwrap(), self.stack.pop().unwrap()); // Unwrap is safe due to validation
@@ -379,6 +380,7 @@ mod tests {
         let expected_result = vec![Value::I32(12)];
         assert_eq!(instance.call(0, vec![]).unwrap(), &expected_result);
     }
+
     #[test]
     fn test_blocks_with_branches() {
         let bytes = wat::parse_str(

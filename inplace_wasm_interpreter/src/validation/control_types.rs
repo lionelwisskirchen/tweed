@@ -1,4 +1,5 @@
 use crate::binary::type_section::FuncType;
+use alloc::vec::Vec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ControlType {

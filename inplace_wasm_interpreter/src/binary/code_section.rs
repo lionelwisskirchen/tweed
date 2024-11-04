@@ -1,4 +1,6 @@
+extern crate alloc;
 use crate::core::{values::ValType, wasm_reader::WasmReader};
+use alloc::vec::Vec;
 
 use self::{module::Module, type_section::FuncType};
 
