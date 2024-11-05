@@ -1,7 +1,7 @@
 use crate::core::{values::ValType, wasm_reader::WasmReader};
 use alloc::vec::Vec;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FuncType {
     pub parameter: Vec<ValType>,
     pub result: Vec<ValType>,

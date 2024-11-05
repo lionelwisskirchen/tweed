@@ -272,6 +272,7 @@ pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
             .map(|valtype| match valtype {
                 ValType::I32 => Value::I32(0),
                 ValType::I64 => Value::I64(0),
+		ValType::Unknown => {panic!("Unknown value type. This should never happen!")}
             })
             .collect();
 

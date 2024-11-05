@@ -40,25 +40,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn example() {
+    fn is_valid_1() {
         let wasm = wat::parse_str(
             "
-(module
+    (module
+                 (func
+		      (block $l
+                       i32.const 1
+		       i32.const 2
+		       br $l
+		       i32.const 3
+		       i32.const 2
 
-(func
-      (local $i i32)
-      (loop $my_loop
-      local.get $i
-      i32.const 1
-      i32.add
-      local.set $i
+		       )
+                     
+                )
+             )
+",
+        )
+        .unwrap();
+        run(&wasm);
+    }
+    #[test]
+    fn is_valid_2() {
+        let wasm = wat::parse_str(
+            "
+    (module
+(func (result i32 i32)
 
-      local.get $i
-      i32.const 10
-      i32.lt_s
-      br_if $my_loop
+    i32.const 0 
+    (if $i (result i32 i32)
+      (then
+        i32.const 1
+        i32.const 1
+        br $i
+	i32.add
+      )
+      (else
+        i32.const 0
+        i32.const 1
+      )
     )
- )
+  )
 )
 ",
         )

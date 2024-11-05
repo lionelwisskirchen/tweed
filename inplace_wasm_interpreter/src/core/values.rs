@@ -2,6 +2,7 @@
 pub enum ValType {
     I32,
     I64,
+    Unknown
 }
 
 impl ValType {
