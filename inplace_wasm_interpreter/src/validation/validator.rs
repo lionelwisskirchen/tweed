@@ -295,6 +295,11 @@ impl<'a, 'b> Validator<'a, 'b> {
                         } => {
                             sidetable_idxs.push(index_of_br_sidetable_entry);
                             abstract_value_stack.pop_expected_vec(&func_type.result, *reachable);
+
+			    let entry = side_table.get_entry(index_of_br_sidetable_entry);
+                            entry.pop = (abstract_value_stack.height() - *height_of_value_stack) as usize;
+                            entry.vals = func_type.result.len();
+			    
                             abstract_value_stack.set_top(*height_of_value_stack);
                             abstract_control_stack.set_unreachable();
                         }
@@ -335,7 +340,7 @@ impl<'a, 'b> Validator<'a, 'b> {
 
                             // It's allowed to have too less result values on the stack
                             // if the block is marked as unreachable
-                            if (count != expected_results.len() as u32 && reachable) {
+                            if count != expected_results.len() as u32 && reachable {
                                 panic!("Arity Mismatch.");
                             }
 
@@ -351,16 +356,18 @@ impl<'a, 'b> Validator<'a, 'b> {
                             ..
                         } => {
                             let expected_results = func_type.result;
-                            let count = abstract_value_stack.height() - height_of_value_stack;
+                            let count = abstract_value_stack
+                                .height()
+                                .saturating_sub(height_of_value_stack);
 
                             // It's allowed to have too less result values on the stack
                             // if the block is marked as unreachable
                             if count != expected_results.len() as u32 && reachable {
                                 panic!("Arity Mismatch.");
                             }
-
+			    	
                             abstract_value_stack.pop_expected_vec(&expected_results, reachable);
-
+			    
                             let abs_target_pos = self.reader.current_index();
                             for entry_index in sidetable_idxs.iter() {
                                 let sidetable_offset =
@@ -368,6 +375,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                                 let entry = side_table.get_entry(*entry_index);
                                 let abs_start_pos = entry.ip;
                                 let rel_offset = abs_target_pos as i32 - abs_start_pos;
+			
+			
                                 entry.stp = sidetable_offset;
                                 entry.ip = rel_offset;
                             }
@@ -734,7 +743,7 @@ mod tests {
                 SideTableEntry {
                     ip: 10,
                     stp: 4,
-                    vals: 0,
+                    vals: 1,
                     pop: 0,
                 },
                 SideTableEntry {
@@ -746,13 +755,13 @@ mod tests {
                 SideTableEntry {
                     ip: 2,
                     stp: 1,
-                    vals: 0,
+                    vals: 1,
                     pop: 0,
                 },
                 SideTableEntry {
                     ip: 2,
                     stp: 1,
-                    vals: 0,
+                    vals: 1,
                     pop: 0,
                 },
             ],
@@ -949,7 +958,7 @@ mod tests {
                 SideTableEntry {
                     ip: 10,
                     stp: 4,
-                    vals: 0,
+                    vals: 1,
                     pop: 0,
                 },
                 SideTableEntry {
@@ -961,13 +970,13 @@ mod tests {
                 SideTableEntry {
                     ip: 2,
                     stp: 1,
-                    vals: 0,
+                    vals: 1,
                     pop: 0,
                 },
                 SideTableEntry {
                     ip: 2,
                     stp: 1,
-                    vals: 0,
+                    vals: 1,
                     pop: 0,
                 },
                 SideTableEntry {

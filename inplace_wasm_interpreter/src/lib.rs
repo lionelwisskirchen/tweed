@@ -40,6 +40,65 @@ mod tests {
     use super::*;
 
     #[test]
+    fn is_invalid_1(){
+	 let wasm = wat::parse_str("(module
+           (func (result i32)
+	       i32.const 12	       
+               (block $label1 (result i32)
+	    	   i32.const 10
+		   i32.add
+	         )
+               )
+)").unwrap();
+	run(&wasm);
+
+    }
+    
+    #[test]
+    fn is_valid_4() {
+        let wasm = wat::parse_str(
+            "
+    (module
+	   
+           (func (result i32)
+                (block $bl (result i32)
+                  i32.const 0
+                  i32.const 1
+                  br_if $bl
+                  i32.const 3
+                  return
+               )
+               )
+)
+",
+        )
+            .unwrap();
+	assert_eq!(run(&wasm), vec![Value::I32(0)]);
+    }
+    #[test]
+    fn is_valid_3() {
+        let wasm = wat::parse_str(
+            "
+     (module
+	   
+           (func (result i32)
+               (block $label1 (result i32)
+       	           i32.const 12	       
+	    	   i32.const 10
+		   i32.const 10
+		   br $label1
+	         )
+		 i32.const 10
+		 i32.add
+               )
+)
+",
+        )
+            .unwrap();
+	assert_eq!(run(&wasm), vec![Value::I32(20)]);
+    }
+    
+    #[test]
     fn is_valid_1() {
         let wasm = wat::parse_str(
             "

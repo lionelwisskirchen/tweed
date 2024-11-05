@@ -225,6 +225,21 @@ impl<'a> Instance<'a> {
                     let pos = (self.reader.current_index() - 1) as i32 + side_table_entry.ip; // -1 because of the depth
                     self.reader.seek(pos as usize);
                     current_frame.side_table_pointer += side_table_entry.stp as usize;
+
+                    // TODO introduce new helper func
+                    let stack_len = self.stack.len();
+                    let saved_vals = self
+                        .stack
+                        .drain(stack_len - side_table_entry.vals..self.stack.len())
+                        .collect::<Vec<Value>>();
+                    for _ in 0..side_table_entry.pop {
+                        self.stack.pop();
+                    }
+                    for saved_val in saved_vals.iter().rev() {
+                        self.stack.push(*saved_val);
+                    }
+		    // for this
+		    
                 } // BR
                 0x0d => {
                     self.reader
@@ -245,8 +260,24 @@ impl<'a> Instance<'a> {
                         } else {
                             current_frame.side_table_pointer = stp as usize;
                         }
+
                         let pos = (self.reader.current_index() - 1) as i32 + side_table_entry.ip; // -1 because of the depth
                         self.reader.seek(pos as usize);
+
+                        // TODO introduce new helper func
+                        let stack_len = self.stack.len();
+                        let saved_vals = self
+                            .stack
+                            .drain(stack_len - side_table_entry.vals..self.stack.len())
+                            .collect::<Vec<Value>>();
+                        for _ in 0..side_table_entry.pop {
+                            self.stack.pop();
+                        }
+
+                        for saved_val in saved_vals.iter().rev() {
+                            self.stack.push(*saved_val);
+                        }
+			// for this
                     }
                 } //BR_if
 
@@ -272,7 +303,9 @@ pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
             .map(|valtype| match valtype {
                 ValType::I32 => Value::I32(0),
                 ValType::I64 => Value::I64(0),
-		ValType::Unknown => {panic!("Unknown value type. This should never happen!")}
+                ValType::Unknown => {
+                    panic!("Unknown value type. This should never happen!")
+                }
             })
             .collect();
 
