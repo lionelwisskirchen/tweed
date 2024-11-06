@@ -1,8 +1,6 @@
 use crate::core::values::ValType;
 use alloc::vec::Vec;
 
-use super::control_types::ControlType;
-
 #[derive(Debug)]
 pub struct ValidationStack {
     stack: Vec<ValType>,

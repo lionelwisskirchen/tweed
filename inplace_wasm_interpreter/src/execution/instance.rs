@@ -3,7 +3,7 @@ use core::iter::zip;
 
 use crate::{
     binary::{module::Module, type_section::FuncType},
-    core::{values::ValType, wasm_reader::WasmReader},
+    core::{opcode::*, values::ValType, wasm_reader::WasmReader},
     validation::side_table::SideTable,
 };
 
@@ -23,6 +23,17 @@ impl core::ops::Add for Value {
         }
     }
 }
+impl core::ops::Sub for Value {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::I32(left), Value::I32(right)) => Value::I32(left - right),
+            (Value::I64(left), Value::I64(right)) => Value::I64(left - right),
+            _ => panic!("type mismatch"),
+        }
+    }
+}
+
 
 #[derive(Debug)]
 pub struct FunctionInstance {
@@ -107,12 +118,12 @@ impl<'a> Instance<'a> {
             println!("Instruction: {:#01x}", instruction);
             #[cfg(test)]
             println!("Value Stack: {:?}", self.stack);
-            match instruction {
-                0x41 => {
+            match *instruction {
+                I32_CONST => {
                     let value = Value::I32(self.reader.next_leb128_i32().unwrap());
                     self.stack.push(value);
-                } // I32Const
-                0x02 => {
+                } 
+                BLOCK => {
                     let idx = self
                         .reader
                         .next_leb128_u32()
@@ -123,11 +134,11 @@ impl<'a> Instance<'a> {
                         _ => {
                             self.types
                                 .get(idx as usize)
-                                .expect("Can't get func sig by index");
+                                .expect("Can't get sig by index");
                         }
                     };
-                } // Block
-                0x03 => {
+                } 
+                LOOP => {
                     let idx = self
                         .reader
                         .next_leb128_u32()
@@ -140,8 +151,8 @@ impl<'a> Instance<'a> {
                                 .expect("Can't get func sig by index");
                         }
                     };
-                } //loop
-                0x04 => {
+                } 
+                IF => {
                     let idx = self
                         .reader
                         .next_leb128_u32()
@@ -169,8 +180,8 @@ impl<'a> Instance<'a> {
                     } else {
                         current_frame.side_table_pointer += 1;
                     }
-                } //if
-                0x05 => {
+                } 
+                ELSE => {
                     let side_table_entry = current_frame
                         .side_table
                         .entries
@@ -179,28 +190,33 @@ impl<'a> Instance<'a> {
                     let pos = self.reader.current_index() as i32 + side_table_entry.ip;
                     current_frame.side_table_pointer += side_table_entry.stp as usize;
                     self.reader.seek(pos as usize);
-                } //else
-                0x20 => {
+                } 
+                LOCAL_GET => {
                     let local = current_frame
                         .locals
                         .get(self.reader.next_leb128_u32().unwrap() as usize)
                         .expect("Local get on invalid index");
                     self.stack.push(*local);
-                } // LocalGet
-                0x21 => {
+                } 
+                LOCAL_SET => {
                     let local = current_frame
                         .locals
                         .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
                         .expect("Local get on invalid index");
                     let new_value = self.stack.pop().expect("LocalSet needs value on stack");
                     *local = new_value;
-                } // LocalSet
-                0x6a => {
+                } 
+                I32_ADD => {
                     let (right, left) = (self.stack.pop().unwrap(), self.stack.pop().unwrap()); // Unwrap is safe due to validation
-
+		    
                     self.stack.push(right + left);
-                } // I32Add
-                0x48 => {
+                }
+		 I32_SUB => {
+                    let (right, left) = (self.stack.pop().unwrap(), self.stack.pop().unwrap()); // Unwrap is safe due to validation
+		    
+                    self.stack.push( left - right);
+                } 
+                I32_LT_S => {
                     let (Value::I32(right), Value::I32(left)) =
                         (self.stack.pop().unwrap(), self.stack.pop().unwrap())
                     else {
@@ -212,8 +228,23 @@ impl<'a> Instance<'a> {
                     } else {
                         self.stack.push(Value::I32(0));
                     }
-                } // lt_s
-                0x0c => {
+                }
+		I32_GT_S => {
+                    let (Value::I32(right), Value::I32(left)) =
+                        (self.stack.pop().unwrap(), self.stack.pop().unwrap())
+                    else {
+                        panic!("Invalid Type for i32 lt_s");
+                    }; // Unwrap is safe due to validation
+
+                    if left > right {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                BR => {
+		    #[cfg(test)]
+		    println!("Sidetable Pointer BR: {}", current_frame.side_table_pointer);
                     self.reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");
@@ -222,9 +253,15 @@ impl<'a> Instance<'a> {
                         .entries
                         .get(current_frame.side_table_pointer)
                         .expect("Expected entry in sidetable for BR instruction");
-                    let pos = (self.reader.current_index() - 1) as i32 + side_table_entry.ip; // -1 because of the depth
+                    let pos = self.reader.current_index() as i32 + side_table_entry.ip; 
                     self.reader.seek(pos as usize);
-                    current_frame.side_table_pointer += side_table_entry.stp as usize;
+		    
+                    let stp = current_frame.side_table_pointer as i32 + side_table_entry.stp;
+                        if stp < 0 {
+                            current_frame.side_table_pointer = 0;
+                        } else {
+                            current_frame.side_table_pointer = stp as usize;
+                        }
 
                     // TODO introduce new helper func
                     let stack_len = self.stack.len();
@@ -240,8 +277,10 @@ impl<'a> Instance<'a> {
                     }
 		    // for this
 		    
-                } // BR
-                0x0d => {
+                } 
+                BR_IF => {
+		    #[cfg(test)]
+		    println!("Sidetable Pointer BR : {}", current_frame.side_table_pointer);
                     self.reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");
@@ -254,14 +293,16 @@ impl<'a> Instance<'a> {
                             .entries
                             .get(current_frame.side_table_pointer)
                             .expect("Expected entry in sidetable for BR_if instruction");
-                        let stp = current_frame.side_table_pointer as i32 + side_table_entry.stp;
+
+
+			let stp = current_frame.side_table_pointer as i32 + side_table_entry.stp;
                         if stp < 0 {
                             current_frame.side_table_pointer = 0;
                         } else {
                             current_frame.side_table_pointer = stp as usize;
                         }
 
-                        let pos = (self.reader.current_index() - 1) as i32 + side_table_entry.ip; // -1 because of the depth
+                        let pos = self.reader.current_index() as i32 + side_table_entry.ip;
                         self.reader.seek(pos as usize);
 
                         // TODO introduce new helper func
@@ -279,14 +320,14 @@ impl<'a> Instance<'a> {
                         }
 			// for this
                     }
-                } //BR_if
+                }
 
-                0x0b => {
+                END => {
                     if self.reader.current_index() == current_frame.end {
                         break;
                     }
-                } //End
-                _ => panic!("Invalid instruction"),
+                } 
+                _ => panic!("Invalid instruction: {}", instruction),
             };
         }
     }
@@ -526,8 +567,8 @@ mod tests {
             }],
             sidetables: vec![SideTable {
                 entries: vec![SideTableEntry {
-                    ip: -14,
-                    stp: -1,
+                    ip: -13,
+                    stp: 0,
                     vals: 0,
                     pop: 0,
                 }],
