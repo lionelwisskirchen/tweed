@@ -4,7 +4,9 @@
 use esp_backtrace as _;
 use esp_hal::prelude::*;
 use inplace_wasm_interpreter;
+use inplace_wasm_interpreter::execution::instance::Value;
 extern crate alloc;
+use alloc::vec;
 use core::mem::MaybeUninit;
 
 fn init_heap() {
@@ -24,8 +26,8 @@ fn init_heap() {
 fn main() -> ! {
     init_heap();
     esp_println::logger::init_logger_from_env();
-    let byte_code = include_bytes!("test.wasm");
-    let result = inplace_wasm_interpreter::run(byte_code);
+    let byte_code = include_bytes!("sum_example.wasm");
+    let result = inplace_wasm_interpreter::run(byte_code, vec![Value::I32(6)]);
     log::info!("Result: {:?}", result);
 
     loop {}
