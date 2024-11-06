@@ -1,3 +1,7 @@
+
+
+use crate::core::opcode::*;
+
 use self::binary::{code_section::FuncCode, type_section::FuncType};
 use self::core::values::*;
 use crate::validation::control_types::ControlType;
@@ -23,64 +27,65 @@ fn shorthand_lookup(val: u32) -> Option<FuncType> {
 pub struct Validator<'a, 'b> {
     reader: &'a mut WasmReader,
     typesec: &'b Vec<FuncType>,
+    locals: Vec<ValType>
 }
 
 impl<'a, 'b> Validator<'a, 'b> {
     pub fn new(reader: &'a mut WasmReader, typesec: &'b Vec<FuncType>) -> Self {
-        Validator { reader, typesec }
+        Validator { reader, typesec, locals: vec![] }
     }
 
+    fn initialize_locals(&mut self, function: &FuncCode){
+	let mut locals = Vec::new();
+        locals.append(&mut function.signature.parameter.clone());
+        locals.append(&mut function.locals.clone());
+	self.locals = locals
+    }
+    
     pub fn validate(&mut self, function: &FuncCode) -> SideTable {
-        #[cfg(test)]
-        println!("\n\n-----Starting Validation Algorithm-----\n\n");
-
         let mut abstract_control_stack = ControlStack::new();
         let mut abstract_value_stack = ValidationStack::new();
         let mut side_table = SideTable::new();
-        let mut locals = Vec::new();
-
-        locals.append(&mut function.signature.parameter.clone());
-        locals.append(&mut function.locals.clone());
-
+        
+	self.initialize_locals(function);
+	
         self.reader.seek(function.start);
-
-        let signature = &function.signature;
 
         abstract_control_stack.push(ControlType::Func {
             instruction_pointer: self.reader.current_index(),
-            func_type: signature.clone(),
-            reachable: true,
+            func_type: function.signature.clone(),
+            reachable: true
         });
+
         loop {
             let byte = self.reader.next_byte().expect("Missing End statement");
-            match byte {
-                0x41 => {
-                    // I32Const
+            match *byte {
+                I32_CONST => {
                     self.reader
                         .next_leb128_i32()
                         .expect("Could not read i32 const");
                     abstract_value_stack.push(ValType::I32);
                 }
-                0x20 => {
+                LOCAL_GET => {
                     let idx = self.reader.next_leb128_u32().expect("Error parsing indx");
-                    let value = locals.get(idx as usize).expect("Invalid Local Index");
+                    let value = self.locals.get(idx as usize).expect("Invalid Local Index");
                     abstract_value_stack.push(*value);
-                } // LocalGet
-                0x21 => {
+                } 
+                LOCAL_SET => {
                     let idx = self.reader.next_leb128_u32().expect("Error parsing indx");
-                    let value = locals.get(idx as usize).expect("Invalid Local Index");
+                    let value = self.locals.get(idx as usize).expect("Invalid Local Index");
 
                     abstract_value_stack
                         .pop_expected(*value, abstract_control_stack.top_is_reachable());
-                } // LocalSet
-                0x6a => {
+                } 
+                I32_ADD => {
                     abstract_value_stack
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
                     abstract_value_stack
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
                     abstract_value_stack.push(ValType::I32);
-                } // I32Add
-                0x04 => {
+                } 
+                IF => {
                     let index_of_if_bytecode = self.reader.current_index() as i32;
                     let signature = read_block_type(self.reader, self.typesec);
                     abstract_value_stack
@@ -103,8 +108,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     });
 
                     abstract_value_stack.push_vec(&signature.parameter);
-                } // If,
-                0x05 => {
+                }
+                ELSE => {
                     let control_type_is_reachable = abstract_control_stack.top_is_reachable();
                     let control_type = abstract_control_stack.top();
                     let index_of_else_sidetable_entry =
@@ -148,15 +153,15 @@ impl<'a, 'b> Validator<'a, 'b> {
                             panic!("Else needs if as start control")
                         }
                     }
-                } // Else,
-                0x48 => {
+                }
+                I32_LT_S => {
                     abstract_value_stack
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
                     abstract_value_stack
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
                     abstract_value_stack.push(ValType::I32);
-                } // lt_s
-                0x0f => {
+                } 
+                RETURN => {
                     let control_type_is_reachable = abstract_control_stack.top_is_reachable();
                     let control_type = abstract_control_stack.top();
                     match control_type {
@@ -185,9 +190,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                             *reachable = false;
                         }
                     }
-                } // return
-                0x02 => {
+                } 
+                BLOCK => {
                     let signature = read_block_type(self.reader, self.typesec);
+
                     abstract_value_stack.pop_expected_vec(
                         &signature.parameter,
                         abstract_control_stack.top_is_reachable(),
@@ -201,8 +207,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                         height_of_value_stack: abstract_value_stack.height(),
                     });
                     abstract_value_stack.push_vec(&signature.parameter);
-                } // Block
-                0x03 => {
+                }
+                LOOP => {
                     let signature = read_block_type(self.reader, self.typesec);
                     abstract_value_stack.pop_expected_vec(
                         &signature.parameter,
@@ -217,8 +223,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                         height_of_value_stack: abstract_value_stack.height(),
                     });
                     abstract_value_stack.push_vec(&signature.parameter);
-                } // Loop
-                0x0d => {
+                } 
+                BR_IF => {
                     let index_of_br_if_bytecode = self.reader.current_index() as i32;
 
                     abstract_value_stack
@@ -268,8 +274,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                             panic!("Branching target not allowed")
                         }
                     };
-                } // br_if
-                0x0c => {
+                }
+                BR => {
                     let index_of_br_bytecode = self.reader.current_index() as i32;
                     let depth = self
                         .reader
@@ -325,8 +331,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                             panic!("Branching target not allowed")
                         }
                     };
-                } // br
-                0x0B => {
+                } 
+                END => {
                     let control_type = abstract_control_stack.pop();
 
                     match control_type {
@@ -443,8 +449,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                             abstract_value_stack.push_vec(&expected_results);
                         }
                     }
-                } // END
-                0x10 => {
+                }
+                CALL => {
                     let func_index = self
                         .reader
                         .next_leb128_u32()
@@ -458,23 +464,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                         abstract_control_stack.top_is_reachable(),
                     );
                     abstract_value_stack.push_vec(&sig.result);
-                } // Call
+                }
                 _ => panic!("Undefined opcode {}", byte),
             };
         }
-        // #[cfg(test)]
-        // println!(
-        //     "\n---- Abstract Value Stack----\n\n {:?}",
-        //     abstract_value_stack
-        // );
-        // #[cfg(test)]
-        // println!(
-        //     "\n---- Abstract Control Stack----\n\n {:?} \n\n\n\n",
-        //     abstract_control_stack
-        // );
-        // #[cfg(test)]
-        // println!("\n\n-----Finished Validation Algorithm-----\n\n");
-
         side_table
     }
 }
