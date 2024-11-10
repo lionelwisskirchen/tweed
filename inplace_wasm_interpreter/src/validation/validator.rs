@@ -379,7 +379,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                             reachable,
                             height_of_value_stack,
                             ..
-                        } => {
+                        } 
+			=> {
                             self.check_args(
                                 &func_type.result,
                                 height_of_value_stack,
@@ -394,7 +395,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             height_of_value_stack,
                             ..
                         } => self.check_args(
-                            &func_type.parameter,
+                            &func_type.result,
                             height_of_value_stack,
                             &mut abstract_value_stack,
                             reachable,

@@ -114,10 +114,6 @@ impl<'a> Instance<'a> {
 
         while self.reader.current_index() < current_frame.end {
             let instruction = self.reader.next_byte().expect("No next byte for frame");
-            #[cfg(test)]
-            println!("Instruction: {:#01x}", instruction);
-            #[cfg(test)]
-            println!("Value Stack: {:?}", self.stack);
             match *instruction {
                 I32_CONST => {
                     let value = Value::I32(self.reader.next_leb128_i32().unwrap());
@@ -243,8 +239,6 @@ impl<'a> Instance<'a> {
                     }
                 }
                 BR => {
-		    #[cfg(test)]
-		    println!("Sidetable Pointer BR: {}", current_frame.side_table_pointer);
                     self.reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");
@@ -279,8 +273,6 @@ impl<'a> Instance<'a> {
 		    
                 } 
                 BR_IF => {
-		    #[cfg(test)]
-		    println!("Sidetable Pointer BR : {}", current_frame.side_table_pointer);
                     self.reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");

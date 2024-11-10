@@ -127,7 +127,7 @@ mod tests {
 
     
     #[test]
-    fn is_valid_3() {
+    fn test_sum() {
         let wasm = wat::parse_str(
             "
 (module
@@ -179,7 +179,7 @@ mod tests {
 ",
         )
         .unwrap();
-        assert_eq!(run(&wasm, vec![Value::I32(3)]), vec![Value::I32(6)]);
+        assert_eq!(run(&wasm, vec![Value::I32(6)]), vec![Value::I32(21)]);
     }
 
      
