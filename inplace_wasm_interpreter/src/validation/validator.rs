@@ -26,6 +26,9 @@ pub struct Validator<'a, 'b> {
     reader: &'a mut WasmReader,
     typesec: &'b Vec<FuncType>,
     locals: Vec<ValType>,
+    abstract_control_stack: ControlStack,
+    abstract_value_stack: ValidationStack,
+    side_table: SideTable,
 }
 
 impl<'a, 'b> Validator<'a, 'b> {
@@ -34,6 +37,9 @@ impl<'a, 'b> Validator<'a, 'b> {
             reader,
             typesec,
             locals: vec![],
+            abstract_control_stack: ControlStack::new(),
+            abstract_value_stack: ValidationStack::new(),
+            side_table: SideTable::new(),
         }
     }
 
@@ -45,85 +51,81 @@ impl<'a, 'b> Validator<'a, 'b> {
     }
 
     pub fn validate(&mut self, function: &FuncCode) -> SideTable {
-        let mut abstract_control_stack = ControlStack::new();
-        let mut abstract_value_stack = ValidationStack::new();
-        let mut side_table = SideTable::new();
-
         self.initialize_locals(function);
 
         self.reader.seek(function.start);
-        abstract_control_stack.push(ControlType::Func {
+        self.abstract_control_stack.push(ControlType::Func {
             instruction_pointer: self.reader.current_index(),
             func_type: function.signature.clone(),
             sidetable_idxs: Vec::new(),
-            height_of_value_stack: abstract_value_stack.height(),
+            height_of_value_stack: self.abstract_value_stack.height(),
             reachable: true,
         });
 
         loop {
-
             let byte = self.reader.next_byte().expect("Missing End statement");
             match *byte {
                 I32_CONST => {
                     self.reader
                         .next_leb128_i32()
                         .expect("Could not read i32 const");
-                    abstract_value_stack.push(ValType::I32);
+                    self.abstract_value_stack.push(ValType::I32);
                 }
                 LOCAL_GET => {
                     let idx = self.reader.next_leb128_u32().expect("Error parsing indx");
                     let value = self.locals.get(idx as usize).expect("Invalid Local Index");
-                    abstract_value_stack.push(*value);
+                    self.abstract_value_stack.push(*value);
                 }
                 LOCAL_SET => {
                     let idx = self.reader.next_leb128_u32().expect("Error parsing indx");
                     let value = self.locals.get(idx as usize).expect("Invalid Local Index");
 
-                    abstract_value_stack
-                        .pop_expected(*value, abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack
+                        .pop_expected(*value, self.abstract_control_stack.top_is_reachable());
                 }
                 I32_ADD => {
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
-                    abstract_value_stack.push(ValType::I32);
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_SUB => {
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
-                    abstract_value_stack.push(ValType::I32);
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.push(ValType::I32);
                 }
                 IF => {
                     let index_of_if_bytecode = self.reader.current_index() as i32;
                     let signature = read_block_type(self.reader, self.typesec);
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable()); // bool value
-                    abstract_value_stack.pop_expected_vec(
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable()); // bool value
+                    self.abstract_value_stack.pop_expected_vec(
                         &signature.parameter,
-                        abstract_control_stack.top_is_reachable(),
+                        self.abstract_control_stack.top_is_reachable(),
                     );
 
                     let index_of_if_sidetable_entry =
-                        side_table.create_entry(index_of_if_bytecode, 0, 0, 0);
+                        self.side_table.create_entry(index_of_if_bytecode, 0, 0, 0);
 
-                    abstract_control_stack.push(ControlType::If {
+                    self.abstract_control_stack.push(ControlType::If {
                         instruction_pointer: self.reader.current_index(),
                         func_type: signature.clone(),
                         sidetable_idxs: Vec::new(),
                         side_table_entry: index_of_if_sidetable_entry,
                         reachable: true,
-                        height_of_value_stack: abstract_value_stack.height(),
+                        height_of_value_stack: self.abstract_value_stack.height(),
                     });
 
-                    abstract_value_stack.push_vec(&signature.parameter);
+                    self.abstract_value_stack.push_vec(&signature.parameter);
                 }
                 ELSE => {
-                    let control_type = abstract_control_stack.top();
+                    let control_type = self.abstract_control_stack.top();
                     let index_of_else_sidetable_entry =
-                        side_table.create_entry(self.reader.current_index() as i32, 0, 0, 0);
+                        self.side_table
+                            .create_entry(self.reader.current_index() as i32, 0, 0, 0);
 
                     match control_type {
                         ControlType::If {
@@ -137,16 +139,17 @@ impl<'a, 'b> Validator<'a, 'b> {
                             sidetable_idxs.push(index_of_else_sidetable_entry);
                             let expected_results = func_type.result.clone();
 
-                            abstract_value_stack.pop_expected_vec(&expected_results, *reachable);
+                            self.abstract_value_stack
+                                .pop_expected_vec(&expected_results, *reachable);
 
-                            if *height_of_value_stack != abstract_value_stack.height() {
+                            if *height_of_value_stack != self.abstract_value_stack.height() {
                                 panic!("Stack has not shrunk back to its initial height!");
                             }
 
-                            abstract_value_stack.push_vec(&func_type.parameter);
+                            self.abstract_value_stack.push_vec(&func_type.parameter);
 
-                            let side_table_len = side_table.len();
-                            let entry = side_table.get_entry(*side_table_entry);
+                            let side_table_len = self.side_table.len();
+                            let entry = self.side_table.get_entry(*side_table_entry);
                             // branch from "if" will go to instruction after else
                             entry.ip = (self.reader.current_index() + 1) as i32 - entry.ip;
                             // branch if will skip all sidetable entries from if to else
@@ -158,103 +161,86 @@ impl<'a, 'b> Validator<'a, 'b> {
                     }
                 }
                 I32_LT_S => {
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
-                    abstract_value_stack.push(ValType::I32);
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_GT_S => {
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
-                    abstract_value_stack.push(ValType::I32);
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.push(ValType::I32);
                 }
                 RETURN => {
-                    let control_type_is_reachable = abstract_control_stack.top_is_reachable();
-                    let control_type = abstract_control_stack.top();
+                    let control_type_is_reachable = self.abstract_control_stack.top_is_reachable();
+                    let control_type = self.abstract_control_stack.top();
                     match control_type {
-                        ControlType::For {
-                            func_type,
-                            ..
-                        }
-                        | ControlType::Block {
-                            func_type,
-                            ..
-                        }
-                        | ControlType::If {
-                            func_type,
-                            ..
-                        }
-                        | ControlType::Func {
-                            func_type,
-                            ..
-                        } => {
-                            abstract_value_stack
+                        ControlType::For { func_type, .. }
+                        | ControlType::Block { func_type, .. }
+                        | ControlType::If { func_type, .. }
+                        | ControlType::Func { func_type, .. } => {
+                            self.abstract_value_stack
                                 .pop_expected_vec(&func_type.result, control_type_is_reachable);
                         }
                     }
-		    abstract_value_stack.set_top(abstract_control_stack.height_of_top());
-                    abstract_control_stack.set_unreachable();
+                    self.abstract_value_stack
+                        .set_top(self.abstract_control_stack.height_of_top());
+                    self.abstract_control_stack.set_unreachable();
                 }
                 BLOCK => {
                     let signature = read_block_type(self.reader, self.typesec);
 
-                    abstract_value_stack.pop_expected_vec(
+                    self.abstract_value_stack.pop_expected_vec(
                         &signature.parameter,
-                        abstract_control_stack.top_is_reachable(),
+                        self.abstract_control_stack.top_is_reachable(),
                     );
 
-                    abstract_control_stack.push(ControlType::Block {
+                    self.abstract_control_stack.push(ControlType::Block {
                         instruction_pointer: self.reader.current_index(),
                         func_type: signature.clone(),
                         sidetable_idxs: Vec::new(),
                         reachable: true,
-                        height_of_value_stack: abstract_value_stack.height(),
+                        height_of_value_stack: self.abstract_value_stack.height(),
                     });
-                    abstract_value_stack.push_vec(&signature.parameter);
+                    self.abstract_value_stack.push_vec(&signature.parameter);
                 }
                 LOOP => {
                     let signature = read_block_type(self.reader, self.typesec);
-                    abstract_value_stack.pop_expected_vec(
+                    self.abstract_value_stack.pop_expected_vec(
                         &signature.parameter,
-                        abstract_control_stack.top_is_reachable(),
+                        self.abstract_control_stack.top_is_reachable(),
                     );
 
-                    abstract_control_stack.push(ControlType::For {
+                    self.abstract_control_stack.push(ControlType::For {
                         instruction_pointer: self.reader.current_index(),
                         func_type: signature.clone(),
-                        side_table_entry: side_table.len(), // Wrong
+                        side_table_entry: self.side_table.len(),
                         reachable: true,
-                        height_of_value_stack: abstract_value_stack.height(),
+                        height_of_value_stack: self.abstract_value_stack.height(),
                     });
-                    abstract_value_stack.push_vec(&signature.parameter);
+                    self.abstract_value_stack.push_vec(&signature.parameter);
                 }
                 BR_IF => {
                     let index_of_br_if_bytecode = self.reader.current_index() as i32;
 
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable()); // bool
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable()); // bool
 
                     let depth = self
                         .reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");
 
-                    self.create_sidetable_entry(
-                        &mut abstract_control_stack,
-                        &mut abstract_value_stack,
-                        depth,
-                        &mut side_table,
-                        index_of_br_if_bytecode,
-                    );
+                    self.create_sidetable_entry(depth, index_of_br_if_bytecode);
                 }
                 BR_TABLE => {
                     let index_of_br_table_bytecode = self.reader.current_index() as i32;
 
-                    abstract_value_stack
-                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable()); // index of branch
+                    self.abstract_value_stack
+                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable()); // index of branch
                     let number_of_branches = self
                         .reader
                         .next_leb128_u32()
@@ -265,17 +251,12 @@ impl<'a, 'b> Validator<'a, 'b> {
                             .reader
                             .next_leb128_u32()
                             .expect("Error parsing break depth");
-			
-                        self.create_sidetable_entry(
-                            &mut abstract_control_stack,
-                            &mut abstract_value_stack,
-                            depth,
-                            &mut side_table,
-                            index_of_br_table_bytecode,
-                        );
+
+                        self.create_sidetable_entry(depth, index_of_br_table_bytecode);
                     }
-                    abstract_value_stack.set_top(abstract_control_stack.height_of_top());
-                    abstract_control_stack.set_unreachable();
+                    self.abstract_value_stack
+                        .set_top(self.abstract_control_stack.height_of_top());
+                    self.abstract_control_stack.set_unreachable();
                 }
                 BR => {
                     let index_of_br_bytecode = self.reader.current_index() as i32;
@@ -283,18 +264,13 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");
-                    self.create_sidetable_entry(
-                        &mut abstract_control_stack,
-                        &mut abstract_value_stack,
-                        depth,
-                        &mut side_table,
-                        index_of_br_bytecode,
-                    );
-                    abstract_value_stack.set_top(abstract_control_stack.height_of_top());
-                    abstract_control_stack.set_unreachable();
+                    self.create_sidetable_entry(depth, index_of_br_bytecode);
+                    self.abstract_value_stack
+                        .set_top(self.abstract_control_stack.height_of_top());
+                    self.abstract_control_stack.set_unreachable();
                 }
                 END => {
-                    let control_type = abstract_control_stack.pop();
+                    let control_type = self.abstract_control_stack.pop();
 
                     match control_type {
                         ControlType::Func {
@@ -304,13 +280,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                             height_of_value_stack,
                             ..
                         } => {
-                            self.check_args(
-                                &func_type.result,
-                                height_of_value_stack,
-                                &mut abstract_value_stack,
-                                reachable,
-                            );
-                            self.resolve_sidetable_entries(&sidetable_idxs, &mut side_table);
+                            self.check_args(&func_type.result, height_of_value_stack, reachable);
+                            self.resolve_sidetable_entries(&sidetable_idxs);
                             break;
                         }
                         ControlType::Block {
@@ -327,25 +298,15 @@ impl<'a, 'b> Validator<'a, 'b> {
                             height_of_value_stack,
                             ..
                         } => {
-                            self.check_args(
-                                &func_type.result,
-                                height_of_value_stack,
-                                &mut abstract_value_stack,
-                                reachable,
-                            );
-                            self.resolve_sidetable_entries(&sidetable_idxs, &mut side_table);
+                            self.check_args(&func_type.result, height_of_value_stack, reachable);
+                            self.resolve_sidetable_entries(&sidetable_idxs);
                         }
                         ControlType::For {
                             func_type,
                             reachable,
                             height_of_value_stack,
                             ..
-                        } => self.check_args(
-                            &func_type.result,
-                            height_of_value_stack,
-                            &mut abstract_value_stack,
-                            reachable,
-                        ),
+                        } => self.check_args(&func_type.result, height_of_value_stack, reachable),
                     }
                 }
                 CALL => {
@@ -357,38 +318,42 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .typesec
                         .get(func_index as usize)
                         .expect("Called func sig does not exist");
-                    abstract_value_stack.pop_expected_vec(
+                    self.abstract_value_stack.pop_expected_vec(
                         &sig.parameter,
-                        abstract_control_stack.top_is_reachable(),
+                        self.abstract_control_stack.top_is_reachable(),
                     );
-                    abstract_value_stack.push_vec(&sig.result);
+                    self.abstract_value_stack.push_vec(&sig.result);
                 }
                 _ => panic!("Undefined opcode {}", byte),
             };
         }
-        side_table
+        let result = self.side_table.clone();
+        self.reset();
+        result
     }
-    fn check_args(
-        &self,
-        args: &[ValType],
-        height_of_value_stack: u32,
-        abstract_value_stack: &mut ValidationStack,
-        reachable: bool,
-    ) {
-        abstract_value_stack.pop_expected_vec(&args, reachable);
 
-        if height_of_value_stack != abstract_value_stack.height() {
+    fn reset(&mut self) {
+        self.abstract_control_stack.reset();
+        self.abstract_value_stack.reset();
+        self.side_table.reset();
+        self.locals.clear();
+    }
+
+    fn check_args(&mut self, args: &[ValType], height_of_value_stack: u32, reachable: bool) {
+        self.abstract_value_stack.pop_expected_vec(&args, reachable);
+
+        if height_of_value_stack != self.abstract_value_stack.height() {
             panic!("Stack has not shrunk back to its initial height!");
         }
 
-        abstract_value_stack.push_vec(&args);
+        self.abstract_value_stack.push_vec(&args);
     }
 
-    fn resolve_sidetable_entries(&self, sidetable_idxs: &[usize], side_table: &mut SideTable) {
+    fn resolve_sidetable_entries(&mut self, sidetable_idxs: &[usize]) {
         let abs_target_pos = self.reader.current_index();
         for entry_index in sidetable_idxs.iter() {
-            let sidetable_offset = side_table.len() as i32 - *entry_index as i32;
-            let entry = side_table.get_entry(*entry_index);
+            let sidetable_offset = self.side_table.len() as i32 - *entry_index as i32;
+            let entry = self.side_table.get_entry(*entry_index);
             let abs_start_pos = entry.ip;
             let rel_offset = abs_target_pos as i32 - abs_start_pos;
 
@@ -396,16 +361,11 @@ impl<'a, 'b> Validator<'a, 'b> {
             entry.ip = rel_offset;
         }
     }
-    fn create_sidetable_entry(
-        &self,
-        abstract_control_stack: &mut ControlStack,
-        abstract_value_stack: &mut ValidationStack,
-        depth: u32,
-        side_table: &mut SideTable,
-        index_of_start_bytecode: i32,
-    ) {
-        let target_control = abstract_control_stack.get_control_type(depth);
-        let index_of_br_sidetable_entry = side_table.create_entry(index_of_start_bytecode, 0, 0, 0);
+    fn create_sidetable_entry(&mut self, depth: u32, index_of_start_bytecode: i32) {
+        let target_control = self.abstract_control_stack.get_control_type(depth);
+        let index_of_br_sidetable_entry =
+            self.side_table
+                .create_entry(index_of_start_bytecode, 0, 0, 0);
         match target_control {
             ControlType::Block {
                 sidetable_idxs,
@@ -430,10 +390,11 @@ impl<'a, 'b> Validator<'a, 'b> {
             } => {
                 sidetable_idxs.push(index_of_br_sidetable_entry);
 
-                abstract_value_stack.pop_expected_vec(&func_type.result, *reachable);
+                self.abstract_value_stack
+                    .pop_expected_vec(&func_type.result, *reachable);
 
-                let entry = side_table.get_entry(index_of_br_sidetable_entry);
-                entry.pop = (abstract_value_stack.height() - *height_of_value_stack) as usize;
+                let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
+                entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
                 entry.vals = func_type.result.len();
             }
             ControlType::For {
@@ -443,11 +404,12 @@ impl<'a, 'b> Validator<'a, 'b> {
                 instruction_pointer,
                 ..
             } => {
-                abstract_value_stack.pop_expected_vec(&func_type.parameter, *reachable);
+                self.abstract_value_stack
+                    .pop_expected_vec(&func_type.parameter, *reachable);
 
-                let stp = *side_table_entry as i32 - (side_table.len() as i32) + 1;
+                let stp = *side_table_entry as i32 - (self.side_table.len() as i32) + 1;
                 let ip = *instruction_pointer as i32 - index_of_start_bytecode as i32;
-                let entry = side_table.get_entry(index_of_br_sidetable_entry);
+                let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.ip = ip;
                 entry.stp = stp;
             }
@@ -965,7 +927,6 @@ mod tests {
         };
         assert_eq!(actual_sidetable, expected_sidetable);
     }
-
 
     #[test]
     fn test_validation_with_br_tables() {

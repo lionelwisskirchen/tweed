@@ -18,6 +18,9 @@ impl SideTable {
     pub fn len(&self) -> usize {
 	self.entries.len()
     }
+     pub fn reset(&mut self) {
+	self.entries.clear();
+    }
     pub fn create_entry(&mut self, ip: i32, stp: i32, vals: usize, pop: usize) -> usize {
         self.entries.push(SideTableEntry { ip, stp, vals, pop });
 	self.entries.len().saturating_sub(1)

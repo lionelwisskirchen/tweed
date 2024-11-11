@@ -10,6 +10,9 @@ impl ValidationStack {
     pub fn new() -> Self {
         Self { stack: Vec::new() }
     }
+     pub fn reset(&mut self) {
+	self.stack.clear();
+    }
     pub fn set_top(&mut self, length: u32) {
 	self.stack.drain(length as usize..self.height() as usize);
     }
