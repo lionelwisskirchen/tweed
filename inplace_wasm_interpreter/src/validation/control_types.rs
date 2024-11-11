@@ -5,6 +5,8 @@ use alloc::vec::Vec;
 pub enum ControlType {
     Func {
         instruction_pointer: usize,
+	sidetable_idxs: Vec<usize>,
+	height_of_value_stack: u32,
         func_type: FuncType,
 	reachable: bool,
 

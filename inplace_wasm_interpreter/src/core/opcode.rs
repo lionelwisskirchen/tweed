@@ -16,5 +16,6 @@ pub const BLOCK: u8 = 0x02;
 pub const LOOP: u8 = 0x03;
 pub const BR_IF: u8 = 0x0D;
 pub const BR: u8 = 0x0C;
+pub const BR_TABLE: u8 = 0x0E;
 
 

@@ -23,6 +23,15 @@ impl ControlStack {
             | ControlType::If { reachable, .. } => *reachable,
         }
     }
+    pub fn height_of_top(&mut self) -> u32 {
+	let top = self.top();
+        match top {
+            ControlType::Block { height_of_value_stack, .. }
+            | ControlType::For { height_of_value_stack, .. }
+            | ControlType::If { height_of_value_stack, .. } => {height_of_value_stack.clone()}
+	    _ => {0}
+        }
+    }
     pub fn set_unreachable(&mut self){
         let top = self.top();
         match top {

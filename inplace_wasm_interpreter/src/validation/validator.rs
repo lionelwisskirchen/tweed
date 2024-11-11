@@ -7,7 +7,7 @@ use crate::*;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use validation::control_stack::ControlStack;
-use validation::validation_stack::ValidationStack;
+use validation::validation_stack::{self, ValidationStack};
 
 use super::side_table::SideTable;
 
@@ -52,14 +52,16 @@ impl<'a, 'b> Validator<'a, 'b> {
         self.initialize_locals(function);
 
         self.reader.seek(function.start);
-
         abstract_control_stack.push(ControlType::Func {
             instruction_pointer: self.reader.current_index(),
             func_type: function.signature.clone(),
+            sidetable_idxs: Vec::new(),
+            height_of_value_stack: abstract_value_stack.height(),
             reachable: true,
         });
 
         loop {
+
             let byte = self.reader.next_byte().expect("Missing End statement");
             match *byte {
                 I32_CONST => {
@@ -87,7 +89,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
                     abstract_value_stack.push(ValType::I32);
                 }
-		I32_SUB => {
+                I32_SUB => {
                     abstract_value_stack
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
                     abstract_value_stack
@@ -162,7 +164,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
                     abstract_value_stack.push(ValType::I32);
                 }
-		I32_GT_S => {
+                I32_GT_S => {
                     abstract_value_stack
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable());
                     abstract_value_stack
@@ -175,29 +177,26 @@ impl<'a, 'b> Validator<'a, 'b> {
                     match control_type {
                         ControlType::For {
                             func_type,
-                            reachable,
                             ..
                         }
                         | ControlType::Block {
                             func_type,
-                            reachable,
                             ..
                         }
                         | ControlType::If {
                             func_type,
-                            reachable,
                             ..
                         }
                         | ControlType::Func {
                             func_type,
-                            reachable,
                             ..
                         } => {
                             abstract_value_stack
                                 .pop_expected_vec(&func_type.result, control_type_is_reachable);
-                            *reachable = false;
                         }
                     }
+		    abstract_value_stack.set_top(abstract_control_stack.height_of_top());
+                    abstract_control_stack.set_unreachable();
                 }
                 BLOCK => {
                     let signature = read_block_type(self.reader, self.typesec);
@@ -237,58 +236,46 @@ impl<'a, 'b> Validator<'a, 'b> {
 
                     abstract_value_stack
                         .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable()); // bool
-		    
+
                     let depth = self
                         .reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");
 
-                    let target_control = abstract_control_stack.get_control_type(depth);
-                    let index_of_br_sidetable_entry =
-                        side_table.create_entry(index_of_br_if_bytecode, 0, 0, 0);
-		    
-		    
-                    match target_control {
-                        ControlType::Block {
-                            sidetable_idxs,
-                            func_type,
-                            reachable,
-                            ..
-                        }
-                        | ControlType::If {
-                            sidetable_idxs,
-                            func_type,
-                            reachable,
-                            ..
-                        } => {
-                            sidetable_idxs.push(index_of_br_sidetable_entry);
-			 
-                            abstract_value_stack.pop_expected_vec(&func_type.result, *reachable);
+                    self.create_sidetable_entry(
+                        &mut abstract_control_stack,
+                        &mut abstract_value_stack,
+                        depth,
+                        &mut side_table,
+                        index_of_br_if_bytecode,
+                    );
+                }
+                BR_TABLE => {
+                    let index_of_br_table_bytecode = self.reader.current_index() as i32;
 
-                            abstract_value_stack.push_vec(&func_type.result);
-                        }
-                        ControlType::For {
-                            func_type,
-                            side_table_entry,
-                            instruction_pointer,
-                            reachable,
-                            ..
-                        } => {
-                            abstract_value_stack.pop_expected_vec(&func_type.parameter, *reachable);
+                    abstract_value_stack
+                        .pop_expected(ValType::I32, abstract_control_stack.top_is_reachable()); // index of branch
+                    let number_of_branches = self
+                        .reader
+                        .next_leb128_u32()
+                        .expect("Error parsing number of branches in BR_Table");
 
-                            abstract_value_stack.push_vec(&func_type.parameter);
-
-                            let stp = *side_table_entry as i32 - (side_table.len()as i32) + 1;
-                            let ip =
-                                *instruction_pointer as i32 - index_of_br_if_bytecode as i32;
-                            let entry = side_table.get_entry(index_of_br_sidetable_entry);
-                            entry.ip = ip;
-                            entry.stp = stp;
-                        }
-                        _ => {
-                            panic!("Branching target not allowed")
-                        }
-                    };
+                    for _ in 0..=number_of_branches {
+                        let depth = self
+                            .reader
+                            .next_leb128_u32()
+                            .expect("Error parsing break depth");
+			
+                        self.create_sidetable_entry(
+                            &mut abstract_control_stack,
+                            &mut abstract_value_stack,
+                            depth,
+                            &mut side_table,
+                            index_of_br_table_bytecode,
+                        );
+                    }
+                    abstract_value_stack.set_top(abstract_control_stack.height_of_top());
+                    abstract_control_stack.set_unreachable();
                 }
                 BR => {
                     let index_of_br_bytecode = self.reader.current_index() as i32;
@@ -296,59 +283,15 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .reader
                         .next_leb128_u32()
                         .expect("Error parsing break depth");
-                    let target_control = abstract_control_stack.get_control_type(depth);
-                    let index_of_br_sidetable_entry =
-                        side_table.create_entry(index_of_br_bytecode, 0, 0, 0);
-                    match target_control {
-                        ControlType::Block {
-                            sidetable_idxs,
-                            func_type,
-                            reachable,
-                            height_of_value_stack,
-                            ..
-                        }
-                        | ControlType::If {
-                            sidetable_idxs,
-                            func_type,
-                            reachable,
-                            height_of_value_stack,
-                            ..
-                        } => {
-                            sidetable_idxs.push(index_of_br_sidetable_entry);
-
-                            abstract_value_stack.pop_expected_vec(&func_type.result, *reachable);
-
-                            let entry = side_table.get_entry(index_of_br_sidetable_entry);
-                            entry.pop =
-                                (abstract_value_stack.height() - *height_of_value_stack) as usize;
-                            entry.vals = func_type.result.len();
-
-                            abstract_value_stack.set_top(*height_of_value_stack);
-                            abstract_control_stack.set_unreachable();
-                        }
-                        ControlType::For {
-                            func_type,
-                            reachable,
-                            side_table_entry,
-                            instruction_pointer,
-                            height_of_value_stack,
-                        } => {
-                            abstract_value_stack.pop_expected_vec(&func_type.parameter, *reachable);
-
-                            let stp = *side_table_entry as i32 - (side_table.len()as i32) + 1;
-                            let ip =
-                                *instruction_pointer as i32 - index_of_br_bytecode as i32;
-                            let entry = side_table.get_entry(index_of_br_sidetable_entry);
-                            entry.ip = ip;
-                            entry.stp = stp;
-
-                            abstract_value_stack.set_top(*height_of_value_stack);
-                            abstract_control_stack.set_unreachable();
-                        }
-                        _ => {
-                            panic!("Branching target not allowed")
-                        }
-                    };
+                    self.create_sidetable_entry(
+                        &mut abstract_control_stack,
+                        &mut abstract_value_stack,
+                        depth,
+                        &mut side_table,
+                        index_of_br_bytecode,
+                    );
+                    abstract_value_stack.set_top(abstract_control_stack.height_of_top());
+                    abstract_control_stack.set_unreachable();
                 }
                 END => {
                     let control_type = abstract_control_stack.pop();
@@ -357,14 +300,17 @@ impl<'a, 'b> Validator<'a, 'b> {
                         ControlType::Func {
                             func_type,
                             reachable,
+                            sidetable_idxs,
+                            height_of_value_stack,
                             ..
                         } => {
                             self.check_args(
                                 &func_type.result,
-                                0,
+                                height_of_value_stack,
                                 &mut abstract_value_stack,
                                 reachable,
                             );
+                            self.resolve_sidetable_entries(&sidetable_idxs, &mut side_table);
                             break;
                         }
                         ControlType::Block {
@@ -373,21 +319,21 @@ impl<'a, 'b> Validator<'a, 'b> {
                             height_of_value_stack,
                             reachable,
                             ..
-                        } | ControlType::If {
+                        }
+                        | ControlType::If {
                             func_type,
                             sidetable_idxs,
                             reachable,
                             height_of_value_stack,
                             ..
-                        } 
-			=> {
+                        } => {
                             self.check_args(
                                 &func_type.result,
                                 height_of_value_stack,
                                 &mut abstract_value_stack,
                                 reachable,
                             );
-			    self.resolve_sidetable_entries(&sidetable_idxs, &mut side_table);
+                            self.resolve_sidetable_entries(&sidetable_idxs, &mut side_table);
                         }
                         ControlType::For {
                             func_type,
@@ -430,6 +376,7 @@ impl<'a, 'b> Validator<'a, 'b> {
         reachable: bool,
     ) {
         abstract_value_stack.pop_expected_vec(&args, reachable);
+
         if height_of_value_stack != abstract_value_stack.height() {
             panic!("Stack has not shrunk back to its initial height!");
         }
@@ -437,7 +384,7 @@ impl<'a, 'b> Validator<'a, 'b> {
         abstract_value_stack.push_vec(&args);
     }
 
-    fn resolve_sidetable_entries(&self, sidetable_idxs: &[usize], side_table: &mut SideTable ) {
+    fn resolve_sidetable_entries(&self, sidetable_idxs: &[usize], side_table: &mut SideTable) {
         let abs_target_pos = self.reader.current_index();
         for entry_index in sidetable_idxs.iter() {
             let sidetable_offset = side_table.len() as i32 - *entry_index as i32;
@@ -448,6 +395,63 @@ impl<'a, 'b> Validator<'a, 'b> {
             entry.stp = sidetable_offset;
             entry.ip = rel_offset;
         }
+    }
+    fn create_sidetable_entry(
+        &self,
+        abstract_control_stack: &mut ControlStack,
+        abstract_value_stack: &mut ValidationStack,
+        depth: u32,
+        side_table: &mut SideTable,
+        index_of_start_bytecode: i32,
+    ) {
+        let target_control = abstract_control_stack.get_control_type(depth);
+        let index_of_br_sidetable_entry = side_table.create_entry(index_of_start_bytecode, 0, 0, 0);
+        match target_control {
+            ControlType::Block {
+                sidetable_idxs,
+                func_type,
+                reachable,
+                height_of_value_stack,
+                ..
+            }
+            | ControlType::If {
+                sidetable_idxs,
+                func_type,
+                reachable,
+                height_of_value_stack,
+                ..
+            }
+            | ControlType::Func {
+                sidetable_idxs,
+                func_type,
+                reachable,
+                height_of_value_stack,
+                ..
+            } => {
+                sidetable_idxs.push(index_of_br_sidetable_entry);
+
+                abstract_value_stack.pop_expected_vec(&func_type.result, *reachable);
+
+                let entry = side_table.get_entry(index_of_br_sidetable_entry);
+                entry.pop = (abstract_value_stack.height() - *height_of_value_stack) as usize;
+                entry.vals = func_type.result.len();
+            }
+            ControlType::For {
+                func_type,
+                reachable,
+                side_table_entry,
+                instruction_pointer,
+                ..
+            } => {
+                abstract_value_stack.pop_expected_vec(&func_type.parameter, *reachable);
+
+                let stp = *side_table_entry as i32 - (side_table.len() as i32) + 1;
+                let ip = *instruction_pointer as i32 - index_of_start_bytecode as i32;
+                let entry = side_table.get_entry(index_of_br_sidetable_entry);
+                entry.ip = ip;
+                entry.stp = stp;
+            }
+        };
     }
 }
 
@@ -809,7 +813,7 @@ mod tests {
                 SideTableEntry {
                     ip: 5,
                     stp: 1,
-                    vals: 0,
+                    vals: 1,
                     pop: 0,
                 },
             ],
@@ -954,6 +958,85 @@ mod tests {
                 SideTableEntry {
                     ip: -30,
                     stp: -5,
+                    vals: 0,
+                    pop: 0,
+                },
+            ],
+        };
+        assert_eq!(actual_sidetable, expected_sidetable);
+    }
+
+
+    #[test]
+    fn test_validation_with_br_tables() {
+        let bytes = wat::parse_str(
+            "
+(func (result i32)
+  (block
+    (block
+      (block
+        (block
+               i32.const 0
+               (br_table
+                         2  
+                         1  
+                         0  
+                         3)
+	) 
+        i32.const 100
+        return
+       )
+       i32.const 101
+       return
+      )
+    i32.const 102
+    return
+    )
+i32.const 103
+return
+)",
+        )
+        .unwrap();
+        let mut reader = WasmReader::new(bytes.to_vec());
+        let typesec = vec![FuncType {
+            parameter: vec![],
+            result: vec![ValType::I32],
+        }];
+
+        let code = FuncCode {
+            signature: FuncType {
+                parameter: vec![],
+                result: vec![ValType::I32],
+            },
+            locals: vec![],
+            start: 24,
+            end: 60,
+        };
+        let mut validator = Validator::new(&mut reader, &typesec);
+        let actual_sidetable = validator.validate(&code);
+        let expected_sidetable = SideTable {
+            entries: vec![
+                SideTableEntry {
+                    ip: 16,
+                    stp: 4,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 11,
+                    stp: 3,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 6,
+                    stp: 2,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 21,
+                    stp: 1,
                     vals: 0,
                     pop: 0,
                 },
