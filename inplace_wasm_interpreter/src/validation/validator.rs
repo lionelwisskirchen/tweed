@@ -7,7 +7,7 @@ use crate::*;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use validation::control_stack::ControlStack;
-use validation::validation_stack::{self, ValidationStack};
+use validation::validation_stack::ValidationStack;
 
 use super::side_table::SideTable;
 
@@ -49,12 +49,39 @@ impl<'a, 'b> Validator<'a, 'b> {
         locals.append(&mut function.locals.clone());
         self.locals = locals
     }
+    fn push_ctrl(&mut self, ctrl: ControlType) {
+        match ctrl {
+            ControlType::Block {
+                reachable,
+                height_of_value_stack,
+                ..
+            }
+            | ControlType::Func {
+                reachable,
+                height_of_value_stack,
+                ..
+            }
+            | ControlType::If {
+                reachable,
+                height_of_value_stack,
+                ..
+            }
+            | ControlType::For {
+                reachable,
+                height_of_value_stack,
+                ..
+            } => {
+                self.abstract_value_stack
+                    .update(height_of_value_stack, reachable);
+            }
+        }
 
+        self.abstract_control_stack.push(ctrl);
+    }
     pub fn validate(&mut self, function: &FuncCode) -> SideTable {
         self.initialize_locals(function);
-
         self.reader.seek(function.start);
-        self.abstract_control_stack.push(ControlType::Func {
+        self.push_ctrl(ControlType::Func {
             instruction_pointer: self.reader.current_index(),
             func_type: function.signature.clone(),
             sidetable_idxs: Vec::new(),
@@ -80,37 +107,29 @@ impl<'a, 'b> Validator<'a, 'b> {
                     let idx = self.reader.next_leb128_u32().expect("Error parsing indx");
                     let value = self.locals.get(idx as usize).expect("Invalid Local Index");
 
-                    self.abstract_value_stack
-                        .pop_expected(*value, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.pop_expected(*value);
                 }
                 I32_ADD => {
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_SUB => {
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 IF => {
                     let index_of_if_bytecode = self.reader.current_index() as i32;
                     let signature = read_block_type(self.reader, self.typesec);
+                    self.abstract_value_stack.pop_expected(ValType::I32); // bool value
                     self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable()); // bool value
-                    self.abstract_value_stack.pop_expected_vec(
-                        &signature.parameter,
-                        self.abstract_control_stack.top_is_reachable(),
-                    );
+                        .pop_expected_vec(&signature.parameter);
 
                     let index_of_if_sidetable_entry =
                         self.side_table.create_entry(index_of_if_bytecode, 0, 0, 0);
 
-                    self.abstract_control_stack.push(ControlType::If {
+                    self.push_ctrl(ControlType::If {
                         instruction_pointer: self.reader.current_index(),
                         func_type: signature.clone(),
                         sidetable_idxs: Vec::new(),
@@ -133,14 +152,13 @@ impl<'a, 'b> Validator<'a, 'b> {
                             sidetable_idxs,
                             side_table_entry,
                             height_of_value_stack,
-                            reachable,
                             ..
                         } => {
                             sidetable_idxs.push(index_of_else_sidetable_entry);
                             let expected_results = func_type.result.clone();
 
                             self.abstract_value_stack
-                                .pop_expected_vec(&expected_results, *reachable);
+                                .pop_expected_vec(&expected_results);
 
                             if *height_of_value_stack != self.abstract_value_stack.height() {
                                 panic!("Stack has not shrunk back to its initial height!");
@@ -161,21 +179,16 @@ impl<'a, 'b> Validator<'a, 'b> {
                     }
                 }
                 I32_LT_S => {
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_GT_S => {
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable());
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 RETURN => {
-                    let control_type_is_reachable = self.abstract_control_stack.top_is_reachable();
                     let control_type = self.abstract_control_stack.top();
                     match control_type {
                         ControlType::For { func_type, .. }
@@ -183,22 +196,22 @@ impl<'a, 'b> Validator<'a, 'b> {
                         | ControlType::If { func_type, .. }
                         | ControlType::Func { func_type, .. } => {
                             self.abstract_value_stack
-                                .pop_expected_vec(&func_type.result, control_type_is_reachable);
+                                .pop_expected_vec(&func_type.result);
                         }
                     }
                     self.abstract_value_stack
                         .set_top(self.abstract_control_stack.height_of_top());
                     self.abstract_control_stack.set_unreachable();
+                    self.abstract_value_stack
+                        .update(self.abstract_control_stack.height_of_top(), false);
                 }
                 BLOCK => {
                     let signature = read_block_type(self.reader, self.typesec);
 
-                    self.abstract_value_stack.pop_expected_vec(
-                        &signature.parameter,
-                        self.abstract_control_stack.top_is_reachable(),
-                    );
+                    self.abstract_value_stack
+                        .pop_expected_vec(&signature.parameter);
 
-                    self.abstract_control_stack.push(ControlType::Block {
+                    self.push_ctrl(ControlType::Block {
                         instruction_pointer: self.reader.current_index(),
                         func_type: signature.clone(),
                         sidetable_idxs: Vec::new(),
@@ -209,12 +222,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                 }
                 LOOP => {
                     let signature = read_block_type(self.reader, self.typesec);
-                    self.abstract_value_stack.pop_expected_vec(
-                        &signature.parameter,
-                        self.abstract_control_stack.top_is_reachable(),
-                    );
+                    self.abstract_value_stack
+                        .pop_expected_vec(&signature.parameter);
 
-                    self.abstract_control_stack.push(ControlType::For {
+                    self.push_ctrl(ControlType::For {
                         instruction_pointer: self.reader.current_index(),
                         func_type: signature.clone(),
                         side_table_entry: self.side_table.len(),
@@ -226,8 +237,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 BR_IF => {
                     let index_of_br_if_bytecode = self.reader.current_index() as i32;
 
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable()); // bool
+                    self.abstract_value_stack.pop_expected(ValType::I32); // bool
 
                     let depth = self
                         .reader
@@ -239,8 +249,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 BR_TABLE => {
                     let index_of_br_table_bytecode = self.reader.current_index() as i32;
 
-                    self.abstract_value_stack
-                        .pop_expected(ValType::I32, self.abstract_control_stack.top_is_reachable()); // index of branch
+                    self.abstract_value_stack.pop_expected(ValType::I32); // index of branch
                     let number_of_branches = self
                         .reader
                         .next_leb128_u32()
@@ -257,6 +266,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack
                         .set_top(self.abstract_control_stack.height_of_top());
                     self.abstract_control_stack.set_unreachable();
+                    self.abstract_value_stack
+                        .update(self.abstract_control_stack.height_of_top(), false);
                 }
                 BR => {
                     let index_of_br_bytecode = self.reader.current_index() as i32;
@@ -268,6 +279,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack
                         .set_top(self.abstract_control_stack.height_of_top());
                     self.abstract_control_stack.set_unreachable();
+                    self.abstract_value_stack
+                        .update(self.abstract_control_stack.height_of_top(), false);
                 }
                 END => {
                     let control_type = self.abstract_control_stack.pop();
@@ -275,12 +288,11 @@ impl<'a, 'b> Validator<'a, 'b> {
                     match control_type {
                         ControlType::Func {
                             func_type,
-                            reachable,
                             sidetable_idxs,
                             height_of_value_stack,
                             ..
                         } => {
-                            self.check_args(&func_type.result, height_of_value_stack, reachable);
+                            self.check_args(&func_type.result, height_of_value_stack);
                             self.resolve_sidetable_entries(&sidetable_idxs);
                             break;
                         }
@@ -288,26 +300,27 @@ impl<'a, 'b> Validator<'a, 'b> {
                             func_type,
                             sidetable_idxs,
                             height_of_value_stack,
-                            reachable,
                             ..
                         }
                         | ControlType::If {
                             func_type,
                             sidetable_idxs,
-                            reachable,
                             height_of_value_stack,
                             ..
                         } => {
-                            self.check_args(&func_type.result, height_of_value_stack, reachable);
+                            self.check_args(&func_type.result, height_of_value_stack);
                             self.resolve_sidetable_entries(&sidetable_idxs);
                         }
                         ControlType::For {
                             func_type,
-                            reachable,
                             height_of_value_stack,
                             ..
-                        } => self.check_args(&func_type.result, height_of_value_stack, reachable),
+                        } => self.check_args(&func_type.result, height_of_value_stack),
                     }
+                    self.abstract_value_stack.update(
+                        self.abstract_control_stack.height_of_top(),
+                        self.abstract_control_stack.top_is_reachable(),
+                    )
                 }
                 CALL => {
                     let func_index = self
@@ -318,10 +331,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .typesec
                         .get(func_index as usize)
                         .expect("Called func sig does not exist");
-                    self.abstract_value_stack.pop_expected_vec(
-                        &sig.parameter,
-                        self.abstract_control_stack.top_is_reachable(),
-                    );
+                    self.abstract_value_stack.pop_expected_vec(&sig.parameter);
                     self.abstract_value_stack.push_vec(&sig.result);
                 }
                 _ => panic!("Undefined opcode {}", byte),
@@ -339,8 +349,8 @@ impl<'a, 'b> Validator<'a, 'b> {
         self.locals.clear();
     }
 
-    fn check_args(&mut self, args: &[ValType], height_of_value_stack: u32, reachable: bool) {
-        self.abstract_value_stack.pop_expected_vec(&args, reachable);
+    fn check_args(&mut self, args: &[ValType], height_of_value_stack: u32) {
+        self.abstract_value_stack.pop_expected_vec(&args);
 
         if height_of_value_stack != self.abstract_value_stack.height() {
             panic!("Stack has not shrunk back to its initial height!");
@@ -370,28 +380,25 @@ impl<'a, 'b> Validator<'a, 'b> {
             ControlType::Block {
                 sidetable_idxs,
                 func_type,
-                reachable,
                 height_of_value_stack,
                 ..
             }
             | ControlType::If {
                 sidetable_idxs,
                 func_type,
-                reachable,
                 height_of_value_stack,
                 ..
             }
             | ControlType::Func {
                 sidetable_idxs,
                 func_type,
-                reachable,
                 height_of_value_stack,
                 ..
             } => {
                 sidetable_idxs.push(index_of_br_sidetable_entry);
 
                 self.abstract_value_stack
-                    .pop_expected_vec(&func_type.result, *reachable);
+                    .pop_expected_vec(&func_type.result);
 
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
@@ -399,13 +406,12 @@ impl<'a, 'b> Validator<'a, 'b> {
             }
             ControlType::For {
                 func_type,
-                reachable,
                 side_table_entry,
                 instruction_pointer,
                 ..
             } => {
                 self.abstract_value_stack
-                    .pop_expected_vec(&func_type.parameter, *reachable);
+                    .pop_expected_vec(&func_type.parameter);
 
                 let stp = *side_table_entry as i32 - (self.side_table.len() as i32) + 1;
                 let ip = *instruction_pointer as i32 - index_of_start_bytecode as i32;
