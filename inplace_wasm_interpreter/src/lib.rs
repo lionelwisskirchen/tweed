@@ -21,7 +21,7 @@ pub fn run(input: &[u8], params: Vec<Value>) -> Vec<Value> {
     println!("----- Created and validated Module -----\n {:#?}", module);
     let mut instance = instance::instantiate(module, &mut reader);
 
-    instance.call(0, params).unwrap().to_vec()
+    instance.call(0, params)
 }
 
 fn validate(reader: &mut WasmReader, module: &mut Module) {

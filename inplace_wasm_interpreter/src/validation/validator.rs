@@ -1,26 +1,16 @@
+use self::core::signature_lookup::lookup_signature;
+
 use crate::core::opcode::*;
 
 use self::binary::{code_section::FuncCode, type_section::FuncType};
 use self::core::values::*;
 use crate::validation::control_types::ControlType;
 use crate::*;
-use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use validation::control_stack::ControlStack;
 use validation::validation_stack::ValidationStack;
 
 use super::side_table::SideTable;
-
-fn shorthand_lookup(val: u32) -> Option<FuncType> {
-    let lookup_map = BTreeMap::from([(
-        0x7f,
-        FuncType {
-            parameter: Vec::new(),
-            result: vec![ValType::I32],
-        },
-    )]);
-    lookup_map.get(&val).cloned()
-}
 
 pub struct Validator<'a, 'b> {
     reader: &'a mut WasmReader,
@@ -414,7 +404,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     .pop_expected_vec(&func_type.parameter);
 
                 let stp = *side_table_entry as i32 - (self.side_table.len() as i32) + 1;
-                let ip = *instruction_pointer as i32 - index_of_start_bytecode as i32;
+                let ip = *instruction_pointer as i32 - index_of_start_bytecode as i32 - 1; // -1 Because current byte is the depth
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.ip = ip;
                 entry.stp = stp;
@@ -429,20 +419,7 @@ fn read_block_type(reader: &mut WasmReader, type_section: &[FuncType]) -> FuncTy
         .expect("Error parsing block func idx");
     lookup_signature(func_idx, type_section)
 }
-fn lookup_signature(func_idx: u32, type_section: &[FuncType]) -> FuncType {
-    if func_idx == 0x40 {
-        return FuncType {
-            ..Default::default()
-        };
-    };
-    if let Some(signature) = shorthand_lookup(func_idx) {
-        return signature;
-    };
-    type_section
-        .get(func_idx as usize)
-        .expect("No func idx for sig")
-        .clone()
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -831,7 +808,7 @@ mod tests {
         let actual_sidetable = validator.validate(&code);
         let expected_sidetable = SideTable {
             entries: vec![SideTableEntry {
-                ip: -13,
+                ip: -14,
                 stp: 0,
                 vals: 0,
                 pop: 0,
@@ -924,7 +901,7 @@ mod tests {
                     pop: 0,
                 },
                 SideTableEntry {
-                    ip: -30,
+                    ip: -31,
                     stp: -5,
                     vals: 0,
                     pop: 0,

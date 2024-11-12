@@ -7,6 +7,8 @@ use crate::{
     validation::side_table::SideTable,
 };
 
+use super::execution_stack::ExecutionStack;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Value {
     I32(i32),
@@ -34,8 +36,7 @@ impl core::ops::Sub for Value {
     }
 }
 
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionInstance {
     pub signature: FuncType,
     pub locals: Vec<Value>,
@@ -63,52 +64,75 @@ pub struct Instance<'a> {
     functions: Vec<FunctionInstance>,
     types: Vec<FuncType>,
     call_stack: Vec<Frame>,
-    stack: Vec<Value>,
+    stack: ExecutionStack,
 }
 
 impl<'a> Instance<'a> {
-    pub fn call(&mut self, index: usize, args: Vec<Value>) -> Option<&[Value]> {
-        self.stack.clear(); // Reset stack. Maybe not the perfect location
-        for arg in args {
-            self.stack.push(arg);
-        }
+    pub fn call(&mut self, index: usize, args: Vec<Value>) -> Vec<Value> {
+        self.stack.reset(); // Reset stack. Maybe not the perfect location
+        self.stack.push_vec(&args);
         self.invoke(index)
     }
-    fn invoke(&mut self, index: usize) -> Option<&[Value]> {
-        let func = self
+    fn build_frame(&mut self, function: FunctionInstance) -> Frame {
+        let mut locals = self.stack.pop_n(function.signature.parameter.len());
+        locals.append(&mut function.locals.clone()); // Locals = Params + Locals
+        Frame {
+            program_counter: -1,
+            stack_pointer: self.stack.len(),
+            start: function.start,
+            end: function.end,
+            return_value: function.signature.result.clone(),
+            locals,
+            side_table: function.side_table.clone(),
+            side_table_pointer: 0,
+        }
+    }
+    fn invoke(&mut self, index: usize) -> Vec<Value> {
+        let function = self
             .functions
             .get(index)
             .expect("Invoked function does not exist");
-        let bottom = self
-            .stack
-            .len()
-            .saturating_sub(func.signature.parameter.len());
-
-        let mut locals = self.stack.split_off(bottom);
-        locals.append(&mut func.locals.clone());
-
-        let frame = Frame {
-            program_counter: -1,
-            stack_pointer: self.stack.len(),
-            start: func.start,
-            end: func.end,
-            return_value: func.signature.result.clone(),
-            locals,
-            side_table: func.side_table.clone(),
-            side_table_pointer: 0,
-        };
+        let frame = self.build_frame(function.clone());
         self.call_stack.push(frame);
         self.execute()
     }
-    fn execute(&mut self) -> Option<&[Value]> {
+    fn execute(&mut self) -> Vec<Value> {
         loop {
             let Some(mut current_frame) = self.call_stack.pop() else {
-                return Some(&self.stack);
+                return self.stack.pop_n(self.stack.len());
             };
-
             self.execute_frame(&mut current_frame);
         }
     }
+    fn skip_block_type(&mut self) {
+        self.reader
+            .next_leb128_u32()
+            .expect("Error parsing block func idx");
+    }
+    fn skip_depth(&mut self) {
+        self.reader
+            .next_leb128_u32()
+            .expect("Error parsing break depth");
+    }
+    fn do_goto(&mut self, current_frame: &mut Frame) {
+        let side_table_entry = current_frame
+            .side_table
+            .entries
+            .get(current_frame.side_table_pointer)
+            .expect("Expected entry in sidetable for instruction");
+        let pos = self.reader.current_index() as i32 + side_table_entry.ip;
+        let stp = current_frame.side_table_pointer as i32 + side_table_entry.stp;
+        if stp < 0 {
+            current_frame.side_table_pointer = 0;
+        } else {
+            current_frame.side_table_pointer = stp as usize;
+        }
+        self.reader.seek(pos as usize);
+        let saved_vals = self.stack.pop_n(side_table_entry.vals);
+        self.stack.pop_n(side_table_entry.pop);
+        self.stack.push_vec(&saved_vals);
+    }
+
     fn execute_frame(&mut self, current_frame: &mut Frame) {
         self.reader.seek(current_frame.start);
 
@@ -118,119 +142,56 @@ impl<'a> Instance<'a> {
                 I32_CONST => {
                     let value = Value::I32(self.reader.next_leb128_i32().unwrap());
                     self.stack.push(value);
-                } 
-                BLOCK => {
-                    let idx = self
-                        .reader
-                        .next_leb128_u32()
-                        .expect("Error parsing block func idx");
-
-                    match idx {
-                        0x7f | 0x40 => {}
-                        _ => {
-                            self.types
-                                .get(idx as usize)
-                                .expect("Can't get sig by index");
-                        }
-                    };
-                } 
-                LOOP => {
-                    let idx = self
-                        .reader
-                        .next_leb128_u32()
-                        .expect("Error parsing block func idx");
-                    match idx {
-                        0x7f | 0x40 => {}
-                        _ => {
-                            self.types
-                                .get(idx as usize)
-                                .expect("Can't get func sig by index");
-                        }
-                    };
-                } 
+                }
+                BLOCK | LOOP => {
+                    self.skip_block_type();
+                }
                 IF => {
-                    let idx = self
-                        .reader
-                        .next_leb128_u32()
-                        .expect("Error parsing block func idx");
-
-                    match idx {
-                        0x7f | 0x40 => {}
-                        _ => {
-                            self.types
-                                .get(idx as usize)
-                                .expect("Can't get func sig by index");
-                        }
-                    };
-
-                    let bool_val = self.stack.pop().unwrap(); // Unwrap is safe due to validation
+                    let bool_val = self.stack.pop();
                     if bool_val == Value::I32(0) {
-                        let side_table_entry = current_frame
-                            .side_table
-                            .entries
-                            .get(current_frame.side_table_pointer)
-                            .expect("Expected entry in sidetable for if instruction");
-                        let pos = (self.reader.current_index() - 1) as i32 + side_table_entry.ip; // -1 because of the func index
-                        current_frame.side_table_pointer += side_table_entry.stp as usize;
-                        self.reader.seek(pos as usize);
+                        self.do_goto(current_frame);
                     } else {
+                        self.skip_block_type();
                         current_frame.side_table_pointer += 1;
                     }
-                } 
+                }
                 ELSE => {
-                    let side_table_entry = current_frame
-                        .side_table
-                        .entries
-                        .get(current_frame.side_table_pointer)
-                        .expect("Expected entry in sidetable for else instruction");
-                    let pos = self.reader.current_index() as i32 + side_table_entry.ip;
-                    current_frame.side_table_pointer += side_table_entry.stp as usize;
-                    self.reader.seek(pos as usize);
-                } 
+                    self.do_goto(current_frame);
+                }
                 LOCAL_GET => {
                     let local = current_frame
                         .locals
                         .get(self.reader.next_leb128_u32().unwrap() as usize)
                         .expect("Local get on invalid index");
                     self.stack.push(*local);
-                } 
+                }
                 LOCAL_SET => {
                     let local = current_frame
                         .locals
                         .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
                         .expect("Local get on invalid index");
-                    let new_value = self.stack.pop().expect("LocalSet needs value on stack");
+                    let new_value = self.stack.pop();
                     *local = new_value;
-                } 
+                }
                 I32_ADD => {
-                    let (right, left) = (self.stack.pop().unwrap(), self.stack.pop().unwrap()); // Unwrap is safe due to validation
-		    
+                    let (right, left) = (self.stack.pop(), self.stack.pop());
                     self.stack.push(right + left);
                 }
-		 I32_SUB => {
-                    let (right, left) = (self.stack.pop().unwrap(), self.stack.pop().unwrap()); // Unwrap is safe due to validation
-		    
-                    self.stack.push( left - right);
-                } 
-                I32_LT_S => {
-                    let (Value::I32(right), Value::I32(left)) =
-                        (self.stack.pop().unwrap(), self.stack.pop().unwrap())
-                    else {
-                        panic!("Invalid Type for i32 lt_s");
-                    }; // Unwrap is safe due to validation
+                I32_SUB => {
+                    let (right, left) = (self.stack.pop(), self.stack.pop());
 
+                    self.stack.push(left - right);
+                }
+                I32_LT_S => {
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     if left < right {
                         self.stack.push(Value::I32(1));
                     } else {
                         self.stack.push(Value::I32(0));
                     }
                 }
-		I32_GT_S => {
-                    let (Value::I32(right), Value::I32(left)) =
-                        (self.stack.pop().unwrap(), self.stack.pop().unwrap())
-                    else {
-                        panic!("Invalid Type for i32 lt_s");
-                    }; // Unwrap is safe due to validation
+                I32_GT_S => {
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
 
                     if left > right {
                         self.stack.push(Value::I32(1));
@@ -239,78 +200,15 @@ impl<'a> Instance<'a> {
                     }
                 }
                 BR => {
-                    self.reader
-                        .next_leb128_u32()
-                        .expect("Error parsing break depth");
-                    let side_table_entry = current_frame
-                        .side_table
-                        .entries
-                        .get(current_frame.side_table_pointer)
-                        .expect("Expected entry in sidetable for BR instruction");
-                    let pos = self.reader.current_index() as i32 + side_table_entry.ip; 
-                    self.reader.seek(pos as usize);
-		    
-                    let stp = current_frame.side_table_pointer as i32 + side_table_entry.stp;
-                        if stp < 0 {
-                            current_frame.side_table_pointer = 0;
-                        } else {
-                            current_frame.side_table_pointer = stp as usize;
-                        }
-
-                    // TODO introduce new helper func
-                    let stack_len = self.stack.len();
-                    let saved_vals = self
-                        .stack
-                        .drain(stack_len - side_table_entry.vals..self.stack.len())
-                        .collect::<Vec<Value>>();
-                    for _ in 0..side_table_entry.pop {
-                        self.stack.pop();
-                    }
-                    for saved_val in saved_vals.iter().rev() {
-                        self.stack.push(*saved_val);
-                    }
-		    // for this
-		    
-                } 
+                    self.do_goto(current_frame);
+                }
                 BR_IF => {
-                    self.reader
-                        .next_leb128_u32()
-                        .expect("Error parsing break depth");
-                    let bool_val = self.stack.pop().unwrap(); // Unwrap is safe due to validation
+                    let bool_val = self.stack.pop();
                     if bool_val == Value::I32(0) {
+                        self.skip_depth();
                         current_frame.side_table_pointer += 1;
                     } else {
-                        let side_table_entry = current_frame
-                            .side_table
-                            .entries
-                            .get(current_frame.side_table_pointer)
-                            .expect("Expected entry in sidetable for BR_if instruction");
-
-
-			let stp = current_frame.side_table_pointer as i32 + side_table_entry.stp;
-                        if stp < 0 {
-                            current_frame.side_table_pointer = 0;
-                        } else {
-                            current_frame.side_table_pointer = stp as usize;
-                        }
-
-                        let pos = self.reader.current_index() as i32 + side_table_entry.ip;
-                        self.reader.seek(pos as usize);
-
-                        // TODO introduce new helper func
-                        let stack_len = self.stack.len();
-                        let saved_vals = self
-                            .stack
-                            .drain(stack_len - side_table_entry.vals..self.stack.len())
-                            .collect::<Vec<Value>>();
-                        for _ in 0..side_table_entry.pop {
-                            self.stack.pop();
-                        }
-
-                        for saved_val in saved_vals.iter().rev() {
-                            self.stack.push(*saved_val);
-                        }
-			// for this
+                        self.do_goto(current_frame);
                     }
                 }
 
@@ -318,7 +216,7 @@ impl<'a> Instance<'a> {
                     if self.reader.current_index() == current_frame.end {
                         break;
                     }
-                } 
+                }
                 _ => panic!("Invalid instruction: {}", instruction),
             };
         }
@@ -355,7 +253,7 @@ pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
         types: module.typesec,
         functions,
         call_stack: vec![],
-        stack: vec![],
+        stack: ExecutionStack::new(),
     }
 }
 
@@ -400,7 +298,7 @@ mod tests {
         let mut reader = WasmReader::new(bytes.to_vec());
         let mut instance = instantiate(module, &mut reader);
         let expected_result = vec![Value::I32(22)];
-        assert_eq!(instance.call(0, vec![]).unwrap(), &expected_result);
+        assert_eq!(instance.call(0, vec![]), expected_result);
     }
 
     #[test]
@@ -445,7 +343,7 @@ mod tests {
         let mut reader = WasmReader::new(bytes.to_vec());
         let mut instance = instantiate(module, &mut reader);
         let expected_result = vec![Value::I32(12)];
-        assert_eq!(instance.call(0, vec![]).unwrap(), &expected_result);
+        assert_eq!(instance.call(0, vec![]), expected_result);
     }
 
     #[test]
@@ -516,7 +414,7 @@ mod tests {
         let mut reader = WasmReader::new(bytes.to_vec());
         let mut instance = instantiate(module, &mut reader);
         let expected_result = vec![Value::I32(3)];
-        assert_eq!(instance.call(0, vec![]).unwrap(), &expected_result);
+        assert_eq!(instance.call(0, vec![]), expected_result);
     }
 
     #[test]
@@ -559,7 +457,7 @@ mod tests {
             }],
             sidetables: vec![SideTable {
                 entries: vec![SideTableEntry {
-                    ip: -13,
+                    ip: -14,
                     stp: 0,
                     vals: 0,
                     pop: 0,
@@ -569,7 +467,7 @@ mod tests {
         let mut reader = WasmReader::new(bytes.to_vec());
         let mut instance = instantiate(module, &mut reader);
         let expected_result = vec![Value::I32(10)];
-        assert_eq!(instance.call(0, vec![]).unwrap(), &expected_result);
+        assert_eq!(instance.call(0, vec![]), expected_result);
     }
 
     #[test]
@@ -649,13 +547,7 @@ mod tests {
         let mut reader = WasmReader::new(bytes.to_vec());
         let mut instance = instantiate(module, &mut reader);
 
-        assert_eq!(
-            instance.call(0, vec![Value::I32(1)]).unwrap(),
-            &vec![Value::I32(1)]
-        );
-        assert_eq!(
-            instance.call(0, vec![Value::I32(0)]).unwrap(),
-            &vec![Value::I32(3)]
-        );
+        assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(1)]);
+        assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(3)]);
     }
 }
