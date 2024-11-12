@@ -68,6 +68,14 @@ impl<'a, 'b> Validator<'a, 'b> {
 
         self.abstract_control_stack.push(ctrl);
     }
+
+    fn unreachable(&mut self) {
+        self.abstract_value_stack
+            .set_top(self.abstract_control_stack.height_of_top());
+        self.abstract_control_stack.set_unreachable();
+        self.abstract_value_stack
+            .update(self.abstract_control_stack.height_of_top(), false);
+    }
     pub fn validate(&mut self, function: &FuncCode) -> SideTable {
         self.initialize_locals(function);
         self.reader.seek(function.start);
@@ -111,7 +119,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 }
                 IF => {
                     let index_of_if_bytecode = self.reader.current_index() as i32;
-                    let signature = read_block_type(self.reader, self.typesec);
+                    let signature = self.read_block_type();
                     self.abstract_value_stack.pop_expected(ValType::I32); // bool value
                     self.abstract_value_stack
                         .pop_expected_vec(&signature.parameter);
@@ -189,14 +197,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                                 .pop_expected_vec(&func_type.result);
                         }
                     }
-                    self.abstract_value_stack
-                        .set_top(self.abstract_control_stack.height_of_top());
-                    self.abstract_control_stack.set_unreachable();
-                    self.abstract_value_stack
-                        .update(self.abstract_control_stack.height_of_top(), false);
+                    self.unreachable();
                 }
                 BLOCK => {
-                    let signature = read_block_type(self.reader, self.typesec);
+                    let signature = self.read_block_type();
 
                     self.abstract_value_stack
                         .pop_expected_vec(&signature.parameter);
@@ -211,7 +215,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push_vec(&signature.parameter);
                 }
                 LOOP => {
-                    let signature = read_block_type(self.reader, self.typesec);
+                    let signature = self.read_block_type();
                     self.abstract_value_stack
                         .pop_expected_vec(&signature.parameter);
 
@@ -229,10 +233,7 @@ impl<'a, 'b> Validator<'a, 'b> {
 
                     self.abstract_value_stack.pop_expected(ValType::I32); // bool
 
-                    let depth = self
-                        .reader
-                        .next_leb128_u32()
-                        .expect("Error parsing break depth");
+                    let depth = self.read_depth();
 
                     self.create_sidetable_entry(depth, index_of_br_if_bytecode);
                 }
@@ -246,31 +247,16 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .expect("Error parsing number of branches in BR_Table");
 
                     for _ in 0..=number_of_branches {
-                        let depth = self
-                            .reader
-                            .next_leb128_u32()
-                            .expect("Error parsing break depth");
-
+			let depth = self.read_depth();
                         self.create_sidetable_entry(depth, index_of_br_table_bytecode);
                     }
-                    self.abstract_value_stack
-                        .set_top(self.abstract_control_stack.height_of_top());
-                    self.abstract_control_stack.set_unreachable();
-                    self.abstract_value_stack
-                        .update(self.abstract_control_stack.height_of_top(), false);
+                    self.unreachable();
                 }
                 BR => {
                     let index_of_br_bytecode = self.reader.current_index() as i32;
-                    let depth = self
-                        .reader
-                        .next_leb128_u32()
-                        .expect("Error parsing break depth");
+                    let depth = self.read_depth();
                     self.create_sidetable_entry(depth, index_of_br_bytecode);
-                    self.abstract_value_stack
-                        .set_top(self.abstract_control_stack.height_of_top());
-                    self.abstract_control_stack.set_unreachable();
-                    self.abstract_value_stack
-                        .update(self.abstract_control_stack.height_of_top(), false);
+                    self.unreachable();
                 }
                 END => {
                     let control_type = self.abstract_control_stack.pop();
@@ -330,6 +316,11 @@ impl<'a, 'b> Validator<'a, 'b> {
         let result = self.side_table.clone();
         self.reset();
         result
+    }
+    fn read_depth(&mut self) -> u32 {
+        self.reader
+            .next_leb128_u32()
+            .expect("Error parsing break depth")
     }
 
     fn reset(&mut self) {
@@ -398,6 +389,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 func_type,
                 side_table_entry,
                 instruction_pointer,
+                height_of_value_stack,
                 ..
             } => {
                 self.abstract_value_stack
@@ -406,20 +398,21 @@ impl<'a, 'b> Validator<'a, 'b> {
                 let stp = *side_table_entry as i32 - (self.side_table.len() as i32) + 1;
                 let ip = *instruction_pointer as i32 - index_of_start_bytecode as i32 - 1; // -1 Because current byte is the depth
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
+                entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
+                entry.vals = func_type.result.len();
                 entry.ip = ip;
                 entry.stp = stp;
             }
         };
     }
+    fn read_block_type(&mut self) -> FuncType {
+        let func_idx = self
+            .reader
+            .next_leb128_u32()
+            .expect("Error parsing block func idx");
+        lookup_signature(func_idx, &self.typesec)
+    }
 }
-
-fn read_block_type(reader: &mut WasmReader, type_section: &[FuncType]) -> FuncType {
-    let func_idx = reader
-        .next_leb128_u32()
-        .expect("Error parsing block func idx");
-    lookup_signature(func_idx, type_section)
-}
-
 
 #[cfg(test)]
 mod tests {
