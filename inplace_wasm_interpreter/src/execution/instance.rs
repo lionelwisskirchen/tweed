@@ -176,15 +176,36 @@ impl<'a> Instance<'a> {
                     self.do_goto(current_frame);
                 }
                 BR_IF => {
-                    let bool_val = self.stack.pop();
-                    if bool_val == Value::I32(0) {
+                    let bool_val = self.stack.pop_i32();
+                    if bool_val == 0 {
                         self.skip_depth();
                         current_frame.side_table_pointer += 1;
                     } else {
                         self.do_goto(current_frame);
                     }
                 }
-
+		BR_TABLE => {
+		    let branch_index = self.stack.pop_i32();
+		    let number_of_branches = self
+                        .reader
+                        .next_leb128_u32()
+                        .expect("Error parsing number of branches in BR_Table") as usize;
+		    if branch_index as usize >= number_of_branches{
+			current_frame.side_table_pointer += number_of_branches as usize;
+		    } else {
+			current_frame.side_table_pointer += branch_index as usize;
+		    }
+		    self.do_goto(current_frame);
+		    #[cfg(test)]
+		    println!("{:?}", self.reader.rest());
+		}
+		RETURN => {
+		    let count = current_frame.return_value.len();
+		    let results= self.stack.pop_n(count);
+		    self.stack.unwind_to(current_frame.stack_pointer);
+		    self.stack.push_vec(&results);
+		    break;
+		}
                 END => {
                     if self.reader.current_index() == current_frame.end {
                         break;
@@ -271,6 +292,42 @@ mod tests {
         let mut reader = WasmReader::new(bytes.to_vec());
         let mut instance = instantiate(module, &mut reader);
         let expected_result = vec![Value::I32(22)];
+        assert_eq!(instance.call(0, vec![]), expected_result);
+    }
+
+    #[test]
+    fn test_return() {
+        let bytes = wat::parse_str(
+            "(module
+               (func (result i32)
+	    	   i32.const 10
+	    	   i32.const 12
+               	   return
+                   i32.const 12
+               )
+             )",
+        )
+        .unwrap();
+        let module = Module {
+            typesec: vec![FuncType {
+                parameter: vec![],
+                result: vec![ValType::I32],
+            }],
+            funcsec: vec![FuncDecl { sig_index: 0 }],
+            codesec: vec![FuncCode {
+                signature: FuncType {
+                    parameter: vec![],
+                    result: vec![ValType::I32],
+                },
+                locals: vec![],
+                start: 24,
+                end: 31,
+            }],
+            sidetables: vec![SideTable { entries: vec![] }],
+        };
+        let mut reader = WasmReader::new(bytes.to_vec());
+        let mut instance = instantiate(module, &mut reader);
+        let expected_result = vec![Value::I32(12)];
         assert_eq!(instance.call(0, vec![]), expected_result);
     }
 
@@ -522,5 +579,85 @@ mod tests {
 
         assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(1)]);
         assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(3)]);
+    }
+
+      #[test]
+    fn test_br_table() {
+        let bytes = wat::parse_str(
+            "
+(func (param $p i32) (result i32)
+  (block
+    (block
+      (block
+        (block (local.get $p)
+               (br_table
+                         2   ;; p == 0 => (br 2)
+                         1   ;; p == 1 => (br 1)
+                         0   ;; p == 2 => (br 0)
+                         3)) ;; else => (br 3)
+        ;; Target for (br 0)
+        (i32.const 100)
+        (return))
+      ;; Target for (br 1)
+      (i32.const 101)
+      (return))
+    ;; Target for (br 2)
+    (i32.const 102)
+    (return))
+  ;; Target for (br 3)
+  (i32.const 103)
+  (return))",
+        )
+        .unwrap();
+        let module = Module {
+            typesec: vec![FuncType {
+                parameter: vec![ValType::I32],
+                result: vec![ValType::I32],
+            }],
+            funcsec: vec![FuncDecl { sig_index: 0 }],
+            codesec: vec![FuncCode {
+                signature: FuncType {
+                    parameter: vec![ValType::I32],
+                    result: vec![ValType::I32],
+                },
+                locals: vec![],
+                start: 25,
+                end: 61,
+            }],
+            sidetables: vec![SideTable {
+                entries: vec![
+                SideTableEntry {
+                    ip: 15,
+                    stp: 4,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 10,
+                    stp: 3,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 5,
+                    stp: 2,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 20,
+                    stp: 1,
+                    vals: 0,
+                    pop: 0,
+                },
+            ],
+            }],
+        };
+        let mut reader = WasmReader::new(bytes.to_vec());
+        let mut instance = instantiate(module, &mut reader);
+        assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(102)]);
+        assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(101)]);	
+        assert_eq!(instance.call(0, vec![Value::I32(2)]), vec![Value::I32(100)]);
+	assert_eq!(instance.call(0, vec![Value::I32(10)]), vec![Value::I32(103)]);
     }
 }

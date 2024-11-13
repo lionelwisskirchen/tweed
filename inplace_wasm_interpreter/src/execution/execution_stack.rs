@@ -24,6 +24,12 @@ impl ExecutionStack {
             self.push(*value);
         }
     }
+    pub fn unwind_to(&mut self, size: usize){
+	if size > self.stack.len() {
+            panic!("Error: Stack underflow happened in function!");
+        }
+	self.stack.drain(size..);
+    }
     pub fn pop(&mut self) -> Value {
         self.stack.pop().expect("No value on Stack!")
     }

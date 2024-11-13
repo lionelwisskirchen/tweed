@@ -40,7 +40,23 @@ fn validate(reader: &mut WasmReader, module: &mut Module) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    #[test]
+    #[should_panic]
+    fn is_invalid_return() {
+        let wasm = wat::parse_str(
+            "(module
+               (func (result i32)
+	    	   i32.const 10
+	    	   i32.const 12
+               	   return
+                   i32.const 12
+                   i32.const 12
+               )
+             )",
+        )
+        .unwrap();
+        run(&wasm, vec![]);
+    }
     #[test]
     #[should_panic]
     fn is_invalid_1() {
@@ -82,7 +98,6 @@ mod tests {
         run(&wasm, vec![]);
     }
 
-    
     #[test]
     fn is_valid_1() {
         let wasm = wat::parse_str(
@@ -102,7 +117,7 @@ mod tests {
 ",
         )
         .unwrap();
-        assert_eq!(run(&wasm,vec![]), vec![Value::I32(0)]);
+        assert_eq!(run(&wasm, vec![]), vec![Value::I32(0)]);
     }
     #[test]
     fn is_valid_2() {
@@ -127,7 +142,6 @@ mod tests {
         assert_eq!(run(&wasm, vec![]), vec![Value::I32(20)]);
     }
 
-    
     #[test]
     fn test_sum() {
         let wasm = wat::parse_str(
@@ -184,5 +198,34 @@ mod tests {
         assert_eq!(run(&wasm, vec![Value::I32(6)]), vec![Value::I32(21)]);
     }
 
-     
+    #[test]
+    fn test_br_table() {
+        let wasm = wat::parse_str(
+            "
+(func (param $p i32) (result i32)
+  (block
+    (block
+      (block
+        (block (local.get $p)
+               (br_table
+                         2   ;; p == 0 => (br 2)
+                         1   ;; p == 1 => (br 1)
+                         0   ;; p == 2 => (br 0)
+                         3)) ;; else => (br 3)
+        ;; Target for (br 0)
+        (i32.const 100)
+        (return))
+      ;; Target for (br 1)
+      (i32.const 101)
+      (return))
+    ;; Target for (br 2)
+    (i32.const 102)
+    (return))
+  ;; Target for (br 3)
+  (i32.const 103)
+  (return))",
+        )
+        .unwrap();
+        assert_eq!(run(&wasm, vec![Value::I32(0)]), vec![Value::I32(102)]);
+    }
 }

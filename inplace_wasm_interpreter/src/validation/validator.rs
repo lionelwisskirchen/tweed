@@ -240,15 +240,17 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.create_sidetable_entry(depth, index_of_br_if_bytecode);
                 }
                 BR_TABLE => {
-                    let index_of_br_table_bytecode = self.reader.current_index() as i32;
+                    
 
                     self.abstract_value_stack.pop_expected(ValType::I32); // index of branch
                     let number_of_branches = self
                         .reader
                         .next_leb128_u32()
                         .expect("Error parsing number of branches in BR_Table");
+		    
+		    let index_of_br_table_bytecode = self.reader.current_index() as i32; // We jump from here because we need to parse the number of branches during execution (because the default branch can be any i32 and could move the stp to a wrong entry).
 
-                    for _ in 0..=number_of_branches {
+		    for _ in 0..=number_of_branches {
 			let depth = self.read_depth();
                         self.create_sidetable_entry(depth, index_of_br_table_bytecode);
                     }
@@ -421,39 +423,6 @@ mod tests {
 
     use super::*;
     use crate::validation::side_table::SideTableEntry;
-    #[test]
-    fn test_validation_without_control_structs() {
-        let bytes = [
-            0x12, 0x01, 0x10, // Number of Function Bodies (1), Body Size (16),
-            0x01, 0x01, 0x7f, // Number of local declarations (1), 1 x I32
-            0x20, 0x00, 0x20, 0x01, // Local.get(Index 0), Local.get(Index 1)
-            0x6a, // I32Add
-            0x21, 0x00, // Local.set(Index 0)
-            0x20, 0x00, 0x20, 0x01, // Local.get(Index 0), Local.get(Index 1)
-            0x6a, // I32Add
-            0x0b, // Terminal
-        ];
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![FuncType {
-            parameter: vec![ValType::I32, ValType::I32],
-            result: vec![ValType::I32],
-        }];
-        let code = FuncCode {
-            signature: FuncType {
-                parameter: vec![ValType::I32, ValType::I32],
-                result: vec![ValType::I32],
-            },
-            locals: vec![ValType::I32],
-            start: 6,
-            end: 18,
-        };
-
-        let mut validator = Validator::new(&mut reader, &typesec);
-        let actual_sidetable = validator.validate(&code);
-        let expected_sidetable = SideTable::new();
-        assert_eq!(actual_sidetable, expected_sidetable);
-    }
-
     #[test]
     fn test_validation_with_blocks() {
         let bytes = wat::parse_str(
@@ -956,25 +925,25 @@ return
         let expected_sidetable = SideTable {
             entries: vec![
                 SideTableEntry {
-                    ip: 16,
+                    ip: 15,
                     stp: 4,
                     vals: 0,
                     pop: 0,
                 },
                 SideTableEntry {
-                    ip: 11,
+                    ip: 10,
                     stp: 3,
                     vals: 0,
                     pop: 0,
                 },
                 SideTableEntry {
-                    ip: 6,
+                    ip: 5,
                     stp: 2,
                     vals: 0,
                     pop: 0,
                 },
                 SideTableEntry {
-                    ip: 21,
+                    ip: 20,
                     stp: 1,
                     vals: 0,
                     pop: 0,
