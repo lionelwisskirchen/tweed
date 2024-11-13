@@ -188,6 +188,16 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
                 }
+		I32_GE_S => {
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+		I32_AND => {
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.push(ValType::I32);
+                }
                 RETURN => {
                     let control_type = self.abstract_control_stack.top();
                     match control_type {
@@ -386,6 +396,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
                 entry.vals = func_type.result.len();
+                self.abstract_value_stack.push_vec(&func_type.result);
             }
             ControlType::For {
                 func_type,
@@ -404,6 +415,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 entry.vals = func_type.result.len();
                 entry.ip = ip;
                 entry.stp = stp;
+                self.abstract_value_stack.push_vec(&func_type.parameter);
             }
         };
     }

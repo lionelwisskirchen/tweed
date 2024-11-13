@@ -172,6 +172,21 @@ impl<'a> Instance<'a> {
                         self.stack.push(Value::I32(0));
                     }
                 }
+		I32_GE_S => {
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
+
+                    if left == right {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+		I32_AND => {
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
+
+                    let result = right & left;
+		    self.stack.push(Value::I32(result));
+                }
                 BR => {
                     self.do_goto(current_frame);
                 }

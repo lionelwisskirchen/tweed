@@ -8,6 +8,7 @@ pub const LOCAL_SET: u8 = 0x21;
 pub const I32_CONST: u8 = 0x41;
 pub const I32_LT_S: u8 = 0x48;
 pub const I32_GT_S: u8 = 0x4A;
+pub const I32_GE_S: u8 = 0x4E;
 pub const IF: u8 = 0x04;
 pub const ELSE: u8 = 0x05;
 pub const I32_ADD: u8 = 0x6A;
@@ -17,5 +18,4 @@ pub const LOOP: u8 = 0x03;
 pub const BR_IF: u8 = 0x0D;
 pub const BR: u8 = 0x0C;
 pub const BR_TABLE: u8 = 0x0E;
-
-
+pub const I32_AND: u8 = 0x71;
