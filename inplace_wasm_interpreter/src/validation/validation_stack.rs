@@ -5,20 +5,20 @@ use alloc::vec::Vec;
 pub struct ValidationStack {
     stack: Vec<ValType>,
     top_height: u32,
-    top_reachable: bool
+    top_reachable: bool,
 }
 
 impl ValidationStack {
     pub fn new() -> Self {
         Self {
             stack: Vec::new(),
-            top_height:0,
-	    top_reachable:true
+            top_height: 0,
+            top_reachable: true,
         }
     }
-    pub fn update(&mut self, height: u32, reachable: bool){
-	self.top_height = height;
-	self.top_reachable = reachable;
+    pub fn update(&mut self, height: u32, reachable: bool) {
+        self.top_height = height;
+        self.top_reachable = reachable;
     }
     pub fn reset(&mut self) {
         self.stack.clear();
@@ -38,16 +38,13 @@ impl ValidationStack {
         }
     }
     pub fn pop_val(&mut self) -> ValType {
-        let val = self.stack.pop();
-        if self.top_reachable {
-            val.expect("Value stack is empty.")
-        } else {
-            if val.is_none() {
-                ValType::Unknown
-            } else {
-                val.unwrap()
-            }
+        if self.stack.len() == self.top_height as usize && !self.top_reachable {
+            return ValType::Unknown;
+        };
+        if self.stack.len() == self.top_height as usize {
+            panic!("Stack underflow.");
         }
+        self.stack.pop().expect("Value stack is empty.")
     }
 
     pub fn pop_expected_vec(&mut self, val_types: &[ValType]) {

@@ -7,10 +7,10 @@ use crate::core::opcode::*;
 use crate::binary::{code_section::FuncCode, type_section::FuncType};
 
 use crate::core::wasm_reader::WasmReader;
-use crate::validation::control_types::ControlType;
-use alloc::vec::Vec;
 use crate::validation::control_stack::ControlStack;
+use crate::validation::control_types::ControlType;
 use crate::validation::validation_stack::ValidationStack;
+use alloc::vec::Vec;
 
 use super::side_table::SideTable;
 
@@ -240,18 +240,16 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.create_sidetable_entry(depth, index_of_br_if_bytecode);
                 }
                 BR_TABLE => {
-                    
-
                     self.abstract_value_stack.pop_expected(ValType::I32); // index of branch
                     let number_of_branches = self
                         .reader
                         .next_leb128_u32()
                         .expect("Error parsing number of branches in BR_Table");
-		    
-		    let index_of_br_table_bytecode = self.reader.current_index() as i32; // We jump from here because we need to parse the number of branches during execution (because the default branch can be any i32 and could move the stp to a wrong entry).
 
-		    for _ in 0..=number_of_branches {
-			let depth = self.read_depth();
+                    let index_of_br_table_bytecode = self.reader.current_index() as i32; // We jump from here because we need to parse the number of branches during execution (because the default branch can be any i32 and could move the stp to a wrong entry).
+
+                    for _ in 0..=number_of_branches {
+                        let depth = self.read_depth();
                         self.create_sidetable_entry(depth, index_of_br_table_bytecode);
                     }
                     self.unreachable();
