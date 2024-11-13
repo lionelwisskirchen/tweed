@@ -63,10 +63,10 @@ impl ControlStack {
         self.stack.pop().expect("No ControlType on stack")
     }
     pub fn get_control_type(&mut self, depth: u32) -> &mut ControlType {
-        if depth as usize > self.stack.len() - 1 {
+        if depth as usize > self.stack.len().saturating_sub(1) {
             panic!("Depth exceeds control depth.")
         }
-        let control_stack_index_size = self.stack.len() - 1;
+        let control_stack_index_size = self.stack.len().saturating_sub(1);
         let start_control = self
             .stack
             .get_mut(control_stack_index_size - depth as usize)
@@ -75,5 +75,17 @@ impl ControlStack {
     }
     pub fn push(&mut self, control_type: ControlType) {
         self.stack.push(control_type);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[should_panic]
+    #[test]
+    fn invalid_depth() {
+        let mut control_stack = ControlStack::default();
+        control_stack.get_control_type(2);
     }
 }

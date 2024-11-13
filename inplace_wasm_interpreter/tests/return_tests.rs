@@ -35,6 +35,18 @@ fn test_valid_simple() {
 }
 
 #[test]
+fn test_loop() {
+    let wasm = wat::parse_str(
+        "
+               (func (result i32)
+    (loop (result i32) (return (i32.const 3)) (i32.const 2))
+  )
+",
+    )
+    .unwrap();
+    assert_eq!(run(&wasm, vec![]), vec![Value::from(3)]);
+}
+#[test]
 fn test_valid_if_else() {
     let wasm = wat::parse_str(
         "

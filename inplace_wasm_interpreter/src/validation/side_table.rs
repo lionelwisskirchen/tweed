@@ -41,3 +41,15 @@ pub struct SideTableEntry {
     pub vals: usize,
     pub pop: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_is_empty() {
+        let mut side_table = SideTable::default();
+        assert!(side_table.is_empty());
+        side_table.create_entry(1, 1, 1, 1);
+        assert!(!side_table.is_empty());
+    }
+}

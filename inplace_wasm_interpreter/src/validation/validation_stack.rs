@@ -62,7 +62,53 @@ impl ValidationStack {
         let actual = self.pop_val();
 
         if expected != actual && actual != ValType::Unknown && expected != ValType::Unknown {
-            panic!("Not expected Value Type on validation stack.");
+            panic!("Unexpected Value Type on validation stack.");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pop_expected_with_matching_type() {
+        let mut validator = ValidationStack::new();
+        validator.push(ValType::I32);
+
+        validator.pop_expected(ValType::I32);
+    }
+
+    #[test]
+    #[should_panic(expected = "Unexpected Value Type on validation stack.")]
+    fn test_pop_expected_with_different_type() {
+        let mut validator = ValidationStack::new();
+        validator.push(ValType::I64);
+
+        validator.pop_expected(ValType::I32);
+    }
+
+    #[test]
+    fn test_pop_expected_with_unknown_actual() {
+        let mut validator = ValidationStack::new();
+        validator.push(ValType::Unknown);
+
+        validator.pop_expected(ValType::I32);
+    }
+
+    #[test]
+    fn test_pop_expected_with_unknown_expected() {
+        let mut validator = ValidationStack::new();
+        validator.push(ValType::I32);
+
+        validator.pop_expected(ValType::Unknown);
+    }
+
+    #[test]
+    fn test_pop_expected_with_both_unknown() {
+        let mut validator = ValidationStack::new();
+        validator.push(ValType::Unknown);
+
+        validator.pop_expected(ValType::Unknown);
     }
 }

@@ -43,22 +43,8 @@ impl WasmReader {
         Some(result)
     }
     pub fn next_leb128_i32(&mut self) -> Option<i32> {
-        let mut result: i32 = 0;
-        let mut shift = 0;
-        while let Some(byte) = self.next_byte() {
-            let low = (byte & 0x7f) as i32; // 0111 1111 Mask -> MSB signals next byte is also relevant
-
-            result |= low << shift;
-            if (byte & 0x80) == 0 {
-                // No next byte, Algorithm is finished
-                break;
-            }
-            shift += 7;
-            if shift > 32 {
-                return None;
-            }
-        }
-        Some(result)
+        let val = self.next_leb128_u32()?;
+        Some(val as i32)
     }
     pub fn calculate_offset(&self, offset: usize) -> usize {
         offset + self.current_index()
@@ -70,15 +56,14 @@ impl WasmReader {
         self.byte_pointer += number_of_bytes;
         chunk
     }
-    pub fn get_slice(&self, start: usize, end: usize) -> Option<&[u8]> {
-        self.bytecode.get(start..=end)
-    }
-    pub fn compare_chunk(&mut self, number_of_bytes: usize, expected: &[u8]) -> Option<&[u8]> {
-        let slice = self.next_chunk(number_of_bytes)?;
+    pub fn compare_chunk(&mut self, expected: &[u8]) -> Option<&[u8]> {
+        let slice = self.next_chunk(expected.len())?;
+
         if slice == expected {
-            return Some(slice);
+            Some(slice)
+        } else {
+            None
         }
-        None
     }
     pub fn rest(&self) -> &[u8] {
         &self.bytecode[self.byte_pointer..]
@@ -95,6 +80,7 @@ mod tests {
         reader.next_byte();
         assert_eq!(*reader.next_chunk(0).unwrap(), vec![]);
     }
+
     #[test]
     fn test_calculate_offset() {
         let bytes = [0x04, 0x03, 0x05];
@@ -102,6 +88,41 @@ mod tests {
         reader.next_byte();
         reader.next_byte();
         assert_eq!(reader.calculate_offset(1), 2);
+    }
+    #[test]
+    fn test_compare_chunk_match() {
+        let mut reader = WasmReader::new(vec![1, 2, 3, 4, 5]);
+        assert_eq!(reader.compare_chunk(&[1, 2, 3]), Some(&[1, 2, 3][..]));
+    }
+
+    #[test]
+    fn test_compare_chunk_no_match() {
+        let mut reader = WasmReader::new(vec![1, 2, 3, 4, 5]);
+        assert_eq!(reader.compare_chunk(&[1, 2, 4]), None);
+    }
+
+    #[test]
+    fn test_compare_chunk_length_exceeds_data() {
+        let mut reader = WasmReader::new(vec![1, 2, 3]);
+        assert_eq!(reader.compare_chunk(&[1, 2, 3, 4]), None);
+    }
+
+    #[test]
+    fn test_compare_chunk_partial_match() {
+        let mut reader = WasmReader::new(vec![1, 2, 3, 4, 5]);
+        assert_eq!(reader.compare_chunk(&[1, 2, 3, 6]), None);
+    }
+
+    #[test]
+    fn test_compare_chunk_empty_expected() {
+        let mut reader = WasmReader::new(vec![1, 2, 3, 4, 5]);
+        assert_eq!(reader.compare_chunk(&[]), Some(&[][..]));
+    }
+
+    #[test]
+    fn test_compare_chunk_not_empty_but_mismatch() {
+        let mut reader = WasmReader::new(vec![1, 2, 3]);
+        assert_eq!(reader.compare_chunk(&[3, 2, 1]), None);
     }
 
     #[test]
@@ -120,5 +141,43 @@ mod tests {
 
         reader.seek(0);
         assert_eq!(reader.current_index(), 0);
+    }
+    #[test]
+    fn test_next_leb128_i32_no_byte() {
+        let mut decoder = WasmReader::new(vec![]);
+        assert_eq!(decoder.next_leb128_i32(), Some(0));
+    }
+    #[test]
+    fn test_next_leb128_u32_no_byte() {
+        let mut decoder = WasmReader::new(vec![]);
+        assert_eq!(decoder.next_leb128_u32(), Some(0));
+    }
+    #[test]
+    fn test_next_leb128_u32_single_byte() {
+        let mut decoder = WasmReader::new(vec![0x01]);
+        assert_eq!(decoder.next_leb128_u32(), Some(1));
+    }
+    #[test]
+    fn test_next_leb128_u32_multi_byte() {
+        let mut decoder = WasmReader::new(vec![0xE5, 0x8E, 0x26]);
+        assert_eq!(decoder.next_leb128_u32(), Some(624485));
+    }
+
+    #[test]
+    fn test_next_leb128_u32_overflow() {
+        let mut decoder = WasmReader::new(vec![0x80, 0x80, 0x80, 0x80, 0x80, 0x01]);
+        assert_eq!(decoder.next_leb128_u32(), None);
+    }
+
+    #[test]
+    fn test_next_leb128_u32_large_value() {
+        let mut decoder = WasmReader::new(vec![0xFF, 0xFF, 0xFF, 0xFF, 0x07]);
+        assert_eq!(decoder.next_leb128_u32(), Some(2147483647));
+    }
+
+    #[test]
+    fn test_next_leb128_u32_zero() {
+        let mut decoder = WasmReader::new(vec![0x00]);
+        assert_eq!(decoder.next_leb128_u32(), Some(0));
     }
 }

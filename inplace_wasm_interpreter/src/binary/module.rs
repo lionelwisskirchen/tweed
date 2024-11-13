@@ -20,10 +20,10 @@ pub fn create_module(reader: &mut WasmReader) -> Module {
         ..Default::default()
     };
     reader
-        .compare_chunk(4, &[0x00, 0x61, 0x73, 0x6D])
+        .compare_chunk(&[0x00, 0x61, 0x73, 0x6D])
         .expect("No preamble found");
     reader
-        .compare_chunk(4, &[0x01, 0x00, 0x00, 0x00])
+        .compare_chunk(&[0x01, 0x00, 0x00, 0x00])
         .expect("No version number found");
 
     while let Some(section_code) = reader.next_byte() {
@@ -38,8 +38,27 @@ pub fn create_module(reader: &mut WasmReader) -> Module {
             0x0a => {
                 module.codesec = process_code_section(reader, &module);
             }
-            _ => {}
+            _ => {
+                panic!("Unknown section code");
+            }
         }
     }
     module
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[should_panic]
+    #[test]
+    fn test_lookup_unknown() {
+        let mut reader =
+            WasmReader::new(vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, 0x77]);
+        create_module(&mut reader);
+    }
+    #[test]
+    fn test_empty_sequence() {
+        let mut reader = WasmReader::new(vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00]);
+        create_module(&mut reader);
+    }
 }

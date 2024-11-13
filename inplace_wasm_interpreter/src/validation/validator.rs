@@ -29,9 +29,9 @@ impl<'a, 'b> Validator<'a, 'b> {
             reader,
             typesec,
             locals: vec![],
-            abstract_control_stack: ControlStack::new(),
-            abstract_value_stack: ValidationStack::new(),
-            side_table: SideTable::new(),
+            abstract_control_stack: ControlStack::default(),
+            abstract_value_stack: ValidationStack::default(),
+            side_table: SideTable::default(),
         }
     }
 
@@ -433,6 +433,39 @@ mod tests {
 
     use super::*;
     use crate::validation::side_table::SideTableEntry;
+    #[should_panic]
+    #[test]
+    fn test_validation_undefined_opcode() {
+        let bytes = wat::parse_str(
+            "(module
+               
+             )",
+        )
+        .unwrap();
+        let mut reader = WasmReader::new(bytes.to_vec());
+        let typesec = vec![
+            FuncType {
+                parameter: vec![],
+                result: vec![ValType::I32],
+            },
+            FuncType {
+                parameter: vec![ValType::I32],
+                result: vec![ValType::I32],
+            },
+        ];
+        let code = FuncCode {
+            signature: FuncType {
+                parameter: vec![],
+                result: vec![ValType::I32],
+            },
+            locals: vec![],
+            start: 0,
+            end: 40,
+        };
+        let mut validator = Validator::new(&mut reader, &typesec);
+        validator.validate(&code);
+    }
+
     #[test]
     fn test_validation_with_blocks() {
         let bytes = wat::parse_str(

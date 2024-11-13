@@ -62,3 +62,49 @@ impl ExecutionStack {
         self.stack.split_off(self.stack.len() - count).to_vec()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_is_empty() {
+        let mut stack = ExecutionStack::default();
+        assert!(stack.is_empty());
+        stack.push(Value::I32(2));
+        assert!(!stack.is_empty());
+    }
+    #[should_panic]
+    #[test]
+    fn test_underflow() {
+        let mut stack = ExecutionStack::default();
+        stack.unwind_to(1);
+    }
+    #[should_panic]
+    #[test]
+    fn test_pop_unexpected_i64() {
+        let mut stack = ExecutionStack::default();
+        stack.push(Value::I32(2));
+        stack.pop_i64();
+    }
+    #[should_panic]
+    #[test]
+    fn test_pop_unexpected_i32() {
+        let mut stack = ExecutionStack::default();
+        stack.push(Value::I64(2));
+        stack.pop_i32();
+    }
+    #[should_panic]
+    #[test]
+    fn test_pop_unexpected_vec() {
+        let mut stack = ExecutionStack::default();
+        stack.push(Value::I64(2));
+        stack.pop_n(2);
+    }
+
+    #[test]
+    fn test_pop_i64() {
+        let mut stack = ExecutionStack::default();
+        stack.push(Value::I64(2));
+        assert_eq!(stack.pop_i64(), 2);
+    }
+}

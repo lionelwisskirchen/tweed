@@ -95,12 +95,9 @@ impl<'a> Instance<'a> {
             .get(current_frame.side_table_pointer)
             .expect("Expected entry in sidetable for instruction");
         let pos = self.reader.current_index() as i32 + side_table_entry.ip;
-        let stp = current_frame.side_table_pointer as i32 + side_table_entry.stp;
-        if stp < 0 {
-            current_frame.side_table_pointer = 0;
-        } else {
-            current_frame.side_table_pointer = stp as usize;
-        }
+        current_frame.side_table_pointer = current_frame
+            .side_table_pointer
+            .saturating_add_signed(side_table_entry.stp as isize);
         self.reader.seek(pos as usize);
         let saved_vals = self.stack.pop_n(side_table_entry.vals);
         self.stack.pop_n(side_table_entry.pop);
@@ -242,14 +239,8 @@ pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
         let locals: Vec<Value> = function
             .locals
             .iter()
-            .map(|valtype| match valtype {
-                ValType::I32 => Value::I32(0),
-                ValType::I64 => Value::I64(0),
-                ValType::Unknown => {
-                    panic!("Unknown value type. This should never happen!")
-                }
-            })
-            .collect();
+            .map(|val_type| (*val_type).into())
+            .collect::<Vec<Value>>();
 
         functions.push(FunctionInstance {
             signature: function.signature,
@@ -303,6 +294,76 @@ mod tests {
                 locals: vec![],
                 start: 24,
                 end: 29,
+            }],
+            sidetables: vec![SideTable { entries: vec![] }],
+        };
+        let mut reader = WasmReader::new(bytes.to_vec());
+        let mut instance = instantiate(module, &mut reader);
+        let expected_result = vec![Value::I32(22)];
+        assert_eq!(instance.call(0, vec![]), expected_result);
+    }
+    #[should_panic]
+    #[test]
+    fn test_invalid_instruction() {
+        let bytes = wat::parse_str(
+            "(module
+               (func (result i32)
+	    	   i32.const 10
+	    	   i32.const 12
+               	   i32.add
+               )
+             )",
+        )
+        .unwrap();
+        let module = Module {
+            typesec: vec![FuncType {
+                parameter: vec![],
+                result: vec![ValType::I32],
+            }],
+            funcsec: vec![FuncDecl { sig_index: 0 }],
+            codesec: vec![FuncCode {
+                signature: FuncType {
+                    parameter: vec![],
+                    result: vec![ValType::I32],
+                },
+                locals: vec![],
+                start: 1,
+                end: 29,
+            }],
+            sidetables: vec![SideTable { entries: vec![] }],
+        };
+        let mut reader = WasmReader::new(bytes.to_vec());
+        let mut instance = instantiate(module, &mut reader);
+        let expected_result = vec![Value::I32(22)];
+        assert_eq!(instance.call(0, vec![]), expected_result);
+    }
+
+    #[test]
+    fn test_no_end_instruction() {
+        let bytes = wat::parse_str(
+            "(module
+               (func (result i32)
+	    	   i32.const 10
+	    	   i32.const 12
+               	   i32.add
+               )
+             )",
+        )
+        .unwrap();
+        let module = Module {
+            typesec: vec![FuncType {
+                parameter: vec![],
+                result: vec![ValType::I32],
+            }],
+            funcsec: vec![FuncDecl { sig_index: 0 }],
+            codesec: vec![FuncCode {
+                signature: FuncType {
+                    parameter: vec![],
+                    result: vec![ValType::I32],
+                },
+                locals: vec![],
+                start: 24,
+                end: 28,
             }],
             sidetables: vec![SideTable { entries: vec![] }],
         };
