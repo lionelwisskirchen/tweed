@@ -1,10 +1,19 @@
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Value {
     I32(i32),
     I64(i64),
 }
 
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Value::I32(value)
+    }
+}
+impl From<u32> for Value {
+    fn from(value: u32) -> Self {
+        Value::I32(value as i32)
+    }
+}
 impl core::ops::Add for Value {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
