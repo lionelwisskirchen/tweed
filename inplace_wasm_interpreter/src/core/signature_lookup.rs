@@ -2,7 +2,8 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use crate::binary::type_section::FuncType;
 
-use super::values::ValType;
+use super::value_types::ValType;
+
 
 fn shorthand_lookup(val: u32) -> Option<FuncType> {
     let lookup_map = BTreeMap::from([(

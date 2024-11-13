@@ -1,8 +1,7 @@
 
-
-use super::instance::Value;
-
 use alloc::vec::Vec;
+
+use crate::core::values::Value;
 
 #[derive(Debug)]
 pub struct ExecutionStack {

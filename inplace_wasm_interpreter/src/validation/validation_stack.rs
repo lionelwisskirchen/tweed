@@ -1,4 +1,4 @@
-use crate::core::values::ValType;
+use crate::core::value_types::ValType;
 use alloc::vec::Vec;
 
 #[derive(Debug)]

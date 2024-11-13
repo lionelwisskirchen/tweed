@@ -1,40 +1,13 @@
 use alloc::vec::Vec;
 use core::iter::zip;
-
+use crate::core::values::Value;
 use crate::{
     binary::{module::Module, type_section::FuncType},
-    core::{opcode::*, values::ValType, wasm_reader::WasmReader},
+    core::{opcode::*, value_types::ValType, wasm_reader::WasmReader},
     validation::side_table::SideTable,
 };
 
 use super::execution_stack::ExecutionStack;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Value {
-    I32(i32),
-    I64(i64),
-}
-
-impl core::ops::Add for Value {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Value::I32(left), Value::I32(right)) => Value::I32(left + right),
-            (Value::I64(left), Value::I64(right)) => Value::I64(left + right),
-            _ => panic!("type mismatch"),
-        }
-    }
-}
-impl core::ops::Sub for Value {
-    type Output = Self;
-    fn sub(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Value::I32(left), Value::I32(right)) => Value::I32(left - right),
-            (Value::I64(left), Value::I64(right)) => Value::I64(left - right),
-            _ => panic!("type mismatch"),
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct FunctionInstance {

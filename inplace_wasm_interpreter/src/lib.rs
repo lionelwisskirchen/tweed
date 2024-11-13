@@ -6,8 +6,10 @@ pub mod binary;
 pub mod core;
 pub mod execution;
 pub mod validation;
+use core::values::Value;
+
 use crate::core::wasm_reader::WasmReader;
-use crate::instance::Value;
+
 use alloc::vec::Vec;
 use binary::module::{create_module, Module};
 use execution::instance;

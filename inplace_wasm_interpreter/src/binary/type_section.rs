@@ -1,4 +1,4 @@
-use crate::core::{values::ValType, wasm_reader::WasmReader};
+use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

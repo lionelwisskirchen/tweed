@@ -1,14 +1,16 @@
-use self::core::signature_lookup::lookup_signature;
+use crate::core::value_types::ValType;
+
+use crate::core::signature_lookup::lookup_signature;
 
 use crate::core::opcode::*;
 
-use self::binary::{code_section::FuncCode, type_section::FuncType};
-use self::core::values::*;
+use crate::binary::{code_section::FuncCode, type_section::FuncType};
+
+use crate::core::wasm_reader::WasmReader;
 use crate::validation::control_types::ControlType;
-use crate::*;
 use alloc::vec::Vec;
-use validation::control_stack::ControlStack;
-use validation::validation_stack::ValidationStack;
+use crate::validation::control_stack::ControlStack;
+use crate::validation::validation_stack::ValidationStack;
 
 use super::side_table::SideTable;
 
