@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-clippy
+        name: Cargo Clippy
+        entry: ./scripts/style-checks.bash  
+        language: system
+        types: [rust]
+      - id: cargo-format
+        name: Cargo Format
+        entry: ./scripts/format-checks.bash  
+        language: system
+        types: [rust]
+      - id: Unittests
+        name: Cargo Test
+        entry: ./scripts/test-checks.bash  
+        language: system
+        types: [rust]
