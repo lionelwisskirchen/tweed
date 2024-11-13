@@ -8,6 +8,12 @@ pub struct ValidationStack {
     top_reachable: bool,
 }
 
+impl Default for ValidationStack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ValidationStack {
     pub fn new() -> Self {
         Self {

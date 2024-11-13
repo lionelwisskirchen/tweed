@@ -1,11 +1,11 @@
-use alloc::vec::Vec;
-use core::iter::zip;
 use crate::core::values::Value;
 use crate::{
     binary::{module::Module, type_section::FuncType},
     core::{opcode::*, value_types::ValType, wasm_reader::WasmReader},
     validation::side_table::SideTable,
 };
+use alloc::vec::Vec;
+use core::iter::zip;
 
 use super::execution_stack::ExecutionStack;
 
@@ -32,6 +32,7 @@ pub struct Frame {
 
 // An instantiated Module
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Instance<'a> {
     reader: &'a mut WasmReader,
     functions: Vec<FunctionInstance>,
@@ -172,7 +173,7 @@ impl<'a> Instance<'a> {
                         self.stack.push(Value::I32(0));
                     }
                 }
-		I32_GE_S => {
+                I32_GE_S => {
                     let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
 
                     if left == right {
@@ -181,11 +182,11 @@ impl<'a> Instance<'a> {
                         self.stack.push(Value::I32(0));
                     }
                 }
-		I32_AND => {
+                I32_AND => {
                     let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
 
                     let result = right & left;
-		    self.stack.push(Value::I32(result));
+                    self.stack.push(Value::I32(result));
                 }
                 BR => {
                     self.do_goto(current_frame);
@@ -199,28 +200,29 @@ impl<'a> Instance<'a> {
                         self.do_goto(current_frame);
                     }
                 }
-		BR_TABLE => {
-		    let branch_index = self.stack.pop_i32();
-		    let number_of_branches = self
+                BR_TABLE => {
+                    let branch_index = self.stack.pop_i32();
+                    let number_of_branches = self
                         .reader
                         .next_leb128_u32()
-                        .expect("Error parsing number of branches in BR_Table") as usize;
-		    if branch_index as usize >= number_of_branches{
-			current_frame.side_table_pointer += number_of_branches as usize;
-		    } else {
-			current_frame.side_table_pointer += branch_index as usize;
-		    }
-		    self.do_goto(current_frame);
-		    #[cfg(test)]
-		    println!("{:?}", self.reader.rest());
-		}
-		RETURN => {
-		    let count = current_frame.return_value.len();
-		    let results= self.stack.pop_n(count);
-		    self.stack.unwind_to(current_frame.stack_pointer);
-		    self.stack.push_vec(&results);
-		    break;
-		}
+                        .expect("Error parsing number of branches in BR_Table")
+                        as usize;
+                    if branch_index as usize >= number_of_branches {
+                        current_frame.side_table_pointer += number_of_branches;
+                    } else {
+                        current_frame.side_table_pointer += branch_index as usize;
+                    }
+                    self.do_goto(current_frame);
+                    #[cfg(test)]
+                    println!("{:?}", self.reader.rest());
+                }
+                RETURN => {
+                    let count = current_frame.return_value.len();
+                    let results = self.stack.pop_n(count);
+                    self.stack.unwind_to(current_frame.stack_pointer);
+                    self.stack.push_vec(&results);
+                    break;
+                }
                 END => {
                     if self.reader.current_index() == current_frame.end {
                         break;
@@ -262,7 +264,7 @@ pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
         types: module.typesec,
         functions,
         call_stack: vec![],
-        stack: ExecutionStack::new(),
+        stack: ExecutionStack::default(),
     }
 }
 
@@ -596,7 +598,7 @@ mod tests {
         assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(3)]);
     }
 
-      #[test]
+    #[test]
     fn test_br_table() {
         let bytes = wat::parse_str(
             "
@@ -641,38 +643,41 @@ mod tests {
             }],
             sidetables: vec![SideTable {
                 entries: vec![
-                SideTableEntry {
-                    ip: 15,
-                    stp: 4,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 10,
-                    stp: 3,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 5,
-                    stp: 2,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 20,
-                    stp: 1,
-                    vals: 0,
-                    pop: 0,
-                },
-            ],
+                    SideTableEntry {
+                        ip: 15,
+                        stp: 4,
+                        vals: 0,
+                        pop: 0,
+                    },
+                    SideTableEntry {
+                        ip: 10,
+                        stp: 3,
+                        vals: 0,
+                        pop: 0,
+                    },
+                    SideTableEntry {
+                        ip: 5,
+                        stp: 2,
+                        vals: 0,
+                        pop: 0,
+                    },
+                    SideTableEntry {
+                        ip: 20,
+                        stp: 1,
+                        vals: 0,
+                        pop: 0,
+                    },
+                ],
             }],
         };
         let mut reader = WasmReader::new(bytes.to_vec());
         let mut instance = instantiate(module, &mut reader);
         assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(102)]);
-        assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(101)]);	
+        assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(101)]);
         assert_eq!(instance.call(0, vec![Value::I32(2)]), vec![Value::I32(100)]);
-	assert_eq!(instance.call(0, vec![Value::I32(10)]), vec![Value::I32(103)]);
+        assert_eq!(
+            instance.call(0, vec![Value::I32(10)]),
+            vec![Value::I32(103)]
+        );
     }
 }

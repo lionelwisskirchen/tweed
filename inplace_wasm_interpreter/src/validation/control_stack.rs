@@ -6,6 +6,11 @@ use super::control_types::ControlType;
 pub struct ControlStack {
     stack: Vec<ControlType>,
 }
+impl Default for ControlStack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ControlStack {
     pub fn new() -> Self {
@@ -15,7 +20,7 @@ impl ControlStack {
         self.stack.last_mut().expect("No ControlType on stack")
     }
     pub fn reset(&mut self) {
-	self.stack.clear();
+        self.stack.clear();
     }
     pub fn top_is_reachable(&self) -> bool {
         let top = self.stack.last().expect("No ControlType on stack");
@@ -40,7 +45,7 @@ impl ControlStack {
             | ControlType::If {
                 height_of_value_stack,
                 ..
-            } => height_of_value_stack.clone(),
+            } => *height_of_value_stack,
             _ => 0,
         }
     }

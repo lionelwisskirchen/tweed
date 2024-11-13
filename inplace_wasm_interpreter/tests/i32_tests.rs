@@ -8,8 +8,20 @@ fn test_add() {
 ",
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![Value::from(1), Value::from(1)]), vec![Value::from(2)]);
-    assert_eq!(run(&wasm, vec![Value::from(-1), Value::from(-1)]), vec![Value::from(-2)]);
-    assert_eq!(run(&wasm, vec![Value::from(-1), Value::from(1)]), vec![Value::from(0)]);
-    assert_eq!(run(&wasm, vec![Value::from(0x3fffffff), Value::from(1)]), vec![Value::from(0x40000000)]);
+    assert_eq!(
+        run(&wasm, vec![Value::from(1), Value::from(1)]),
+        vec![Value::from(2)]
+    );
+    assert_eq!(
+        run(&wasm, vec![Value::from(-1), Value::from(-1)]),
+        vec![Value::from(-2)]
+    );
+    assert_eq!(
+        run(&wasm, vec![Value::from(-1), Value::from(1)]),
+        vec![Value::from(0)]
+    );
+    assert_eq!(
+        run(&wasm, vec![Value::from(0x3fffffff), Value::from(1)]),
+        vec![Value::from(0x40000000)]
+    );
 }

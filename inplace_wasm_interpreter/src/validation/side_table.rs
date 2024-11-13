@@ -16,17 +16,22 @@ impl SideTable {
         }
     }
     pub fn len(&self) -> usize {
-	self.entries.len()
+        self.entries.len()
     }
-     pub fn reset(&mut self) {
-	self.entries.clear();
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+    pub fn reset(&mut self) {
+        self.entries.clear();
     }
     pub fn create_entry(&mut self, ip: i32, stp: i32, vals: usize, pop: usize) -> usize {
         self.entries.push(SideTableEntry { ip, stp, vals, pop });
-	self.entries.len().saturating_sub(1)
+        self.entries.len().saturating_sub(1)
     }
-    pub fn get_entry(&mut self, index: usize) -> &mut SideTableEntry{
-	self.entries.get_mut(index).expect("Sidetable entry does not exist")
+    pub fn get_entry(&mut self, index: usize) -> &mut SideTableEntry {
+        self.entries
+            .get_mut(index)
+            .expect("Sidetable entry does not exist")
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,4 +1,3 @@
-
 use alloc::vec::Vec;
 
 use crate::core::values::Value;
@@ -6,6 +5,11 @@ use crate::core::values::Value;
 #[derive(Debug)]
 pub struct ExecutionStack {
     stack: Vec<Value>,
+}
+impl Default for ExecutionStack {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExecutionStack {
@@ -24,11 +28,11 @@ impl ExecutionStack {
             self.push(*value);
         }
     }
-    pub fn unwind_to(&mut self, size: usize){
-	if size > self.stack.len() {
+    pub fn unwind_to(&mut self, size: usize) {
+        if size > self.stack.len() {
             panic!("Error: Stack underflow happened in function!");
         }
-	self.stack.drain(size..);
+        self.stack.drain(size..);
     }
     pub fn pop(&mut self) -> Value {
         self.stack.pop().expect("No value on Stack!")
@@ -36,17 +40,20 @@ impl ExecutionStack {
     pub fn len(&self) -> usize {
         self.stack.len()
     }
+    pub fn is_empty(&self) -> bool {
+        self.stack.is_empty()
+    }
     pub fn pop_i32(&mut self) -> i32 {
         let Value::I32(value) = self.pop() else {
-	    panic!("Unexpected value type.")
-	};
-	value
+            panic!("Unexpected value type.")
+        };
+        value
     }
     pub fn pop_i64(&mut self) -> i64 {
         let Value::I64(value) = self.pop() else {
-	    panic!("Unexpected value type.")
-	};
-	value
+            panic!("Unexpected value type.")
+        };
+        value
     }
     pub fn pop_n(&mut self, count: usize) -> Vec<Value> {
         if count > self.stack.len() {

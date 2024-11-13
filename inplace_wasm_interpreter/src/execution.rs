@@ -1,2 +1,2 @@
-pub mod instance;
 pub mod execution_stack;
+pub mod instance;

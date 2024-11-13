@@ -188,12 +188,12 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
                 }
-		I32_GE_S => {
+                I32_GE_S => {
                     self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
                 }
-		I32_AND => {
+                I32_AND => {
                     self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
@@ -343,13 +343,13 @@ impl<'a, 'b> Validator<'a, 'b> {
     }
 
     fn check_args(&mut self, args: &[ValType], height_of_value_stack: u32) {
-        self.abstract_value_stack.pop_expected_vec(&args);
+        self.abstract_value_stack.pop_expected_vec(args);
 
         if height_of_value_stack != self.abstract_value_stack.height() {
             panic!("Stack has not shrunk back to its initial height!");
         }
 
-        self.abstract_value_stack.push_vec(&args);
+        self.abstract_value_stack.push_vec(args);
     }
 
     fn resolve_sidetable_entries(&mut self, sidetable_idxs: &[usize]) {
@@ -409,7 +409,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     .pop_expected_vec(&func_type.parameter);
 
                 let stp = *side_table_entry as i32 - (self.side_table.len() as i32) + 1;
-                let ip = *instruction_pointer as i32 - index_of_start_bytecode as i32 - 1; // -1 Because current byte is the depth
+                let ip = *instruction_pointer as i32 - index_of_start_bytecode - 1; // -1 Because current byte is the depth
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
                 entry.vals = func_type.result.len();
@@ -424,7 +424,7 @@ impl<'a, 'b> Validator<'a, 'b> {
             .reader
             .next_leb128_u32()
             .expect("Error parsing block func idx");
-        lookup_signature(func_idx, &self.typesec)
+        lookup_signature(func_idx, self.typesec)
     }
 }
 

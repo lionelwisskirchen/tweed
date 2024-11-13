@@ -11,8 +11,6 @@ fn as_if_then() {
     assert_eq!(run(&wasm, vec![]), vec![Value::I32(1)]);
 }
 
-
-
 #[test]
 fn nested() {
     let wasm = wat::parse_str(
@@ -65,6 +63,3 @@ end
     .unwrap();
     assert_eq!(run(&wasm, vec![]), vec![]);
 }
-
-
-
