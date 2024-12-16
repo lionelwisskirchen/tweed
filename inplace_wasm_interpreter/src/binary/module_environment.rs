@@ -1,4 +1,4 @@
-use crate::{core::wasm_reader::WasmReader, validation::side_table::SideTable};
+use crate::core::wasm_reader::WasmReader;
 use alloc::vec::Vec;
 
 use super::{
@@ -8,15 +8,14 @@ use super::{
 };
 
 #[derive(Debug, Default)]
-pub struct Module {
+pub struct ModuleEnvironment {
     pub typesec: Vec<FuncType>,
     pub funcsec: Vec<FuncDecl>,
     pub codesec: Vec<FuncCode>,
-    pub sidetables: Vec<SideTable>,
 }
 
-pub fn create_module(reader: &mut WasmReader) -> Module {
-    let mut module = Module {
+pub fn create_module_environment(reader: &mut WasmReader) -> ModuleEnvironment {
+    let mut module = ModuleEnvironment {
         ..Default::default()
     };
     reader
@@ -36,7 +35,7 @@ pub fn create_module(reader: &mut WasmReader) -> Module {
                 module.funcsec = process_function_section(reader);
             }
             0x0a => {
-                module.codesec = process_code_section(reader, &module);
+                module.codesec = process_code_section(reader);
             }
             _ => {
                 panic!("Unknown section code");
@@ -54,11 +53,11 @@ mod tests {
     fn test_lookup_unknown() {
         let mut reader =
             WasmReader::new(vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, 0x77]);
-        create_module(&mut reader);
+        create_module_environment(&mut reader);
     }
     #[test]
     fn test_empty_sequence() {
         let mut reader = WasmReader::new(vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00]);
-        create_module(&mut reader);
+        create_module_environment(&mut reader);
     }
 }

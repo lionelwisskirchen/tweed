@@ -2,19 +2,14 @@ extern crate alloc;
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use alloc::vec::Vec;
 
-use self::{module::Module, type_section::FuncType};
-
-use super::*;
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FuncCode {
-    pub signature: FuncType,
     pub locals: Vec<ValType>,
     pub start: usize,
     pub end: usize,
 }
 
-pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<FuncCode> {
+pub fn process_code_section(reader: &mut WasmReader) -> Vec<FuncCode> {
     reader.next_leb128_u32().expect("No Section size found");
     // Size is not required for decoding, so just check if size is present
     let number_of_codes = reader
@@ -22,7 +17,7 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
         .expect("No function defined in Code section");
 
     let mut aggregated_functions = Vec::new();
-    for index in 0..number_of_codes {
+    for _ in 0..number_of_codes {
         let func_body_size = reader
             .next_leb128_u32()
             .expect("No function body size in Code section");
@@ -42,19 +37,7 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
                 locals.push(local_type);
             }
         }
-        let signature_index = module
-            .funcsec
-            .get(index as usize)
-            .expect("Function Mapping failed")
-            .sig_index as usize;
-
-        let signature = module
-            .typesec
-            .get(signature_index)
-            .expect("signature for function not found");
-
         let function = FuncCode {
-            signature: signature.clone(),
             locals,
             start: reader.current_index() + 1,
             end: position_of_last_instruction,
@@ -68,8 +51,6 @@ pub fn process_code_section(reader: &mut WasmReader, module: &Module) -> Vec<Fun
 
 #[cfg(test)]
 mod tests {
-
-    use code_section::function_section::FuncDecl;
 
     use super::*;
     #[test]
@@ -85,21 +66,8 @@ mod tests {
             0x0b, // Terminal
         ];
         let mut reader = WasmReader::new(bytes.to_vec());
-        let module = Module {
-            typesec: vec![FuncType {
-                parameter: vec![ValType::I32, ValType::I32],
-                result: vec![ValType::I32],
-            }],
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            codesec: Vec::new(),
-            sidetables: vec![],
-        };
-        let actual_functions = process_code_section(&mut reader, &module);
+        let actual_functions = process_code_section(&mut reader);
         let expected_functions = vec![FuncCode {
-            signature: FuncType {
-                parameter: vec![ValType::I32, ValType::I32],
-                result: vec![ValType::I32],
-            },
             locals: vec![ValType::I32],
             start: 6,
             end: 18,

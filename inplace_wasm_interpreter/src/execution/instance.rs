@@ -1,6 +1,8 @@
+use crate::core::signature_lookup::lookup_signature;
 use crate::core::values::Value;
+use crate::validation::module::Module;
 use crate::{
-    binary::{module::Module, type_section::FuncType},
+    binary::type_section::FuncType,
     core::{opcode::*, value_types::ValType, wasm_reader::WasmReader},
     validation::side_table::SideTable,
 };
@@ -235,15 +237,22 @@ pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
     let function_to_sidetable = zip(module.codesec, module.sidetables);
     let mut functions = Vec::new();
 
-    for (function, side_table) in function_to_sidetable {
+    for (index, (function, side_table)) in function_to_sidetable.enumerate() {
         let locals: Vec<Value> = function
             .locals
             .iter()
             .map(|val_type| (*val_type).into())
             .collect::<Vec<Value>>();
 
+        let signature_index = module
+            .funcsec
+            .get(index)
+            .expect("Signature for function does not exist")
+            .sig_index;
+        let signature = lookup_signature(signature_index, &module.typesec);
+
         functions.push(FunctionInstance {
-            signature: function.signature,
+            signature: signature.clone(),
             locals,
             start: function.start,
             end: function.end,
@@ -287,10 +296,6 @@ mod tests {
             }],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![],
                 start: 24,
                 end: 29,
@@ -322,10 +327,6 @@ mod tests {
             }],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![],
                 start: 1,
                 end: 29,
@@ -357,10 +358,6 @@ mod tests {
             }],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![],
                 start: 24,
                 end: 28,
@@ -393,10 +390,6 @@ mod tests {
             }],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![],
                 start: 24,
                 end: 31,
@@ -438,10 +431,6 @@ mod tests {
             ],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![],
                 start: 29,
                 end: 40,
@@ -494,10 +483,6 @@ mod tests {
             ],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![],
                 start: 33,
                 end: 56,
@@ -555,10 +540,6 @@ mod tests {
             }],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![ValType::I32],
                 start: 26,
                 end: 45,
@@ -609,10 +590,6 @@ mod tests {
             }],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![ValType::I32],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![],
                 start: 25,
                 end: 44,
@@ -694,10 +671,6 @@ mod tests {
             }],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             codesec: vec![FuncCode {
-                signature: FuncType {
-                    parameter: vec![ValType::I32],
-                    result: vec![ValType::I32],
-                },
                 locals: vec![],
                 start: 25,
                 end: 61,
