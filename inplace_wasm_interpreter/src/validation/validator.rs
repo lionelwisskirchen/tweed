@@ -995,4 +995,49 @@ return
         };
         assert_eq!(actual_sidetable, expected_sidetable);
     }
+
+    #[test]
+    fn test_pop_val() {
+        let bytes = wat::parse_str(
+            "
+(module	   
+   (func (result i32)
+       (block $label1 (result i32)
+          i32.const 12	       
+          i32.const 10
+          i32.const 10
+          br $label1
+       )
+          i32.const 10
+          i32.add
+   )
+)",
+        )
+        .unwrap();
+        let mut reader = WasmReader::new(bytes.to_vec());
+        let typesec = vec![FuncType {
+            parameter: vec![],
+            result: vec![ValType::I32],
+        }];
+        let code = FuncCode {
+            signature: FuncType {
+                parameter: vec![],
+                result: vec![ValType::I32],
+            },
+            locals: vec![],
+            start: 24,
+            end: 38,
+        };
+        let mut validator = Validator::new(&mut reader, &typesec);
+        let actual_sidetable = validator.validate(&code);
+        let expected_sidetable = SideTable {
+            entries: vec![SideTableEntry {
+                ip: 2,
+                stp: 1,
+                vals: 1,
+                pop: 2,
+            }],
+        };
+        assert_eq!(actual_sidetable, expected_sidetable);
+    }
 }

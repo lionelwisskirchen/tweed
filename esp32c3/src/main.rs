@@ -4,7 +4,7 @@
 use esp_backtrace as _;
 use esp_hal::prelude::*;
 use inplace_wasm_interpreter;
-use inplace_wasm_interpreter::execution::instance::Value;
+use inplace_wasm_interpreter::Value;
 extern crate alloc;
 use alloc::vec;
 use core::mem::MaybeUninit;
