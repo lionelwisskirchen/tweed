@@ -4,27 +4,26 @@ use inplace_wasm_interpreter::{run, Value};
 #[should_panic]
 fn block_underflow() {
     let wasm = wat::parse_str(
-        "(module
-           (func (result i32)
+        r#"(module 
+           (func (export "fun") (result i32)
 	       i32.const 12	       
                (block $label1 (result i32)
 	    	   i32.const 10
 		   i32.add
 	         )
                )
-)",
+)"#,
     )
     .unwrap();
-    run(&wasm, vec![]);
+    run(&wasm, "fun".to_string(), vec![]);
 }
 
 #[test]
 #[should_panic]
 fn block_overflow() {
     let wasm = wat::parse_str(
-        "
-    (module
-                 (func
+        r#"(module 
+                 (func (export "fun")
 		      (block $l
                        i32.const 1
 		       i32.const 2
@@ -36,19 +35,19 @@ fn block_overflow() {
                      
                 )
              )
-",
+"#,
     )
     .unwrap();
-    run(&wasm, vec![]);
+    run(&wasm, "fun".to_string(), vec![]);
 }
 
 #[test]
 fn with_br_if() {
     let wasm = wat::parse_str(
-        "
+        r#"
     (module
 	   
-           (func (result i32)
+           (func (export "fun")(result i32)
                 (block $bl (result i32)
                   i32.const 0
                   i32.const 1
@@ -58,18 +57,17 @@ fn with_br_if() {
                )
                )
 )
-",
+"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![]), vec![Value::I32(0)]);
+    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::I32(0)]);
 }
 #[test]
 fn with_br() {
     let wasm = wat::parse_str(
-        "
-     (module
+        r#"(module
 	   
-           (func (result i32)
+           (func  (export "fun") (result i32)
                (block $label1 (result i32)
        	           i32.const 12	       
 	    	   i32.const 10
@@ -80,8 +78,8 @@ fn with_br() {
 		 i32.add
                )
 )
-",
+"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![]), vec![Value::I32(20)]);
+    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::I32(20)]);
 }

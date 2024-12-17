@@ -477,6 +477,7 @@ mod tests {
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         validator.validate();
@@ -518,6 +519,7 @@ mod tests {
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
@@ -559,6 +561,7 @@ mod tests {
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
@@ -618,6 +621,7 @@ mod tests {
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
@@ -677,6 +681,7 @@ mod tests {
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
@@ -766,6 +771,7 @@ mod tests {
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 1 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
@@ -832,6 +838,7 @@ mod tests {
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
@@ -895,6 +902,7 @@ mod tests {
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
@@ -986,6 +994,7 @@ return
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
@@ -1052,6 +1061,7 @@ return
             typesec,
             codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
+            ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();

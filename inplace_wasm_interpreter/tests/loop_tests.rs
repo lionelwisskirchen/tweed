@@ -3,19 +3,19 @@ use inplace_wasm_interpreter::{run, Value};
 #[test]
 fn as_if_then() {
     let wasm = wat::parse_str(
-        "(func (result i32)
+        r#"(func (export "fun") (result i32)
     (if (result i32) (i32.const 1) (then (loop (result i32) (i32.const 1))) (else (i32.const 2)))
-  )",
+  )"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![]), vec![Value::I32(1)]);
+    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::I32(1)]);
 }
 
 #[test]
 fn nested() {
     let wasm = wat::parse_str(
-        "
-(func
+        r#"
+(func  (export "fun")
 (local $index i32)
 (local $total i32)
 
@@ -58,8 +58,8 @@ end
 end  
 )
 
-",
+"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![]), vec![]);
+    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![]);
 }

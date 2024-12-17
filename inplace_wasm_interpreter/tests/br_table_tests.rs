@@ -3,8 +3,8 @@ use inplace_wasm_interpreter::{run, Value};
 #[test]
 fn test_multiple_value_1() {
     let wasm = wat::parse_str(
-        "
-(func (param $p i32) (result i32)
+        r#"
+(func (export "fun") (param $p i32) (result i32)
   (block
     (block
       (block
@@ -25,16 +25,19 @@ fn test_multiple_value_1() {
     (return))
   ;; Target for (br 3)
   (i32.const 103)
-  (return))",
+  (return))"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![Value::from(0)]), vec![Value::from(102)]);
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(0)]),
+        vec![Value::from(102)]
+    );
 }
 #[test]
 fn test_multiple_value_2() {
     let wasm = wat::parse_str(
-        "
-(func (param i32) (result i32)
+        r#"
+(func (export "fun") (param i32) (result i32)
     (local i32)
     (local.set 1 (block (result i32)
       (local.set 1 (block (result i32)
@@ -53,20 +56,51 @@ fn test_multiple_value_2() {
       (return (i32.add (local.get 1) (i32.const 13)))
     ))
     (i32.add (local.get 1) (i32.const 14))
-  )",
+  )"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![Value::from(0)]), vec![Value::from(213)]);
-    assert_eq!(run(&wasm, vec![Value::from(1)]), vec![Value::from(212)]);
-    assert_eq!(run(&wasm, vec![Value::from(2)]), vec![Value::from(211)]);
-    assert_eq!(run(&wasm, vec![Value::from(3)]), vec![Value::from(210)]);
-    assert_eq!(run(&wasm, vec![Value::from(4)]), vec![Value::from(214)]);
-    assert_eq!(run(&wasm, vec![Value::from(5)]), vec![Value::from(214)]);
-    assert_eq!(run(&wasm, vec![Value::from(6)]), vec![Value::from(214)]);
-    assert_eq!(run(&wasm, vec![Value::from(10)]), vec![Value::from(214)]);
-    assert_eq!(run(&wasm, vec![Value::from(-1)]), vec![Value::from(214)]);
     assert_eq!(
-        run(&wasm, vec![Value::from(0xffffffff as u32)]),
+        run(&wasm, "fun".to_string(), vec![Value::from(0)]),
+        vec![Value::from(213)]
+    );
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(1)]),
+        vec![Value::from(212)]
+    );
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(2)]),
+        vec![Value::from(211)]
+    );
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(3)]),
+        vec![Value::from(210)]
+    );
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(4)]),
+        vec![Value::from(214)]
+    );
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(5)]),
+        vec![Value::from(214)]
+    );
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(6)]),
+        vec![Value::from(214)]
+    );
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(10)]),
+        vec![Value::from(214)]
+    );
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::from(-1)]),
+        vec![Value::from(214)]
+    );
+    assert_eq!(
+        run(
+            &wasm,
+            "fun".to_string(),
+            vec![Value::from(0xffffffff as u32)]
+        ),
         vec![Value::from(214)]
     );
 }
@@ -74,9 +108,9 @@ fn test_multiple_value_2() {
 #[test]
 fn test_loop_first() {
     let wasm = wat::parse_str(
-        "
+        r#"
 (module
-(func (result i32)
+(func (export "fun") (result i32)
 (loop (result i32)
    (br_table
      1
@@ -84,8 +118,8 @@ fn test_loop_first() {
        (i32.const 3)
        (i32.const 0)
    )
-(i32.const 1))))",
+(i32.const 1))))"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![]), vec![Value::from(3)]);
+    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::from(3)]);
 }

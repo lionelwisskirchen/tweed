@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 
 use super::{
     code_section::{process_code_section, FuncCode},
+    export_section::{process_export_section, Export},
     function_section::{process_function_section, FuncDecl},
     type_section::{process_type_section, FuncType},
 };
@@ -12,6 +13,7 @@ pub struct ModuleEnvironment {
     pub typesec: Vec<FuncType>,
     pub funcsec: Vec<FuncDecl>,
     pub codesec: Vec<FuncCode>,
+    pub exportsec: Vec<Export>,
 }
 
 pub fn create_module_environment(reader: &mut WasmReader) -> ModuleEnvironment {
@@ -36,6 +38,9 @@ pub fn create_module_environment(reader: &mut WasmReader) -> ModuleEnvironment {
             }
             0x0a => {
                 module.codesec = process_code_section(reader);
+            }
+            0x07 => {
+                module.exportsec = process_export_section(reader);
             }
             _ => {
                 panic!("Unknown section code");

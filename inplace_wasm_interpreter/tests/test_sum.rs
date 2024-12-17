@@ -2,9 +2,9 @@ use inplace_wasm_interpreter::{run, Value};
 #[test]
 fn test_sum() {
     let wasm = wat::parse_str(
-        "
+        r#"
 (module
-  (func (param $x i32) (result i32)
+  (func (export "fun")(param $x i32) (result i32)
         ;; set variables
        (local $i i32)
        (local $res i32)
@@ -49,8 +49,11 @@ fn test_sum() {
   )
 )
 
-",
+"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, vec![Value::I32(6)]), vec![Value::I32(21)]);
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![Value::I32(6)]),
+        vec![Value::I32(21)]
+    );
 }

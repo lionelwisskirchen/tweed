@@ -1,3 +1,4 @@
+use crate::binary::export_section::ExportContext;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::values::Value;
 use crate::validation::module::Module;
@@ -6,10 +7,12 @@ use crate::{
     core::{opcode::*, value_types::ValType, wasm_reader::WasmReader},
     validation::side_table::SideTable,
 };
+use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::iter::zip;
 
 use super::execution_stack::ExecutionStack;
+use super::store::Store;
 
 #[derive(Debug, Clone)]
 pub struct FunctionInstance {
@@ -36,14 +39,21 @@ pub struct Frame {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Instance<'a> {
+    store: Store,
     reader: &'a mut WasmReader,
-    functions: Vec<FunctionInstance>,
-    types: Vec<FuncType>,
     call_stack: Vec<Frame>,
     stack: ExecutionStack,
 }
 
 impl<'a> Instance<'a> {
+    pub fn call_by_name(&mut self, name: &str, args: Vec<Value>) -> Vec<Value> {
+        let Some(export_instance) = self.store.exports.get(name) else {
+            panic!("Could not found export by name");
+        };
+        match export_instance {
+            ExportContext::FunctionExport(index) => self.call(*index as usize, args),
+        }
+    }
     pub fn call(&mut self, index: usize, args: Vec<Value>) -> Vec<Value> {
         self.stack.reset(); // Reset stack. Maybe not the perfect location
         self.stack.push_vec(&args);
@@ -65,6 +75,7 @@ impl<'a> Instance<'a> {
     }
     fn invoke(&mut self, index: usize) -> Vec<Value> {
         let function = self
+            .store
             .functions
             .get(index)
             .expect("Invoked function does not exist");
@@ -259,10 +270,16 @@ pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
             side_table,
         });
     }
+    let mut exports = BTreeMap::new();
+
+    for export in module.exportsec {
+        exports.insert(export.name.clone(), export.context.clone());
+    }
+
+    let store = Store { functions, exports };
     Instance {
         reader,
-        types: module.typesec,
-        functions,
+        store,
         call_stack: vec![],
         stack: ExecutionStack::default(),
     }
@@ -300,6 +317,7 @@ mod tests {
                 start: 24,
                 end: 29,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
         let mut reader = WasmReader::new(bytes.to_vec());
@@ -331,6 +349,7 @@ mod tests {
                 start: 1,
                 end: 29,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
         let mut reader = WasmReader::new(bytes.to_vec());
@@ -362,6 +381,7 @@ mod tests {
                 start: 24,
                 end: 28,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
         let mut reader = WasmReader::new(bytes.to_vec());
@@ -394,6 +414,7 @@ mod tests {
                 start: 24,
                 end: 31,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
         let mut reader = WasmReader::new(bytes.to_vec());
@@ -435,6 +456,7 @@ mod tests {
                 start: 29,
                 end: 40,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
         let mut reader = WasmReader::new(bytes.to_vec());
@@ -487,6 +509,7 @@ mod tests {
                 start: 33,
                 end: 56,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable {
                 entries: vec![
                     SideTableEntry {
@@ -544,6 +567,7 @@ mod tests {
                 start: 26,
                 end: 45,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable {
                 entries: vec![SideTableEntry {
                     ip: -14,
@@ -594,6 +618,7 @@ mod tests {
                 start: 25,
                 end: 44,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable {
                 entries: vec![
                     SideTableEntry {
@@ -675,6 +700,7 @@ mod tests {
                 start: 25,
                 end: 61,
             }],
+            exportsec: vec![],
             sidetables: vec![SideTable {
                 entries: vec![
                     SideTableEntry {
