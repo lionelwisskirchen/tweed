@@ -1,7 +1,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct WasmReader {
     bytecode: Vec<u8>,
     byte_pointer: usize,

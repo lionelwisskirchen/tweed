@@ -40,7 +40,7 @@ impl ValidationStack {
     }
     pub fn push_vec(&mut self, val_types: &[ValType]) {
         for val_type in val_types {
-            self.stack.push(*val_type);
+            self.push(*val_type);
         }
     }
     pub fn pop_val(&mut self) -> ValType {

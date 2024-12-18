@@ -1,7 +1,7 @@
 use crate::core::wasm_reader::WasmReader;
 use alloc::vec::Vec;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FuncDecl {
     pub sig_index: u32,
 }

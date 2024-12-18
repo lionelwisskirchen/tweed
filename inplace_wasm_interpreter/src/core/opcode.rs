@@ -19,3 +19,5 @@ pub const BR_IF: u8 = 0x0D;
 pub const BR: u8 = 0x0C;
 pub const BR_TABLE: u8 = 0x0E;
 pub const I32_AND: u8 = 0x71;
+pub const I32_CTZ: u8 = 0x68;
+pub const DROP: u8 = 0x1A;

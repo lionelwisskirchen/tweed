@@ -25,7 +25,7 @@ pub struct FunctionInstance {
 
 #[derive(Default, Debug, Clone)]
 pub struct Frame {
-    pub program_counter: isize,
+    pub program_counter: usize,
     pub stack_pointer: usize,
     pub start: usize,
     pub end: usize,
@@ -36,19 +36,19 @@ pub struct Frame {
 }
 
 // An instantiated Module
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
-pub struct Instance<'a> {
+pub struct Instance {
     store: Store,
-    reader: &'a mut WasmReader,
+    reader: WasmReader,
     call_stack: Vec<Frame>,
     stack: ExecutionStack,
 }
 
-impl<'a> Instance<'a> {
+impl Instance {
     pub fn call_by_name(&mut self, name: &str, args: Vec<Value>) -> Vec<Value> {
         let Some(export_instance) = self.store.exports.get(name) else {
-            panic!("Could not found export by name");
+            panic!("Could not find export by name");
         };
         match export_instance {
             ExportContext::FunctionExport(index) => self.call(*index as usize, args),
@@ -63,7 +63,7 @@ impl<'a> Instance<'a> {
         let mut locals = self.stack.pop_n(function.signature.parameter.len());
         locals.append(&mut function.locals.clone()); // Locals = Params + Locals
         Frame {
-            program_counter: -1,
+            program_counter: 0,
             stack_pointer: self.stack.len(),
             start: function.start,
             end: function.end,
@@ -85,9 +85,12 @@ impl<'a> Instance<'a> {
     }
     fn execute(&mut self) -> Vec<Value> {
         loop {
+            #[cfg(test)]
+            println!("{:?}", self.call_stack);
             let Some(mut current_frame) = self.call_stack.pop() else {
                 return self.stack.pop_n(self.stack.len());
             };
+
             self.execute_frame(&mut current_frame);
         }
     }
@@ -118,8 +121,8 @@ impl<'a> Instance<'a> {
     }
 
     fn execute_frame(&mut self, current_frame: &mut Frame) {
-        self.reader.seek(current_frame.start);
-
+        self.reader
+            .seek(current_frame.start + current_frame.program_counter);
         while self.reader.current_index() < current_frame.end {
             let instruction = self.reader.next_byte().expect("No next byte for frame");
             match *instruction {
@@ -156,6 +159,15 @@ impl<'a> Instance<'a> {
                         .expect("Local get on invalid index");
                     let new_value = self.stack.pop();
                     *local = new_value;
+                }
+                DROP => {
+                    self.stack.pop();
+                }
+                NOP => {}
+                I32_CTZ => {
+                    let val = self.stack.pop_i32();
+                    let result = val.trailing_zeros() as i32;
+                    self.stack.push(Value::I32(result));
                 }
                 I32_ADD => {
                     let (right, left) = (self.stack.pop(), self.stack.pop());
@@ -238,13 +250,33 @@ impl<'a> Instance<'a> {
                         break;
                     }
                 }
+                CALL => {
+                    let index = self
+                        .reader
+                        .next_leb128_u32()
+                        .expect("Can't get index of called function.");
+                    let function = self
+                        .store
+                        .functions
+                        .get(index as usize)
+                        .expect("Can't get function by called index");
+
+                    // TODO External/internal functions
+                    let frame = self.build_frame(function.clone());
+                    current_frame.program_counter =
+                        self.reader.current_index() - current_frame.start + 1;
+                    self.call_stack.push(current_frame.clone());
+                    self.call_stack.push(frame);
+                    break;
+                }
                 _ => panic!("Invalid instruction: {}", instruction),
             };
         }
+        current_frame.program_counter = self.reader.current_index() - current_frame.start + 1;
     }
 }
 
-pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
+pub fn instantiate(module: Module) -> Instance {
     let function_to_sidetable = zip(module.codesec, module.sidetables);
     let mut functions = Vec::new();
 
@@ -278,7 +310,7 @@ pub fn instantiate(module: Module, reader: &mut WasmReader) -> Instance {
 
     let store = Store { functions, exports };
     Instance {
-        reader,
+        reader: module.reader,
         store,
         call_stack: vec![],
         stack: ExecutionStack::default(),
@@ -307,6 +339,7 @@ mod tests {
         )
         .unwrap();
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![FuncType {
                 parameter: vec![],
                 result: vec![ValType::I32],
@@ -320,8 +353,8 @@ mod tests {
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+
+        let mut instance = instantiate(module);
         let expected_result = vec![Value::I32(22)];
         assert_eq!(instance.call(0, vec![]), expected_result);
     }
@@ -339,6 +372,7 @@ mod tests {
         )
         .unwrap();
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![FuncType {
                 parameter: vec![],
                 result: vec![ValType::I32],
@@ -352,8 +386,8 @@ mod tests {
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+
+        let mut instance = instantiate(module);
         let expected_result = vec![Value::I32(22)];
         assert_eq!(instance.call(0, vec![]), expected_result);
     }
@@ -371,6 +405,7 @@ mod tests {
         )
         .unwrap();
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![FuncType {
                 parameter: vec![],
                 result: vec![ValType::I32],
@@ -384,8 +419,8 @@ mod tests {
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+
+        let mut instance = instantiate(module);
         let expected_result = vec![Value::I32(22)];
         assert_eq!(instance.call(0, vec![]), expected_result);
     }
@@ -404,6 +439,7 @@ mod tests {
         )
         .unwrap();
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![FuncType {
                 parameter: vec![],
                 result: vec![ValType::I32],
@@ -417,8 +453,8 @@ mod tests {
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+
+        let mut instance = instantiate(module);
         let expected_result = vec![Value::I32(12)];
         assert_eq!(instance.call(0, vec![]), expected_result);
     }
@@ -440,6 +476,7 @@ mod tests {
         )
         .unwrap();
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![
                 FuncType {
                     parameter: vec![],
@@ -459,8 +496,7 @@ mod tests {
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+        let mut instance = instantiate(module);
         let expected_result = vec![Value::I32(12)];
         assert_eq!(instance.call(0, vec![]), expected_result);
     }
@@ -489,6 +525,7 @@ mod tests {
         )
         .unwrap();
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![
                 FuncType {
                     parameter: vec![],
@@ -527,8 +564,7 @@ mod tests {
                 ],
             }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+        let mut instance = instantiate(module);
         let expected_result = vec![Value::I32(3)];
         assert_eq!(instance.call(0, vec![]), expected_result);
     }
@@ -557,6 +593,7 @@ mod tests {
         .unwrap();
 
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![FuncType {
                 parameter: vec![],
                 result: vec![ValType::I32],
@@ -577,8 +614,7 @@ mod tests {
                 }],
             }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+        let mut instance = instantiate(module);
         let expected_result = vec![Value::I32(10)];
         assert_eq!(instance.call(0, vec![]), expected_result);
     }
@@ -608,6 +644,7 @@ mod tests {
         )
         .unwrap();
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![FuncType {
                 parameter: vec![ValType::I32],
                 result: vec![ValType::I32],
@@ -654,8 +691,7 @@ mod tests {
                 ],
             }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+        let mut instance = instantiate(module);
 
         assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(1)]);
         assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(3)]);
@@ -690,6 +726,7 @@ mod tests {
         )
         .unwrap();
         let module = Module {
+            reader: WasmReader::new(bytes.to_vec()),
             typesec: vec![FuncType {
                 parameter: vec![ValType::I32],
                 result: vec![ValType::I32],
@@ -730,8 +767,7 @@ mod tests {
                 ],
             }],
         };
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let mut instance = instantiate(module, &mut reader);
+        let mut instance = instantiate(module);
         assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(102)]);
         assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(101)]);
         assert_eq!(instance.call(0, vec![Value::I32(2)]), vec![Value::I32(100)]);

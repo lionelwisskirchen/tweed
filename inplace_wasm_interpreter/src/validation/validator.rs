@@ -193,6 +193,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                         }
                     }
                 }
+                NOP => {}
+                DROP => {
+                    self.abstract_value_stack.pop_val();
+                }
                 I32_LT_S => {
                     self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.pop_expected(ValType::I32);
@@ -210,6 +214,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                 }
                 I32_AND => {
                     self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                I32_CTZ => {
                     self.abstract_value_stack.pop_expected(ValType::I32);
                     self.abstract_value_stack.push(ValType::I32);
                 }
@@ -330,11 +338,20 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .reader
                         .next_leb128_u32()
                         .expect("Called func index is invalid");
+                    #[cfg(test)]
+                    println!("Func index: {:?}", self.module_environment.funcsec);
+
+                    let type_idx = self
+                        .module_environment
+                        .funcsec
+                        .get(func_index as usize)
+                        .expect("type of func index not found")
+                        .sig_index;
                     let sig = self
                         .module_environment
                         .typesec
-                        .get(func_index as usize)
-                        .expect("Called func sig does not exist");
+                        .get(type_idx as usize)
+                        .expect("Called func sig does not exist.");
                     self.abstract_value_stack.pop_expected_vec(&sig.parameter);
                     self.abstract_value_stack.push_vec(&sig.result);
                 }
@@ -361,7 +378,10 @@ impl<'a, 'b> Validator<'a, 'b> {
         self.abstract_value_stack.pop_expected_vec(args);
 
         if height_of_value_stack != self.abstract_value_stack.height() {
-            panic!("Stack has not shrunk back to its initial height!");
+            panic!(
+                "Stack has not shrunk back to its initial height!{:?} {:?} {:?}",
+                self.abstract_value_stack, self.abstract_control_stack, height_of_value_stack
+            );
         }
 
         self.abstract_value_stack.push_vec(args);
@@ -762,41 +782,51 @@ mod tests {
             },
         ];
 
-        let code = FuncCode {
-            locals: vec![],
-            start: 32,
-            end: 49,
-        };
+        let code = vec![
+            FuncCode {
+                locals: vec![],
+                start: 29,
+                end: 29,
+            },
+            FuncCode {
+                locals: vec![],
+                start: 32,
+                end: 56,
+            },
+        ];
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
-            funcsec: vec![FuncDecl { sig_index: 1 }],
+            codesec: code,
+            funcsec: vec![FuncDecl { sig_index: 0 }, FuncDecl { sig_index: 1 }],
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
         let actual_sidetable = validator.validate();
-        let expected_sidetable = vec![SideTable {
-            entries: vec![
-                SideTableEntry {
-                    ip: 7,
-                    stp: 2,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 5,
-                    stp: 1,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 5,
-                    stp: 1,
-                    vals: 1,
-                    pop: 0,
-                },
-            ],
-        }];
+        let expected_sidetable = vec![
+            SideTable { entries: vec![] },
+            SideTable {
+                entries: vec![
+                    SideTableEntry {
+                        ip: 7,
+                        stp: 2,
+                        vals: 0,
+                        pop: 0,
+                    },
+                    SideTableEntry {
+                        ip: 5,
+                        stp: 1,
+                        vals: 0,
+                        pop: 0,
+                    },
+                    SideTableEntry {
+                        ip: 5,
+                        stp: 1,
+                        vals: 1,
+                        pop: 0,
+                    },
+                ],
+            },
+        ];
         assert_eq!(actual_sidetable, expected_sidetable);
     }
 

@@ -43,7 +43,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> ModuleEnvironment {
                 module.exportsec = process_export_section(reader);
             }
             _ => {
-                panic!("Unknown section code");
+                panic!("Unknown section code {section_code:?}");
             }
         }
     }
