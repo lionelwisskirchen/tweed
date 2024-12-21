@@ -8,7 +8,10 @@ fn as_if_then() {
   )"#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::I32(1)]);
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![]).unwrap(),
+        vec![Value::I32(1)]
+    );
 }
 
 #[test]
@@ -61,5 +64,5 @@ end
 "#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![]);
+    assert_eq!(run(&wasm, "fun".to_string(), vec![]).unwrap(), vec![]);
 }

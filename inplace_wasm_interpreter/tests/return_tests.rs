@@ -1,6 +1,5 @@
 use inplace_wasm_interpreter::{run, Value};
 
-#[should_panic]
 #[test]
 fn test_invalid_return() {
     let wasm = wat::parse_str(
@@ -15,7 +14,7 @@ fn test_invalid_return() {
 "#,
     )
     .unwrap();
-    run(&wasm, "fun".to_string(), vec![]);
+    assert!(run(&wasm, "fun".to_string(), vec![]).is_err());
 }
 
 #[test]
@@ -31,7 +30,10 @@ fn test_valid_simple() {
 "#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::from(12)]);
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![]).unwrap(),
+        vec![Value::from(12)]
+    );
 }
 
 #[test]
@@ -44,7 +46,10 @@ fn test_loop() {
 "#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::from(3)]);
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![]).unwrap(),
+        vec![Value::from(3)]
+    );
 }
 #[test]
 fn test_valid_if_else() {
@@ -63,7 +68,8 @@ fn test_valid_if_else() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(0), Value::from(6)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(4)]
     );
     assert_eq!(
@@ -71,7 +77,8 @@ fn test_valid_if_else() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(1), Value::from(6)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(6)]
     );
 }

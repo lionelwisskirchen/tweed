@@ -14,7 +14,16 @@ use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
 
 use super::side_table::SideTable;
+#[derive(Debug, PartialEq, Eq)]
+pub struct ValidationError {
+    pub message: &'static str,
+}
 
+impl ValidationError {
+    pub fn new(message: &'static str) -> Self {
+        ValidationError { message }
+    }
+}
 pub struct Validator<'a, 'b> {
     reader: &'a mut WasmReader,
     module_environment: &'b ModuleEnvironment,
@@ -77,7 +86,8 @@ impl<'a, 'b> Validator<'a, 'b> {
         self.abstract_value_stack
             .update(self.abstract_control_stack.height_of_top(), false);
     }
-    pub fn validate(&mut self) -> Vec<SideTable> {
+
+    pub fn validate(&mut self) -> Result<Vec<SideTable>, ValidationError> {
         let mut side_tables = Vec::new();
 
         for (index, fun) in self.module_environment.codesec.iter().enumerate() {
@@ -85,15 +95,22 @@ impl<'a, 'b> Validator<'a, 'b> {
                 .module_environment
                 .funcsec
                 .get(index)
-                .expect("Signature for function does not exist")
+                .ok_or(ValidationError {
+                    message: "type mismatch",
+                })?
                 .sig_index;
+
             let signature = lookup_signature(signature_index, &self.module_environment.typesec);
-            let side_table = self.validate0(fun, &signature);
+            let side_table = self.validate0(fun, &signature)?;
             side_tables.push(side_table);
         }
-        side_tables
+        Ok(side_tables)
     }
-    fn validate0(&mut self, function: &FuncCode, signature: &FuncType) -> SideTable {
+    fn validate0(
+        &mut self,
+        function: &FuncCode,
+        signature: &FuncType,
+    ) -> Result<SideTable, ValidationError> {
         let locals = self.initialize_locals(function, signature);
         self.reader.seek(function.start);
         self.push_ctrl(ControlType::Func {
@@ -105,41 +122,50 @@ impl<'a, 'b> Validator<'a, 'b> {
         });
 
         loop {
-            let byte = self.reader.next_byte().expect("Missing End statement");
+            let byte = self.reader.next_byte().ok_or(ValidationError {
+                message: "Control flow mismatch",
+            })?;
             match *byte {
                 I32_CONST => {
-                    self.reader
-                        .next_leb128_i32()
-                        .expect("Could not read i32 const");
+                    self.reader.next_leb128_i32().ok_or(ValidationError {
+                        message: "Could not read i32 const",
+                    })?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 LOCAL_GET => {
-                    let idx = self.reader.next_leb128_u32().expect("Error parsing indx");
-                    let value = locals.get(idx as usize).expect("Invalid Local Index");
+                    let idx = self.reader.next_leb128_u32().ok_or(ValidationError {
+                        message: "Error parsing indx",
+                    })?;
+                    let value = locals.get(idx as usize).ok_or(ValidationError {
+                        message: "Invalid Local Index",
+                    })?;
                     self.abstract_value_stack.push(*value);
                 }
                 LOCAL_SET => {
-                    let idx = self.reader.next_leb128_u32().expect("Error parsing indx");
-                    let value = locals.get(idx as usize).expect("Invalid Local Index");
-
-                    self.abstract_value_stack.pop_expected(*value);
+                    let idx = self.reader.next_leb128_u32().ok_or(ValidationError {
+                        message: "Error parsing indx",
+                    })?;
+                    let value = locals.get(idx as usize).ok_or(ValidationError {
+                        message: "Invalid Local Index",
+                    })?;
+                    self.abstract_value_stack.pop_expected(*value)?;
                 }
                 I32_ADD => {
-                    self.abstract_value_stack.pop_expected(ValType::I32);
-                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_SUB => {
-                    self.abstract_value_stack.pop_expected(ValType::I32);
-                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 IF => {
                     let index_of_if_bytecode = self.reader.current_index() as i32;
                     let signature = self.read_block_type();
-                    self.abstract_value_stack.pop_expected(ValType::I32); // bool value
+                    self.abstract_value_stack.pop_expected(ValType::I32)?; // bool value
                     self.abstract_value_stack
-                        .pop_expected_vec(&signature.parameter);
+                        .pop_expected_vec(&signature.parameter)?;
 
                     let index_of_if_sidetable_entry =
                         self.side_table.create_entry(index_of_if_bytecode, 0, 0, 0);
@@ -173,10 +199,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                             let expected_results = func_type.result.clone();
 
                             self.abstract_value_stack
-                                .pop_expected_vec(&expected_results);
+                                .pop_expected_vec(&expected_results)?;
 
                             if *height_of_value_stack != self.abstract_value_stack.height() {
-                                panic!("Stack has not shrunk back to its initial height!");
+                                return Err(ValidationError::new("type mismatch"));
                             }
 
                             self.abstract_value_stack.push_vec(&func_type.parameter);
@@ -189,36 +215,36 @@ impl<'a, 'b> Validator<'a, 'b> {
                             entry.stp = side_table_len as i32 - *side_table_entry as i32;
                         }
                         _ => {
-                            panic!("Else needs if as start control")
+                            return Err(ValidationError::new("control flow mismatch"));
                         }
                     }
                 }
                 NOP => {}
                 DROP => {
-                    self.abstract_value_stack.pop_val();
+                    self.abstract_value_stack.pop_val()?;
                 }
                 I32_LT_S => {
-                    self.abstract_value_stack.pop_expected(ValType::I32);
-                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_GT_S => {
-                    self.abstract_value_stack.pop_expected(ValType::I32);
-                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_GE_S => {
-                    self.abstract_value_stack.pop_expected(ValType::I32);
-                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_AND => {
-                    self.abstract_value_stack.pop_expected(ValType::I32);
-                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_CTZ => {
-                    self.abstract_value_stack.pop_expected(ValType::I32);
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 RETURN => {
@@ -229,7 +255,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                         | ControlType::If { func_type, .. }
                         | ControlType::Func { func_type, .. } => {
                             self.abstract_value_stack
-                                .pop_expected_vec(&func_type.result);
+                                .pop_expected_vec(&func_type.result)?;
                         }
                     }
                     self.unreachable();
@@ -238,7 +264,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     let signature = self.read_block_type();
 
                     self.abstract_value_stack
-                        .pop_expected_vec(&signature.parameter);
+                        .pop_expected_vec(&signature.parameter)?;
 
                     self.push_ctrl(ControlType::Block {
                         instruction_pointer: self.reader.current_index(),
@@ -252,7 +278,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 LOOP => {
                     let signature = self.read_block_type();
                     self.abstract_value_stack
-                        .pop_expected_vec(&signature.parameter);
+                        .pop_expected_vec(&signature.parameter)?;
 
                     self.push_ctrl(ControlType::For {
                         instruction_pointer: self.reader.current_index(),
@@ -266,14 +292,14 @@ impl<'a, 'b> Validator<'a, 'b> {
                 BR_IF => {
                     let index_of_br_if_bytecode = self.reader.current_index() as i32;
 
-                    self.abstract_value_stack.pop_expected(ValType::I32); // bool
+                    self.abstract_value_stack.pop_expected(ValType::I32)?; // bool
 
                     let depth = self.read_depth();
 
-                    self.create_sidetable_entry(depth, index_of_br_if_bytecode);
+                    self.create_sidetable_entry(depth, index_of_br_if_bytecode)?;
                 }
                 BR_TABLE => {
-                    self.abstract_value_stack.pop_expected(ValType::I32); // index of branch
+                    self.abstract_value_stack.pop_expected(ValType::I32)?; // index of branch
                     let number_of_branches = self
                         .reader
                         .next_leb128_u32()
@@ -283,14 +309,14 @@ impl<'a, 'b> Validator<'a, 'b> {
 
                     for _ in 0..=number_of_branches {
                         let depth = self.read_depth();
-                        self.create_sidetable_entry(depth, index_of_br_table_bytecode);
+                        self.create_sidetable_entry(depth, index_of_br_table_bytecode)?;
                     }
                     self.unreachable();
                 }
                 BR => {
                     let index_of_br_bytecode = self.reader.current_index() as i32;
                     let depth = self.read_depth();
-                    self.create_sidetable_entry(depth, index_of_br_bytecode);
+                    self.create_sidetable_entry(depth, index_of_br_bytecode)?;
                     self.unreachable();
                 }
                 END => {
@@ -303,7 +329,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             height_of_value_stack,
                             ..
                         } => {
-                            self.check_args(&func_type.result, height_of_value_stack);
+                            self.check_args(&func_type.result, height_of_value_stack)?;
                             self.resolve_sidetable_entries(&sidetable_idxs);
                             break;
                         }
@@ -319,14 +345,14 @@ impl<'a, 'b> Validator<'a, 'b> {
                             height_of_value_stack,
                             ..
                         } => {
-                            self.check_args(&func_type.result, height_of_value_stack);
+                            self.check_args(&func_type.result, height_of_value_stack)?;
                             self.resolve_sidetable_entries(&sidetable_idxs);
                         }
                         ControlType::For {
                             func_type,
                             height_of_value_stack,
                             ..
-                        } => self.check_args(&func_type.result, height_of_value_stack),
+                        } => self.check_args(&func_type.result, height_of_value_stack)?,
                     }
                     self.abstract_value_stack.update(
                         self.abstract_control_stack.height_of_top(),
@@ -352,7 +378,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .typesec
                         .get(type_idx as usize)
                         .expect("Called func sig does not exist.");
-                    self.abstract_value_stack.pop_expected_vec(&sig.parameter);
+                    self.abstract_value_stack.pop_expected_vec(&sig.parameter)?;
                     self.abstract_value_stack.push_vec(&sig.result);
                 }
                 _ => panic!("Undefined opcode {}", byte),
@@ -360,7 +386,7 @@ impl<'a, 'b> Validator<'a, 'b> {
         }
         let result = self.side_table.clone();
         self.reset();
-        result
+        Ok(result)
     }
     fn read_depth(&mut self) -> u32 {
         self.reader
@@ -374,17 +400,19 @@ impl<'a, 'b> Validator<'a, 'b> {
         self.side_table.reset();
     }
 
-    fn check_args(&mut self, args: &[ValType], height_of_value_stack: u32) {
-        self.abstract_value_stack.pop_expected_vec(args);
+    fn check_args(
+        &mut self,
+        args: &[ValType],
+        height_of_value_stack: u32,
+    ) -> Result<(), ValidationError> {
+        self.abstract_value_stack.pop_expected_vec(args)?;
 
         if height_of_value_stack != self.abstract_value_stack.height() {
-            panic!(
-                "Stack has not shrunk back to its initial height!{:?} {:?} {:?}",
-                self.abstract_value_stack, self.abstract_control_stack, height_of_value_stack
-            );
+            return Err(ValidationError::new("type mismatch"));
         }
 
         self.abstract_value_stack.push_vec(args);
+        Ok(())
     }
 
     fn resolve_sidetable_entries(&mut self, sidetable_idxs: &[usize]) {
@@ -399,8 +427,12 @@ impl<'a, 'b> Validator<'a, 'b> {
             entry.ip = rel_offset;
         }
     }
-    fn create_sidetable_entry(&mut self, depth: u32, index_of_start_bytecode: i32) {
-        let target_control = self.abstract_control_stack.get_control_type(depth);
+    fn create_sidetable_entry(
+        &mut self,
+        depth: u32,
+        index_of_start_bytecode: i32,
+    ) -> Result<(), ValidationError> {
+        let target_control = self.abstract_control_stack.get_control_type(depth)?;
         let index_of_br_sidetable_entry =
             self.side_table
                 .create_entry(index_of_start_bytecode, 0, 0, 0);
@@ -426,7 +458,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 sidetable_idxs.push(index_of_br_sidetable_entry);
 
                 self.abstract_value_stack
-                    .pop_expected_vec(&func_type.result);
+                    .pop_expected_vec(&func_type.result)?;
 
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
@@ -441,7 +473,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 ..
             } => {
                 self.abstract_value_stack
-                    .pop_expected_vec(&func_type.parameter);
+                    .pop_expected_vec(&func_type.parameter)?;
 
                 let stp = *side_table_entry as i32 - (self.side_table.len() as i32) + 1;
                 let ip = *instruction_pointer as i32 - index_of_start_bytecode - 1; // -1 Because current byte is the depth
@@ -453,6 +485,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 self.abstract_value_stack.push_vec(&func_type.parameter);
             }
         };
+        Ok(())
     }
     fn read_block_type(&mut self) -> FuncType {
         let func_idx = self
@@ -465,6 +498,8 @@ impl<'a, 'b> Validator<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
+
+    use core::error::Error;
 
     use super::*;
     use crate::{binary::function_section::FuncDecl, validation::side_table::SideTableEntry};
@@ -504,7 +539,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validation_with_blocks() {
+    fn test_validation_with_blocks() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "(module
                (func (result i32)
@@ -542,13 +577,14 @@ mod tests {
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![SideTable::new()];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
 
     #[test]
-    fn test_validation_with_branches() {
+    fn test_validation_with_branches() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "(module
                 (func
@@ -584,7 +620,7 @@ mod tests {
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![SideTable {
             entries: vec![
                 SideTableEntry {
@@ -608,9 +644,10 @@ mod tests {
             ],
         }];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
     #[test]
-    fn test_validation_with_if_else() {
+    fn test_validation_with_if_else() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "(module
               (func (result i32)
@@ -644,7 +681,7 @@ mod tests {
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![SideTable {
             entries: vec![
                 SideTableEntry {
@@ -662,9 +699,10 @@ mod tests {
             ],
         }];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
     #[test]
-    fn test_validation_with_if_else_and_branches() {
+    fn test_validation_with_if_else_and_branches() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "
 (module
@@ -704,7 +742,7 @@ mod tests {
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![SideTable {
             entries: vec![
                 SideTableEntry {
@@ -740,10 +778,11 @@ mod tests {
             ],
         }];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
 
     #[test]
-    fn test_validation_with_if_else_and_conditional_branches() {
+    fn test_validation_with_if_else_and_conditional_branches() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "
 (module
@@ -801,7 +840,7 @@ mod tests {
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![
             SideTable { entries: vec![] },
             SideTable {
@@ -828,10 +867,11 @@ mod tests {
             },
         ];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
 
     #[test]
-    fn test_validation_with_for_loop() {
+    fn test_validation_with_for_loop() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "
 (module
@@ -871,7 +911,7 @@ mod tests {
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![SideTable {
             entries: vec![SideTableEntry {
                 ip: -14,
@@ -881,10 +921,11 @@ mod tests {
             }],
         }];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
 
     #[test]
-    fn test_validation_with_for_loop_and_blocks_with_branches() {
+    fn test_validation_with_for_loop_and_blocks_with_branches() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "
 (module
@@ -935,7 +976,7 @@ mod tests {
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![SideTable {
             entries: vec![
                 SideTableEntry {
@@ -977,10 +1018,11 @@ mod tests {
             ],
         }];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
 
     #[test]
-    fn test_validation_with_br_tables() {
+    fn test_validation_with_br_tables() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "
 (func (result i32)
@@ -1027,7 +1069,7 @@ return
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![SideTable {
             entries: vec![
                 SideTableEntry {
@@ -1057,10 +1099,11 @@ return
             ],
         }];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
 
     #[test]
-    fn test_pop_val() {
+    fn test_pop_val() -> Result<(), ValidationError> {
         let bytes = wat::parse_str(
             "
 (module	   
@@ -1094,7 +1137,7 @@ return
             ..Default::default()
         };
         let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate();
+        let actual_sidetable = validator.validate()?;
         let expected_sidetable = vec![SideTable {
             entries: vec![SideTableEntry {
                 ip: 2,
@@ -1104,5 +1147,6 @@ return
             }],
         }];
         assert_eq!(actual_sidetable, expected_sidetable);
+        Ok(())
     }
 }

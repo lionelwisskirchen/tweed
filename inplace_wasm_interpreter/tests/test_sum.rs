@@ -53,7 +53,7 @@ fn test_sum() {
     )
     .unwrap();
     assert_eq!(
-        run(&wasm, "fun".to_string(), vec![Value::I32(6)]),
+        run(&wasm, "fun".to_string(), vec![Value::I32(6)]).unwrap(),
         vec![Value::I32(21)]
     );
 }

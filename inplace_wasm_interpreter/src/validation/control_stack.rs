@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use super::control_types::ControlType;
+use super::{control_types::ControlType, validator::ValidationError};
 
 #[derive(Debug)]
 pub struct ControlStack {
@@ -62,16 +62,16 @@ impl ControlStack {
     pub fn pop(&mut self) -> ControlType {
         self.stack.pop().expect("No ControlType on stack")
     }
-    pub fn get_control_type(&mut self, depth: u32) -> &mut ControlType {
-        if depth as usize > self.stack.len().saturating_sub(1) {
-            panic!("Depth exceeds control depth.")
+    pub fn get_control_type(&mut self, depth: u32) -> Result<&mut ControlType, ValidationError> {
+        let control_stack_size = self.stack.len();
+        if depth as usize >= control_stack_size {
+            return Err(ValidationError::new("unknown label"));
         }
-        let control_stack_index_size = self.stack.len().saturating_sub(1);
-        let start_control = self
-            .stack
-            .get_mut(control_stack_index_size - depth as usize)
-            .expect("Can't index control start");
-        start_control
+
+        let control_stack_index = control_stack_size - 1 - depth as usize;
+        self.stack
+            .get_mut(control_stack_index)
+            .ok_or_else(|| ValidationError::new("unknown label"))
     }
     pub fn push(&mut self, control_type: ControlType) {
         self.stack.push(control_type);
@@ -82,10 +82,9 @@ impl ControlStack {
 mod tests {
     use super::*;
 
-    #[should_panic]
     #[test]
     fn invalid_depth() {
         let mut control_stack = ControlStack::default();
-        control_stack.get_control_type(2);
+        assert!(control_stack.get_control_type(2).is_err());
     }
 }

@@ -13,7 +13,8 @@ fn test_add() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(1), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(2)]
     );
     assert_eq!(
@@ -21,7 +22,8 @@ fn test_add() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(-1), Value::from(-1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(-2)]
     );
     assert_eq!(
@@ -29,7 +31,8 @@ fn test_add() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(-1), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
     assert_eq!(
@@ -37,7 +40,8 @@ fn test_add() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(0x3fffffff), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0x40000000)]
     );
 }
@@ -54,7 +58,8 @@ fn test_sub() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(1), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
     assert_eq!(
@@ -62,7 +67,8 @@ fn test_sub() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(1), Value::from(0)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(1)]
     );
     assert_eq!(
@@ -70,7 +76,8 @@ fn test_sub() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(-1), Value::from(-1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
     assert_eq!(
@@ -78,7 +85,8 @@ fn test_sub() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(0x7fffffff), Value::from(-1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0x80000000 as u32)]
     );
     assert_eq!(
@@ -86,7 +94,8 @@ fn test_sub() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(0x80000000 as u32), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0x7fffffff as u32)]
     );
     assert_eq!(
@@ -97,7 +106,8 @@ fn test_sub() {
                 Value::from(0x80000000 as u32),
                 Value::from(0x80000000 as u32)
             ]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
     assert_eq!(
@@ -105,7 +115,8 @@ fn test_sub() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(0x3fffffff), Value::from(-1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0x40000000)]
     );
 }
@@ -123,7 +134,8 @@ fn test_ges() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(0), Value::from(0)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(1)]
     );
     assert_eq!(
@@ -131,7 +143,8 @@ fn test_ges() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(1), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(1)]
     );
     assert_eq!(
@@ -139,7 +152,8 @@ fn test_ges() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(-1), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
 }
@@ -156,7 +170,8 @@ fn test_lts() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(0), Value::from(0)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
     assert_eq!(
@@ -164,7 +179,8 @@ fn test_lts() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(1), Value::from(0)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
     assert_eq!(
@@ -172,7 +188,8 @@ fn test_lts() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(-1), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(1)]
     );
 }
@@ -190,7 +207,8 @@ fn test_gts() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(0), Value::from(0)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
     assert_eq!(
@@ -198,7 +216,8 @@ fn test_gts() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(1), Value::from(0)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(1)]
     );
     assert_eq!(
@@ -206,7 +225,8 @@ fn test_gts() {
             &wasm,
             "fun".to_string(),
             vec![Value::from(-1), Value::from(1)]
-        ),
+        )
+        .unwrap(),
         vec![Value::from(0)]
     );
 }

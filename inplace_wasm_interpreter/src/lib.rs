@@ -15,14 +15,17 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use binary::module_environment::{create_module_environment, ModuleEnvironment};
 use execution::instance::{self, Instance};
-use validation::{module::Module, validator::Validator};
+use validation::{
+    module::Module,
+    validator::{ValidationError, Validator},
+};
 
-pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Vec<Value> {
-    let module = initialize(input);
+pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>, ValidationError> {
+    let module = initialize(input)?;
     let mut instance = instantiate(module);
-    instance.call_by_name(&name, params)
+    Ok(instance.call_by_name(&name, params))
 }
-pub fn initialize(input: &[u8]) -> Module {
+pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
     let mut reader = WasmReader::new(input.to_vec());
     let module_environment = create_module_environment(&mut reader);
     validate(reader, module_environment)
@@ -36,15 +39,18 @@ pub fn invoke(mut instance: Instance, name: String, params: Vec<Value>) -> Vec<V
     instance.call_by_name(&name, params)
 }
 
-fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Module {
+fn validate(
+    mut reader: WasmReader,
+    module_environment: ModuleEnvironment,
+) -> Result<Module, ValidationError> {
     let mut validator = Validator::new(&mut reader, &module_environment);
-    let sidetables = validator.validate();
-    Module {
+    let sidetables = validator.validate()?;
+    Ok(Module {
         reader,
         typesec: module_environment.typesec,
         funcsec: module_environment.funcsec,
         codesec: module_environment.codesec,
         exportsec: module_environment.exportsec,
         sidetables,
-    }
+    })
 }

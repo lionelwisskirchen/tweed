@@ -1,6 +1,8 @@
 use crate::core::value_types::ValType;
 use alloc::vec::Vec;
 
+use super::validator::ValidationError;
+
 #[derive(Debug)]
 pub struct ValidationStack {
     stack: Vec<ValType>,
@@ -43,27 +45,31 @@ impl ValidationStack {
             self.push(*val_type);
         }
     }
-    pub fn pop_val(&mut self) -> ValType {
+    pub fn pop_val(&mut self) -> Result<ValType, ValidationError> {
         if self.stack.len() == self.top_height as usize && !self.top_reachable {
-            return ValType::Unknown;
+            return Ok(ValType::Unknown);
         };
         if self.stack.len() == self.top_height as usize {
-            panic!("Stack underflow.");
+            return Err(ValidationError::new("type mismatch"));
         }
-        self.stack.pop().expect("Value stack is empty.")
+        self.stack
+            .pop()
+            .ok_or(ValidationError::new("type mismatch"))
     }
 
-    pub fn pop_expected_vec(&mut self, val_types: &[ValType]) {
+    pub fn pop_expected_vec(&mut self, val_types: &[ValType]) -> Result<(), ValidationError> {
         for val_type in val_types.iter().rev() {
-            self.pop_expected(*val_type);
+            self.pop_expected(*val_type)?;
         }
+        Ok(())
     }
-    pub fn pop_expected(&mut self, expected: ValType) {
-        let actual = self.pop_val();
+    pub fn pop_expected(&mut self, expected: ValType) -> Result<(), ValidationError> {
+        let actual = self.pop_val()?;
 
         if expected != actual && actual != ValType::Unknown && expected != ValType::Unknown {
-            panic!("Unexpected Value Type on validation stack.");
+            return Err(ValidationError::new("type mismatch"));
         }
+        Ok(())
     }
 }
 
@@ -76,16 +82,15 @@ mod tests {
         let mut validator = ValidationStack::new();
         validator.push(ValType::I32);
 
-        validator.pop_expected(ValType::I32);
+        assert!(validator.pop_expected(ValType::I32).is_ok());
     }
 
     #[test]
-    #[should_panic(expected = "Unexpected Value Type on validation stack.")]
     fn test_pop_expected_with_different_type() {
         let mut validator = ValidationStack::new();
         validator.push(ValType::I64);
 
-        validator.pop_expected(ValType::I32);
+        assert!(validator.pop_expected(ValType::I32).is_err());
     }
 
     #[test]
@@ -93,7 +98,7 @@ mod tests {
         let mut validator = ValidationStack::new();
         validator.push(ValType::Unknown);
 
-        validator.pop_expected(ValType::I32);
+        assert!(validator.pop_expected(ValType::I32).is_ok());
     }
 
     #[test]
@@ -101,7 +106,7 @@ mod tests {
         let mut validator = ValidationStack::new();
         validator.push(ValType::I32);
 
-        validator.pop_expected(ValType::Unknown);
+        assert!(validator.pop_expected(ValType::Unknown).is_ok());
     }
 
     #[test]
@@ -109,6 +114,6 @@ mod tests {
         let mut validator = ValidationStack::new();
         validator.push(ValType::Unknown);
 
-        validator.pop_expected(ValType::Unknown);
+        assert!(validator.pop_expected(ValType::Unknown).is_ok());
     }
 }

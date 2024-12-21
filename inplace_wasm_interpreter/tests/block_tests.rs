@@ -1,7 +1,6 @@
 use inplace_wasm_interpreter::{run, Value};
 
 #[test]
-#[should_panic]
 fn block_underflow() {
     let wasm = wat::parse_str(
         r#"(module 
@@ -15,11 +14,10 @@ fn block_underflow() {
 )"#,
     )
     .unwrap();
-    run(&wasm, "fun".to_string(), vec![]);
+    assert!(run(&wasm, "fun".to_string(), vec![]).is_err());
 }
 
 #[test]
-#[should_panic]
 fn block_overflow() {
     let wasm = wat::parse_str(
         r#"(module 
@@ -38,7 +36,7 @@ fn block_overflow() {
 "#,
     )
     .unwrap();
-    run(&wasm, "fun".to_string(), vec![]);
+    assert!(run(&wasm, "fun".to_string(), vec![]).is_err());
 }
 
 #[test]
@@ -60,7 +58,10 @@ fn with_br_if() {
 "#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::I32(0)]);
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![]).unwrap(),
+        vec![Value::I32(0)]
+    );
 }
 #[test]
 fn with_br() {
@@ -81,5 +82,8 @@ fn with_br() {
 "#,
     )
     .unwrap();
-    assert_eq!(run(&wasm, "fun".to_string(), vec![]), vec![Value::I32(20)]);
+    assert_eq!(
+        run(&wasm, "fun".to_string(), vec![]).unwrap(),
+        vec![Value::I32(20)]
+    );
 }
