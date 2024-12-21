@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
+use crate::core::error::{Error, Result};
 use crate::core::values::Value;
-
 #[derive(Debug)]
 pub struct ExecutionStack {
     stack: Vec<Value>,
@@ -34,8 +34,8 @@ impl ExecutionStack {
         }
         self.stack.drain(size..);
     }
-    pub fn pop(&mut self) -> Value {
-        self.stack.pop().expect("No value on Stack!")
+    pub fn pop(&mut self) -> Result<Value> {
+        self.stack.pop().ok_or(Error::ExpectedAValueOnTheStack)
     }
     pub fn len(&self) -> usize {
         self.stack.len()
@@ -43,23 +43,23 @@ impl ExecutionStack {
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()
     }
-    pub fn pop_i32(&mut self) -> i32 {
-        let Value::I32(value) = self.pop() else {
-            panic!("Unexpected value type.")
+    pub fn pop_i32(&mut self) -> Result<i32> {
+        let Value::I32(value) = self.pop()? else {
+            return Err(Error::UnexpectedValueType);
         };
-        value
+        Ok(value)
     }
-    pub fn pop_i64(&mut self) -> i64 {
-        let Value::I64(value) = self.pop() else {
-            panic!("Unexpected value type.")
+    pub fn pop_i64(&mut self) -> Result<i64> {
+        let Value::I64(value) = self.pop()? else {
+            return Err(Error::UnexpectedValueType);
         };
-        value
+        Ok(value)
     }
-    pub fn pop_n(&mut self, count: usize) -> Vec<Value> {
+    pub fn pop_n(&mut self, count: usize) -> Result<Vec<Value>> {
         if count > self.stack.len() {
-            panic!("Not enough value on stack for count.");
+            return Err(Error::ExpectedAValueOnTheStack);
         }
-        self.stack.split_off(self.stack.len() - count).to_vec()
+        Ok(self.stack.split_off(self.stack.len() - count).to_vec())
     }
 }
 
@@ -79,32 +79,31 @@ mod tests {
         let mut stack = ExecutionStack::default();
         stack.unwind_to(1);
     }
-    #[should_panic]
     #[test]
     fn test_pop_unexpected_i64() {
         let mut stack = ExecutionStack::default();
         stack.push(Value::I32(2));
-        stack.pop_i64();
+        assert!(stack.pop_i64().is_err());
     }
-    #[should_panic]
+
     #[test]
     fn test_pop_unexpected_i32() {
         let mut stack = ExecutionStack::default();
         stack.push(Value::I64(2));
-        stack.pop_i32();
+        assert!(stack.pop_i32().is_err());
     }
-    #[should_panic]
+
     #[test]
     fn test_pop_unexpected_vec() {
         let mut stack = ExecutionStack::default();
         stack.push(Value::I64(2));
-        stack.pop_n(2);
+        assert!(stack.pop_n(2).is_err());
     }
 
     #[test]
     fn test_pop_i64() {
         let mut stack = ExecutionStack::default();
         stack.push(Value::I64(2));
-        assert_eq!(stack.pop_i64(), 2);
+        assert_eq!(stack.pop_i64().unwrap(), 2);
     }
 }

@@ -4,7 +4,12 @@ use crate::core::values::Value;
 use crate::validation::module::Module;
 use crate::{
     binary::type_section::FuncType,
-    core::{opcode::*, value_types::ValType, wasm_reader::WasmReader},
+    core::{
+        error::{Error, Result},
+        opcode::*,
+        value_types::ValType,
+        wasm_reader::WasmReader,
+    },
     validation::side_table::SideTable,
 };
 use alloc::collections::BTreeMap;
@@ -46,23 +51,23 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn call_by_name(&mut self, name: &str, args: Vec<Value>) -> Vec<Value> {
+    pub fn call_by_name(&mut self, name: &str, args: Vec<Value>) -> Result<Vec<Value>> {
         let Some(export_instance) = self.store.exports.get(name) else {
-            panic!("Could not find export by name");
+            return Err(Error::UnknownExportCall);
         };
         match export_instance {
             ExportContext::FunctionExport(index) => self.call(*index as usize, args),
         }
     }
-    pub fn call(&mut self, index: usize, args: Vec<Value>) -> Vec<Value> {
+    pub fn call(&mut self, index: usize, args: Vec<Value>) -> Result<Vec<Value>> {
         self.stack.reset(); // Reset stack. Maybe not the perfect location
         self.stack.push_vec(&args);
         self.invoke(index)
     }
-    fn build_frame(&mut self, function: FunctionInstance) -> Frame {
-        let mut locals = self.stack.pop_n(function.signature.parameter.len());
+    fn build_frame(&mut self, function: FunctionInstance) -> Result<Frame> {
+        let mut locals = self.stack.pop_n(function.signature.parameter.len())?;
         locals.append(&mut function.locals.clone()); // Locals = Params + Locals
-        Frame {
+        Ok(Frame {
             program_counter: 0,
             stack_pointer: self.stack.len(),
             start: function.start,
@@ -71,19 +76,19 @@ impl Instance {
             locals,
             side_table: function.side_table.clone(),
             side_table_pointer: 0,
-        }
+        })
     }
-    fn invoke(&mut self, index: usize) -> Vec<Value> {
+    fn invoke(&mut self, index: usize) -> Result<Vec<Value>> {
         let function = self
             .store
             .functions
             .get(index)
-            .expect("Invoked function does not exist");
-        let frame = self.build_frame(function.clone());
+            .ok_or(Error::InvalidFunctionIndex)?;
+        let frame = self.build_frame(function.clone())?;
         self.call_stack.push(frame);
         self.execute()
     }
-    fn execute(&mut self) -> Vec<Value> {
+    fn execute(&mut self) -> Result<Vec<Value>> {
         loop {
             #[cfg(test)]
             println!("{:?}", self.call_stack);
@@ -91,95 +96,100 @@ impl Instance {
                 return self.stack.pop_n(self.stack.len());
             };
 
-            self.execute_frame(&mut current_frame);
+            self.execute_frame(&mut current_frame)?;
         }
     }
-    fn skip_block_type(&mut self) {
+    fn skip_block_type(&mut self) -> Result<u32> {
         self.reader
             .next_leb128_u32()
-            .expect("Error parsing block func idx");
+            .ok_or(Error::InvalidSectionBytecode)
     }
-    fn skip_depth(&mut self) {
+    fn skip_depth(&mut self) -> Result<u32> {
         self.reader
             .next_leb128_u32()
-            .expect("Error parsing break depth");
+            .ok_or(Error::InvalidSectionBytecode)
     }
-    fn do_goto(&mut self, current_frame: &mut Frame) {
+    fn do_goto(&mut self, current_frame: &mut Frame) -> Result<()> {
         let side_table_entry = current_frame
             .side_table
             .entries
             .get(current_frame.side_table_pointer)
-            .expect("Expected entry in sidetable for instruction");
+            .ok_or(Error::InvalidSidetableIndex)?;
         let pos = self.reader.current_index() as i32 + side_table_entry.ip;
         current_frame.side_table_pointer = current_frame
             .side_table_pointer
             .saturating_add_signed(side_table_entry.stp as isize);
         self.reader.seek(pos as usize);
-        let saved_vals = self.stack.pop_n(side_table_entry.vals);
-        self.stack.pop_n(side_table_entry.pop);
+        let saved_vals = self.stack.pop_n(side_table_entry.vals)?;
+        self.stack.pop_n(side_table_entry.pop)?;
         self.stack.push_vec(&saved_vals);
+        Ok(())
     }
 
-    fn execute_frame(&mut self, current_frame: &mut Frame) {
+    fn execute_frame(&mut self, current_frame: &mut Frame) -> Result<()> {
         self.reader
             .seek(current_frame.start + current_frame.program_counter);
         while self.reader.current_index() < current_frame.end {
-            let instruction = self.reader.next_byte().expect("No next byte for frame");
+            let instruction = self
+                .reader
+                .next_byte()
+                .ok_or(Error::InvalidSectionBytecode)?;
             match *instruction {
                 I32_CONST => {
                     let value = Value::I32(self.reader.next_leb128_i32().unwrap());
                     self.stack.push(value);
                 }
                 BLOCK | LOOP => {
-                    self.skip_block_type();
+                    self.skip_block_type()?;
                 }
                 IF => {
-                    let bool_val = self.stack.pop();
+                    let bool_val = self.stack.pop()?;
                     if bool_val == Value::I32(0) {
-                        self.do_goto(current_frame);
+                        self.do_goto(current_frame)?;
                     } else {
-                        self.skip_block_type();
+                        self.skip_block_type()?;
                         current_frame.side_table_pointer += 1;
                     }
                 }
                 ELSE => {
-                    self.do_goto(current_frame);
+                    self.do_goto(current_frame)?;
                 }
                 LOCAL_GET => {
                     let local = current_frame
                         .locals
                         .get(self.reader.next_leb128_u32().unwrap() as usize)
-                        .expect("Local get on invalid index");
+                        .ok_or(Error::InvalidLocalIndex)?;
                     self.stack.push(*local);
                 }
                 LOCAL_SET => {
                     let local = current_frame
                         .locals
                         .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
-                        .expect("Local get on invalid index");
-                    let new_value = self.stack.pop();
+                        .ok_or(Error::InvalidLocalIndex)?;
+                    let new_value = self.stack.pop()?;
                     *local = new_value;
                 }
                 DROP => {
-                    self.stack.pop();
+                    self.stack.pop()?;
                 }
                 NOP => {}
                 I32_CTZ => {
-                    let val = self.stack.pop_i32();
+                    let val = self.stack.pop_i32()?;
                     let result = val.trailing_zeros() as i32;
-                    self.stack.push(Value::I32(result));
+                    self.stack.push(result.into());
                 }
                 I32_ADD => {
-                    let (right, left) = (self.stack.pop(), self.stack.pop());
-                    self.stack.push(right + left);
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let result = right + left;
+                    self.stack.push(result.into());
                 }
                 I32_SUB => {
-                    let (right, left) = (self.stack.pop(), self.stack.pop());
+                    let (right, left) = (self.stack.pop()?, self.stack.pop()?);
 
                     self.stack.push(left - right);
                 }
                 I32_LT_S => {
-                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
                     if left < right {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -187,7 +197,7 @@ impl Instance {
                     }
                 }
                 I32_GT_S => {
-                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
 
                     if left > right {
                         self.stack.push(Value::I32(1));
@@ -196,7 +206,7 @@ impl Instance {
                     }
                 }
                 I32_GE_S => {
-                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
 
                     if left == right {
                         self.stack.push(Value::I32(1));
@@ -205,42 +215,41 @@ impl Instance {
                     }
                 }
                 I32_AND => {
-                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
 
                     let result = right & left;
                     self.stack.push(Value::I32(result));
                 }
                 BR => {
-                    self.do_goto(current_frame);
+                    self.do_goto(current_frame)?;
                 }
                 BR_IF => {
-                    let bool_val = self.stack.pop_i32();
+                    let bool_val = self.stack.pop_i32()?;
                     if bool_val == 0 {
-                        self.skip_depth();
+                        self.skip_depth()?;
                         current_frame.side_table_pointer += 1;
                     } else {
-                        self.do_goto(current_frame);
+                        self.do_goto(current_frame)?;
                     }
                 }
                 BR_TABLE => {
-                    let branch_index = self.stack.pop_i32();
-                    let number_of_branches = self
-                        .reader
-                        .next_leb128_u32()
-                        .expect("Error parsing number of branches in BR_Table")
-                        as usize;
+                    let branch_index = self.stack.pop_i32()?;
+                    let number_of_branches =
+                        self.reader
+                            .next_leb128_u32()
+                            .ok_or(Error::InvalidSectionBytecode)? as usize;
                     if branch_index as usize >= number_of_branches {
                         current_frame.side_table_pointer += number_of_branches;
                     } else {
                         current_frame.side_table_pointer += branch_index as usize;
                     }
-                    self.do_goto(current_frame);
+                    self.do_goto(current_frame)?;
                     #[cfg(test)]
                     println!("{:?}", self.reader.rest());
                 }
                 RETURN => {
                     let count = current_frame.return_value.len();
-                    let results = self.stack.pop_n(count);
+                    let results = self.stack.pop_n(count)?;
                     self.stack.unwind_to(current_frame.stack_pointer);
                     self.stack.push_vec(&results);
                     break;
@@ -254,29 +263,30 @@ impl Instance {
                     let index = self
                         .reader
                         .next_leb128_u32()
-                        .expect("Can't get index of called function.");
+                        .ok_or(Error::InvalidFunctionIndex)?;
                     let function = self
                         .store
                         .functions
                         .get(index as usize)
-                        .expect("Can't get function by called index");
+                        .ok_or(Error::InvalidFunctionIndex)?;
 
                     // TODO External/internal functions
-                    let frame = self.build_frame(function.clone());
+                    let frame = self.build_frame(function.clone())?;
                     current_frame.program_counter =
                         self.reader.current_index() - current_frame.start + 1;
                     self.call_stack.push(current_frame.clone());
                     self.call_stack.push(frame);
                     break;
                 }
-                _ => panic!("Invalid instruction: {}", instruction),
+                _ => return Err(Error::UndefinedInstruction(*instruction)),
             };
         }
         current_frame.program_counter = self.reader.current_index() - current_frame.start + 1;
+        Ok(())
     }
 }
 
-pub fn instantiate(module: Module) -> Instance {
+pub fn instantiate(module: Module) -> Result<Instance> {
     let function_to_sidetable = zip(module.codesec, module.sidetables);
     let mut functions = Vec::new();
 
@@ -290,7 +300,7 @@ pub fn instantiate(module: Module) -> Instance {
         let signature_index = module
             .funcsec
             .get(index)
-            .expect("Signature for function does not exist")
+            .ok_or(Error::InvalidFunctionIndex)?
             .sig_index;
         let signature = lookup_signature(signature_index, &module.typesec);
 
@@ -309,12 +319,12 @@ pub fn instantiate(module: Module) -> Instance {
     }
 
     let store = Store { functions, exports };
-    Instance {
+    Ok(Instance {
         reader: module.reader,
         store,
         call_stack: vec![],
         stack: ExecutionStack::default(),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -354,9 +364,9 @@ mod tests {
             sidetables: vec![SideTable { entries: vec![] }],
         };
 
-        let mut instance = instantiate(module);
+        let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(22)];
-        assert_eq!(instance.call(0, vec![]), expected_result);
+        assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
     #[should_panic]
     #[test]
@@ -387,9 +397,9 @@ mod tests {
             sidetables: vec![SideTable { entries: vec![] }],
         };
 
-        let mut instance = instantiate(module);
+        let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(22)];
-        assert_eq!(instance.call(0, vec![]), expected_result);
+        assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
 
     #[test]
@@ -420,9 +430,9 @@ mod tests {
             sidetables: vec![SideTable { entries: vec![] }],
         };
 
-        let mut instance = instantiate(module);
+        let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(22)];
-        assert_eq!(instance.call(0, vec![]), expected_result);
+        assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
 
     #[test]
@@ -454,9 +464,9 @@ mod tests {
             sidetables: vec![SideTable { entries: vec![] }],
         };
 
-        let mut instance = instantiate(module);
+        let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(12)];
-        assert_eq!(instance.call(0, vec![]), expected_result);
+        assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
 
     #[test]
@@ -496,9 +506,9 @@ mod tests {
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
         };
-        let mut instance = instantiate(module);
+        let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(12)];
-        assert_eq!(instance.call(0, vec![]), expected_result);
+        assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
 
     #[test]
@@ -564,9 +574,9 @@ mod tests {
                 ],
             }],
         };
-        let mut instance = instantiate(module);
+        let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(3)];
-        assert_eq!(instance.call(0, vec![]), expected_result);
+        assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
 
     #[test]
@@ -614,9 +624,9 @@ mod tests {
                 }],
             }],
         };
-        let mut instance = instantiate(module);
+        let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(10)];
-        assert_eq!(instance.call(0, vec![]), expected_result);
+        assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
 
     #[test]
@@ -691,10 +701,16 @@ mod tests {
                 ],
             }],
         };
-        let mut instance = instantiate(module);
+        let mut instance = instantiate(module).unwrap();
 
-        assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(1)]);
-        assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(3)]);
+        assert_eq!(
+            instance.call(0, vec![Value::I32(1)]).unwrap(),
+            vec![Value::I32(1)]
+        );
+        assert_eq!(
+            instance.call(0, vec![Value::I32(0)]).unwrap(),
+            vec![Value::I32(3)]
+        );
     }
 
     #[test]
@@ -767,12 +783,21 @@ mod tests {
                 ],
             }],
         };
-        let mut instance = instantiate(module);
-        assert_eq!(instance.call(0, vec![Value::I32(0)]), vec![Value::I32(102)]);
-        assert_eq!(instance.call(0, vec![Value::I32(1)]), vec![Value::I32(101)]);
-        assert_eq!(instance.call(0, vec![Value::I32(2)]), vec![Value::I32(100)]);
+        let mut instance = instantiate(module).unwrap();
         assert_eq!(
-            instance.call(0, vec![Value::I32(10)]),
+            instance.call(0, vec![Value::I32(0)]).unwrap(),
+            vec![Value::I32(102)]
+        );
+        assert_eq!(
+            instance.call(0, vec![Value::I32(1)]).unwrap(),
+            vec![Value::I32(101)]
+        );
+        assert_eq!(
+            instance.call(0, vec![Value::I32(2)]).unwrap(),
+            vec![Value::I32(100)]
+        );
+        assert_eq!(
+            instance.call(0, vec![Value::I32(10)]).unwrap(),
             vec![Value::I32(103)]
         );
     }

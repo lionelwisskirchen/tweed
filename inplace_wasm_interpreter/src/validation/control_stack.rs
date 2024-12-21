@@ -1,6 +1,7 @@
+use crate::core::error::{Error, Result};
 use alloc::vec::Vec;
 
-use super::{control_types::ControlType, validator::ValidationError};
+use super::control_types::ControlType;
 
 #[derive(Debug)]
 pub struct ControlStack {
@@ -62,16 +63,16 @@ impl ControlStack {
     pub fn pop(&mut self) -> ControlType {
         self.stack.pop().expect("No ControlType on stack")
     }
-    pub fn get_control_type(&mut self, depth: u32) -> Result<&mut ControlType, ValidationError> {
+    pub fn get_control_type(&mut self, depth: u32) -> Result<&mut ControlType> {
         let control_stack_size = self.stack.len();
         if depth as usize >= control_stack_size {
-            return Err(ValidationError::new("unknown label"));
+            return Err(Error::UnknownLabel);
         }
 
         let control_stack_index = control_stack_size - 1 - depth as usize;
         self.stack
             .get_mut(control_stack_index)
-            .ok_or_else(|| ValidationError::new("unknown label"))
+            .ok_or(Error::UnknownLabel)
     }
     pub fn push(&mut self, control_type: ControlType) {
         self.stack.push(control_type);

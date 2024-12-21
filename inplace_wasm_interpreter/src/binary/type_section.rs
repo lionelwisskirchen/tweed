@@ -1,46 +1,48 @@
+use crate::core::error::{Error, Result};
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use alloc::vec::Vec;
-
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FuncType {
     pub parameter: Vec<ValType>,
     pub result: Vec<ValType>,
 }
 
-pub fn process_type_section(reader: &mut WasmReader) -> Vec<FuncType> {
-    reader.next_leb128_u32().expect("No Section size found");
+pub fn process_type_section(reader: &mut WasmReader) -> Result<Vec<FuncType>> {
+    reader
+        .next_leb128_u32()
+        .ok_or(Error::InvalidSectionBytecode)?;
     // Size is not required for decoding, so just check if size is present
     let mut function_types = Vec::new();
     let number_of_types = reader
         .next_leb128_u32()
-        .expect("No type defined in type section");
+        .ok_or(Error::InvalidSectionBytecode)?;
 
     for _ in 0..number_of_types {
         reader
             .next_leb128_u32()
-            .expect("Could not parse funct type id"); // Can be ignored
+            .ok_or(Error::InvalidSectionBytecode)?; // Can be ignored
         let number_of_params = reader
             .next_leb128_u32()
-            .expect("No number of params defined");
+            .ok_or(Error::InvalidSectionBytecode)?;
         let params = reader
             .next_chunk(number_of_params as usize)
-            .expect("Can't get defined amount of params")
+            .ok_or(Error::InvalidSectionBytecode)?
             .iter()
             .map(ValType::lookup)
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         let number_of_results = reader
             .next_leb128_u32()
-            .expect("No number of results defined");
+            .ok_or(Error::InvalidSectionBytecode)?;
         let results = reader
             .next_chunk(number_of_results as usize)
-            .expect("Can't get defined amount of results")
+            .ok_or(Error::InvalidSectionBytecode)?
             .iter()
             .map(ValType::lookup)
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         function_types.push(FuncType {
             parameter: params,
             result: results,
         });
     }
-    function_types
+    Ok(function_types)
 }

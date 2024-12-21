@@ -33,7 +33,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         line: span.linecol_in(&input).0 + 1,
                     };
                     if let Err(e) = initialize(&bytes) {
-                        if e.message == message {
+                        if format!("{e}") == message {
                             report.success.push(result);
                         } else {
                             report.failure.push(result);
@@ -54,11 +54,11 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     _ => unreachable!(),
                 };
 
-                let mut instance = instantiate(test_module.clone());
+                let mut instance = instantiate(test_module.clone()).unwrap();
                 let args: Vec<Value> = args.iter().map(args_to_runtime_value).collect();
                 let expected_results: Vec<Value> =
                     results.iter().map(result_to_runtime_value).collect();
-                let actual_results = instance.call_by_name(name, args);
+                let actual_results = instance.call_by_name(name, args).unwrap();
                 let result = WastResult::AssertResult {
                     name: name.to_string(),
                     line: span.linecol_in(&input).0 + 1,

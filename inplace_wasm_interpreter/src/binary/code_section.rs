@@ -1,4 +1,5 @@
 extern crate alloc;
+use crate::core::error::{Error, Result};
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use alloc::vec::Vec;
 
@@ -9,30 +10,33 @@ pub struct FuncCode {
     pub end: usize,
 }
 
-pub fn process_code_section(reader: &mut WasmReader) -> Vec<FuncCode> {
-    reader.next_leb128_u32().expect("No Section size found");
+pub fn process_code_section(reader: &mut WasmReader) -> Result<Vec<FuncCode>> {
+    reader
+        .next_leb128_u32()
+        .ok_or(Error::InvalidSectionBytecode)?;
     // Size is not required for decoding, so just check if size is present
     let number_of_codes = reader
         .next_leb128_u32()
-        .expect("No function defined in Code section");
+        .ok_or(Error::InvalidSectionBytecode)?;
 
     let mut aggregated_functions = Vec::new();
     for _ in 0..number_of_codes {
         let func_body_size = reader
             .next_leb128_u32()
-            .expect("No function body size in Code section");
+            .ok_or(Error::InvalidSectionBytecode)?;
 
         let position_of_last_instruction = reader.calculate_offset(func_body_size as usize);
 
         let number_of_locals = reader
             .next_leb128_u32()
-            .expect("No number of locals in Code section");
+            .ok_or(Error::InvalidSectionBytecode)?;
         let mut locals = Vec::new();
         for _ in 0..number_of_locals {
             let count = reader
                 .next_leb128_u32()
-                .expect("No local decl count in Code section");
-            let local_type = ValType::lookup(reader.next_byte().expect("No local type decl"));
+                .ok_or(Error::InvalidSectionBytecode)?;
+            let local_type =
+                ValType::lookup(reader.next_byte().ok_or(Error::InvalidSectionBytecode)?)?;
             for _ in 0..count {
                 locals.push(local_type);
             }
@@ -46,7 +50,7 @@ pub fn process_code_section(reader: &mut WasmReader) -> Vec<FuncCode> {
         aggregated_functions.push(function);
         reader.seek(position_of_last_instruction + 1);
     }
-    aggregated_functions
+    Ok(aggregated_functions)
 }
 
 #[cfg(test)]
@@ -66,7 +70,7 @@ mod tests {
             0x0b, // Terminal
         ];
         let mut reader = WasmReader::new(bytes.to_vec());
-        let actual_functions = process_code_section(&mut reader);
+        let actual_functions = process_code_section(&mut reader).unwrap();
         let expected_functions = vec![FuncCode {
             locals: vec![ValType::I32],
             start: 6,

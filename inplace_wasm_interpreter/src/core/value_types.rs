@@ -1,3 +1,4 @@
+use crate::core::error::{Error, Result};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValType {
     I32,
@@ -6,10 +7,10 @@ pub enum ValType {
 }
 
 impl ValType {
-    pub fn lookup(val: &u8) -> ValType {
+    pub fn lookup(val: &u8) -> Result<ValType> {
         match val {
-            0x7F => ValType::I32,
-            _ => panic!("Unknown value type {}", val),
+            0x7F => Ok(ValType::I32),
+            _ => Err(Error::UnsupportedValueType),
         }
     }
 }
@@ -20,10 +21,9 @@ mod tests {
 
     use super::*;
 
-    #[should_panic]
     #[test]
     fn test_lookup_unknown() {
-        ValType::lookup(&0x7D);
+        assert!(ValType::lookup(&0x7D).is_err());
     }
     #[should_panic]
     #[test]

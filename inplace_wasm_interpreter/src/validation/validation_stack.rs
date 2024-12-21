@@ -1,7 +1,6 @@
+use crate::core::error::{Error, Result};
 use crate::core::value_types::ValType;
 use alloc::vec::Vec;
-
-use super::validator::ValidationError;
 
 #[derive(Debug)]
 pub struct ValidationStack {
@@ -45,29 +44,27 @@ impl ValidationStack {
             self.push(*val_type);
         }
     }
-    pub fn pop_val(&mut self) -> Result<ValType, ValidationError> {
+    pub fn pop_val(&mut self) -> Result<ValType> {
         if self.stack.len() == self.top_height as usize && !self.top_reachable {
             return Ok(ValType::Unknown);
         };
         if self.stack.len() == self.top_height as usize {
-            return Err(ValidationError::new("type mismatch"));
+            return Err(Error::TypeMismatch);
         }
-        self.stack
-            .pop()
-            .ok_or(ValidationError::new("type mismatch"))
+        self.stack.pop().ok_or(Error::TypeMismatch)
     }
 
-    pub fn pop_expected_vec(&mut self, val_types: &[ValType]) -> Result<(), ValidationError> {
+    pub fn pop_expected_vec(&mut self, val_types: &[ValType]) -> Result<()> {
         for val_type in val_types.iter().rev() {
             self.pop_expected(*val_type)?;
         }
         Ok(())
     }
-    pub fn pop_expected(&mut self, expected: ValType) -> Result<(), ValidationError> {
+    pub fn pop_expected(&mut self, expected: ValType) -> Result<()> {
         let actual = self.pop_val()?;
 
         if expected != actual && actual != ValType::Unknown && expected != ValType::Unknown {
-            return Err(ValidationError::new("type mismatch"));
+            return Err(Error::TypeMismatch);
         }
         Ok(())
     }

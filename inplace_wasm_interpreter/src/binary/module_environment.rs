@@ -1,4 +1,7 @@
-use crate::core::wasm_reader::WasmReader;
+use crate::core::{
+    error::{Error, Result},
+    wasm_reader::WasmReader,
+};
 use alloc::vec::Vec;
 
 use super::{
@@ -16,53 +19,52 @@ pub struct ModuleEnvironment {
     pub exportsec: Vec<Export>,
 }
 
-pub fn create_module_environment(reader: &mut WasmReader) -> ModuleEnvironment {
+pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnvironment> {
     let mut module = ModuleEnvironment {
         ..Default::default()
     };
     reader
         .compare_chunk(&[0x00, 0x61, 0x73, 0x6D])
-        .expect("No preamble found");
+        .ok_or(Error::InvalidMagic)?;
     reader
         .compare_chunk(&[0x01, 0x00, 0x00, 0x00])
-        .expect("No version number found");
+        .ok_or(Error::InvalidVersion)?;
 
     while let Some(section_code) = reader.next_byte() {
         match section_code {
             0x00 => break,
             0x01 => {
-                module.typesec = process_type_section(reader);
+                module.typesec = process_type_section(reader)?;
             }
             0x03 => {
-                module.funcsec = process_function_section(reader);
+                module.funcsec = process_function_section(reader)?;
             }
             0x0a => {
-                module.codesec = process_code_section(reader);
+                module.codesec = process_code_section(reader)?;
             }
             0x07 => {
-                module.exportsec = process_export_section(reader);
+                module.exportsec = process_export_section(reader)?;
             }
             _ => {
-                panic!("Unknown section code {section_code:?}");
+                return Err(Error::UnknownSectionCode(*section_code));
             }
         }
     }
-    module
+    Ok(module)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[should_panic]
     #[test]
     fn test_lookup_unknown() {
         let mut reader =
             WasmReader::new(vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, 0x77]);
-        create_module_environment(&mut reader);
+        assert!(create_module_environment(&mut reader).is_err());
     }
     #[test]
     fn test_empty_sequence() {
         let mut reader = WasmReader::new(vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00]);
-        create_module_environment(&mut reader);
+        assert!(create_module_environment(&mut reader).is_ok());
     }
 }
