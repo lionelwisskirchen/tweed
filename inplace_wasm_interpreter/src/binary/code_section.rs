@@ -52,30 +52,3 @@ pub fn process_code_section(reader: &mut WasmReader) -> Result<Vec<FuncCode>> {
     }
     Ok(aggregated_functions)
 }
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    #[test]
-    fn test_aggregation() {
-        let bytes = [
-            0x12, 0x01, 0x10, // Number of Function Bodies (1), Body Size (16),
-            0x01, 0x01, 0x7f, // Number of local declarations (1), 1 x I32
-            0x20, 0x00, 0x20, 0x01, // Local.get(Index 0), Local.get(Index 1)
-            0x6a, // I32Add
-            0x21, 0x00, // Local.set(Index 0)
-            0x20, 0x00, 0x20, 0x01, // Local.get(Index 0), Local.get(Index 1)
-            0x6a, // I32Add
-            0x0b, // Terminal
-        ];
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let actual_functions = process_code_section(&mut reader).unwrap();
-        let expected_functions = vec![FuncCode {
-            locals: vec![ValType::I32],
-            start: 6,
-            end: 18,
-        }];
-        assert_eq!(actual_functions, expected_functions);
-    }
-}

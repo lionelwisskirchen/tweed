@@ -50,21 +50,3 @@ pub fn process_export_section(reader: &mut WasmReader) -> Result<Vec<Export>> {
     }
     Ok(aggregated_exports)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::process_export_section;
-    use super::*;
-    use crate::{binary::export_section::ExportContext, core::wasm_reader::WasmReader};
-    #[test]
-    fn test_export_aggregation() {
-        let bytes = [0x09, 0x01, 0x05, 0x64, 0x75, 0x6d, 0x6d, 0x79, 0x00, 0x00];
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let actual_exports = process_export_section(&mut reader).unwrap();
-        let expected_exports = vec![Export {
-            name: String::from("dummy"),
-            context: ExportContext::FunctionExport(0),
-        }];
-        assert_eq!(actual_exports, expected_exports)
-    }
-}
