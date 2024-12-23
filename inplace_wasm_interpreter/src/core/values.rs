@@ -12,6 +12,11 @@ impl From<i32> for Value {
     }
 }
 
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        Value::I64(value)
+    }
+}
 impl From<ValType> for Value {
     fn from(value: ValType) -> Self {
         match value {
@@ -26,11 +31,17 @@ impl From<u32> for Value {
         Value::I32(value as i32)
     }
 }
+impl From<u64> for Value {
+    fn from(value: u64) -> Self {
+        Value::I64(value as i64)
+    }
+}
 impl core::ops::Add for Value {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Value::I32(left), Value::I32(right)) => Value::I32(left.overflowing_add(right).0),
+            (Value::I64(left), Value::I64(right)) => Value::I64(left.overflowing_add(right).0),
             _ => panic!("type mismatch"),
         }
     }
@@ -40,6 +51,7 @@ impl core::ops::Sub for Value {
     fn sub(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Value::I32(left), Value::I32(right)) => Value::I32(left.overflowing_sub(right).0),
+            (Value::I64(left), Value::I64(right)) => Value::I64(left.overflowing_sub(right).0),
             _ => panic!("type mismatch"),
         }
     }

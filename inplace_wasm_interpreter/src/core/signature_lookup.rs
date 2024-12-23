@@ -5,13 +5,22 @@ use alloc::vec::Vec;
 use super::value_types::ValType;
 
 fn shorthand_lookup(val: u32) -> Option<FuncType> {
-    let lookup_map = BTreeMap::from([(
-        0x7f,
-        FuncType {
-            parameter: Vec::new(),
-            result: vec![ValType::I32],
-        },
-    )]);
+    let lookup_map = BTreeMap::from([
+        (
+            0x7f,
+            FuncType {
+                parameter: Vec::new(),
+                result: vec![ValType::I32],
+            },
+        ),
+        (
+            0x7e,
+            FuncType {
+                parameter: Vec::new(),
+                result: vec![ValType::I64],
+            },
+        ),
+    ]);
     lookup_map.get(&val).cloned()
 }
 

@@ -78,7 +78,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
 fn result_to_runtime_value(expr: &WastRet) -> Value {
     match &expr {
         WastRet::Core(WastRetCore::I32(x)) => Value::I32(*x),
-        //        wast::Instruction::I64Const(x) => RuntimeValue::I64(*x),
+        WastRet::Core(WastRetCore::I64(x)) => Value::I64(*x),
         //      wast::Instruction::F32Const(x) => RuntimeValue::F32(f32::from_bits(x.bits)),
         //        wast::Instruction::F64Const(x) => RuntimeValue::F64(f64::from_bits(x.bits)),
         _ => unreachable!("{:?}", expr),
@@ -88,7 +88,7 @@ fn result_to_runtime_value(expr: &WastRet) -> Value {
 fn args_to_runtime_value(expr: &WastArg) -> Value {
     match &expr {
         WastArg::Core(WastArgCore::I32(x)) => Value::I32(*x),
-        //        wast::Instruction::I64Const(x) => RuntimeValue::I64(*x),
+        WastArg::Core(WastArgCore::I64(x)) => Value::I64(*x),
         //      wast::Instruction::F32Const(x) => RuntimeValue::F32(f32::from_bits(x.bits)),
         //        wast::Instruction::F64Const(x) => RuntimeValue::F64(f64::from_bits(x.bits)),
         _ => unreachable!("{:?}", expr),

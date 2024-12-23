@@ -139,6 +139,10 @@ impl Instance {
                     let value = Value::I32(self.reader.next_leb128_i32().unwrap());
                     self.stack.push(value);
                 }
+                I64_CONST => {
+                    let value = Value::I64(self.reader.next_leb128_i64().unwrap());
+                    self.stack.push(value);
+                }
                 BLOCK | LOOP => {
                     self.skip_block_type()?;
                 }
@@ -178,6 +182,16 @@ impl Instance {
                     let result = val.trailing_zeros() as i32;
                     self.stack.push(result.into());
                 }
+                I64_CTZ => {
+                    let val = self.stack.pop_i64()?;
+                    let result = val.trailing_zeros() as i64;
+                    self.stack.push(result.into());
+                }
+                I64_ADD => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let result = right + left;
+                    self.stack.push(result.into());
+                }
                 I32_ADD => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
                     let result = right + left;
@@ -187,6 +201,14 @@ impl Instance {
                     let (right, left) = (self.stack.pop()?, self.stack.pop()?);
 
                     self.stack.push(left - right);
+                }
+                I32_EQZ => {
+                    let val = self.stack.pop_i32()?;
+                    if val == 0 {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
                 }
                 I32_LT_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
@@ -219,6 +241,15 @@ impl Instance {
 
                     let result = right & left;
                     self.stack.push(Value::I32(result));
+                }
+                SELECT => {
+                    let (cond, b, a) =
+                        (self.stack.pop_i32()?, self.stack.pop()?, self.stack.pop()?);
+                    if cond == 0 {
+                        self.stack.push(b);
+                    } else {
+                        self.stack.push(a);
+                    }
                 }
                 BR => {
                     self.do_goto(current_frame)?;

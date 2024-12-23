@@ -26,6 +26,9 @@ impl WasmReader {
         self.byte_pointer.saturating_sub(1)
     }
     pub fn next_leb128_u32(&mut self) -> Option<u32> {
+        if self.rest().is_empty() {
+            return None;
+        }
         let mut result: u32 = 0;
         let mut shift = 0;
         while let Some(byte) = self.next_byte() {
@@ -42,6 +45,28 @@ impl WasmReader {
             }
         }
         Some(result)
+    }
+    pub fn next_leb128_u64(&mut self) -> Option<u64> {
+        let mut result: u64 = 0;
+        let mut shift = 0;
+        while let Some(byte) = self.next_byte() {
+            let low = (byte & 0x7f) as u64; // 0111 1111 Mask -> MSB signals next byte is also relevant
+
+            result |= low << shift;
+            if (byte & 0x80) == 0 {
+                // No next byte, Algorithm is finished
+                break;
+            }
+            shift += 7;
+            if shift > 32 {
+                return None;
+            }
+        }
+        Some(result)
+    }
+    pub fn next_leb128_i64(&mut self) -> Option<i64> {
+        let val = self.next_leb128_u64()?;
+        Some(val as i64)
     }
     pub fn next_leb128_i32(&mut self) -> Option<i32> {
         let val = self.next_leb128_u32()?;
@@ -154,12 +179,12 @@ mod tests {
     #[test]
     fn test_next_leb128_i32_no_byte() {
         let mut decoder = WasmReader::new(vec![]);
-        assert_eq!(decoder.next_leb128_i32(), Some(0));
+        assert_eq!(decoder.next_leb128_i32(), None);
     }
     #[test]
     fn test_next_leb128_u32_no_byte() {
         let mut decoder = WasmReader::new(vec![]);
-        assert_eq!(decoder.next_leb128_u32(), Some(0));
+        assert_eq!(decoder.next_leb128_u32(), None);
     }
     #[test]
     fn test_next_leb128_u32_single_byte() {

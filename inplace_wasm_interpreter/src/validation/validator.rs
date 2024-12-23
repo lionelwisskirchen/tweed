@@ -15,16 +15,7 @@ use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
 
 use super::side_table::SideTable;
-#[derive(Debug, PartialEq, Eq)]
-pub struct ValidationError {
-    pub message: &'static str,
-}
 
-impl ValidationError {
-    pub fn new(message: &'static str) -> Self {
-        ValidationError { message }
-    }
-}
 pub struct Validator<'a, 'b> {
     reader: &'a mut WasmReader,
     module_environment: &'b ModuleEnvironment,
@@ -123,6 +114,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.reader.next_leb128_i32().ok_or(Error::MissingValue)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
+                I64_CONST => {
+                    self.reader.next_leb128_i64().ok_or(Error::MissingValue)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
                 LOCAL_GET => {
                     let idx = self
                         .reader
@@ -143,6 +138,11 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
+                }
+                I64_ADD => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.push(ValType::I64);
                 }
                 I32_SUB => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -235,6 +235,23 @@ impl<'a, 'b> Validator<'a, 'b> {
                 I32_CTZ => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
+                }
+                I64_CTZ => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
+                I32_EQZ => {
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                SELECT => {
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    let val1 = self.abstract_value_stack.pop_val()?;
+                    if !val1.is_numeric() {
+                        return Err(Error::IllegalSelectType(val1));
+                    };
+                    self.abstract_value_stack.pop_expected(val1)?;
+                    self.abstract_value_stack.push(val1);
                 }
                 RETURN => {
                     let control_type = self.abstract_control_stack.top();

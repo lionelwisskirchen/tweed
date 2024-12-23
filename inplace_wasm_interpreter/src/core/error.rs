@@ -1,5 +1,7 @@
 use core::fmt::{Display, Formatter};
 
+use super::value_types::ValType;
+
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -23,6 +25,7 @@ pub enum Error {
     UnknownExportCall,
     InvalidSidetableIndex,
     UndefinedInstruction(u8),
+    IllegalSelectType(ValType),
 }
 
 impl Display for Error {
@@ -54,6 +57,9 @@ impl Display for Error {
             Error::UnexpectedValueType => f.write_str("Unexpected value type"),
             Error::UnknownExportCall => f.write_str("Unexpected export call"),
             Error::InvalidSidetableIndex => f.write_str("Invalid sidetable entry index"),
+            Error::IllegalSelectType(valtype) => {
+                f.write_fmt(format_args!("Illegal select type: {valtype:?}"))
+            }
         }
     }
 }

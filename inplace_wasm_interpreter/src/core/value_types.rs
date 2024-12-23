@@ -10,7 +10,14 @@ impl ValType {
     pub fn lookup(val: &u8) -> Result<ValType> {
         match val {
             0x7F => Ok(ValType::I32),
+            0x7E => Ok(ValType::I64),
             _ => Err(Error::UnsupportedValueType),
+        }
+    }
+    pub fn is_numeric(&self) -> bool {
+        match self {
+            ValType::I32 | ValType::I64 | ValType::Unknown => true,
+            //            _ => return false,
         }
     }
 }
