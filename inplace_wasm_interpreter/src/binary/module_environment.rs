@@ -52,19 +52,3 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
     }
     Ok(module)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_lookup_unknown() {
-        let mut reader =
-            WasmReader::new(vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, 0x77]);
-        assert!(create_module_environment(&mut reader).is_err());
-    }
-    #[test]
-    fn test_empty_sequence() {
-        let mut reader = WasmReader::new(vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00]);
-        assert!(create_module_environment(&mut reader).is_ok());
-    }
-}

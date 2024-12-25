@@ -20,8 +20,8 @@ use validation::{module::Module, validator::Validator};
 
 pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>> {
     let module = initialize(input)?;
-    let mut instance = instantiate(module)?;
-    instance.call_by_name(&name, params)
+    let instance = instantiate(module)?;
+    invoke(instance, name, params)
 }
 pub fn initialize(input: &[u8]) -> Result<Module> {
     let mut reader = WasmReader::new(input.to_vec());
