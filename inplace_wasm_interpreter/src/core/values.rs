@@ -36,6 +36,23 @@ impl From<u64> for Value {
         Value::I64(value as i64)
     }
 }
+
+pub trait FromLeBytes: Sized {
+    fn from_le_bytes(bytes: &[u8]) -> Self;
+}
+
+impl FromLeBytes for i32 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        i32::from_le_bytes(bytes.try_into().expect("Invalid length for i32"))
+    }
+}
+
+impl FromLeBytes for i64 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        i64::from_le_bytes(bytes.try_into().expect("Invalid length for i64"))
+    }
+}
+
 impl core::ops::Add for Value {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {

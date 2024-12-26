@@ -1,7 +1,7 @@
 use crate::binary::data_section::SegmentMode;
 use crate::binary::export_section::ExportContext;
 use crate::core::signature_lookup::lookup_signature;
-use crate::core::values::Value;
+use crate::core::values::{FromLeBytes, Value};
 use crate::validation::module::Module;
 use crate::{
     binary::type_section::FuncType,
@@ -318,74 +318,69 @@ impl Instance {
                     break;
                 }
                 I64_STORE => {
-                    let _align = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::UndefinedMemory)?;
-                    let offset = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::UndefinedMemory)?;
-                    let store_data = self.stack.pop_i64()? as u64;
+                    let (_, offset) = self.read_mem_args()?;
+                    let store_data = (self.stack.pop_i64()? as u64).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
-                    let mem = self.store.memories.get_mut(0).unwrap();
-                    let address = offset
-                        .checked_add(rel_address)
-                        .ok_or(Error::MemoryAccessOutOfBounds)?
-                        as usize;
-                    let value_in_bytes = store_data.to_le_bytes();
-                    let end = address + value_in_bytes.len();
-                    mem.data[address..end].copy_from_slice(&value_in_bytes);
+                    self.store(offset, &store_data, rel_address)?;
+                }
+                I64_LOAD => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let address = self.stack.pop_i32()? as u32;
+                    let data: i64 = self.load(offset, address, 8)?;
+                    self.stack.push(data.into());
                 }
                 I32_STORE => {
-                    let _align = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::UndefinedMemory)?;
-                    let offset = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::UndefinedMemory)?;
-                    let store_data = self.stack.pop_i32()? as u32;
+                    let (_, offset) = self.read_mem_args()?;
+                    let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
-                    let mem = self.store.memories.get_mut(0).unwrap();
-                    let address = offset
-                        .checked_add(rel_address)
-                        .ok_or(Error::MemoryAccessOutOfBounds)?
-                        as usize;
-                    let value_in_bytes = store_data.to_le_bytes();
-                    let end = address + value_in_bytes.len();
-                    mem.data[address..end].copy_from_slice(&value_in_bytes);
+                    self.store(offset, &store_data, rel_address)?;
                 }
                 I32_LOAD => {
-                    let _align = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::UndefinedMemory)?;
-                    let offset = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::UndefinedMemory)?;
-                    let rel_address = self.stack.pop_i32()? as u32;
-                    let mem = self.store.memories.get_mut(0).unwrap();
-                    let address = offset
-                        .checked_add(rel_address)
-                        .ok_or(Error::MemoryAccessOutOfBounds)?
-                        as usize;
-                    let data_bytes: [u8; 4] = mem
-                        .data
-                        .get(address..address + 4)
-                        .ok_or(Error::MemoryAccessOutOfBounds)?
-                        .try_into()
-                        .expect("Fatal Error");
-                    let data = i32::from_le_bytes(data_bytes);
-                    self.stack.push(Value::I32(data));
+                    let (_, offset) = self.read_mem_args()?;
+                    let address = self.stack.pop_i32()? as u32;
+                    let data: i32 = self.load(offset, address, 4)?;
+                    self.stack.push(data.into());
                 }
                 _ => return Err(Error::UndefinedInstruction(*instruction)),
             };
         }
         current_frame.program_counter = self.reader.current_index() - current_frame.start + 1;
         Ok(())
+    }
+    fn store(&mut self, offset: u32, data: &[u8], address: u32) -> Result<()> {
+        let mem = self.store.memories.get_mut(0).unwrap();
+        let address = offset
+            .checked_add(address)
+            .ok_or(Error::MemoryAccessOutOfBounds)? as usize;
+        let end = address + data.len();
+        mem.data[address..end].copy_from_slice(data);
+        Ok(())
+    }
+    fn load<T>(&mut self, offset: u32, address: u32, bytes: usize) -> Result<T>
+    where
+        T: FromLeBytes,
+    {
+        let mem = self.store.memories.get_mut(0).unwrap();
+        let address = offset
+            .checked_add(address)
+            .ok_or(Error::MemoryAccessOutOfBounds)? as usize;
+        let data_bytes = mem
+            .data
+            .get(address..address + bytes)
+            .ok_or(Error::MemoryAccessOutOfBounds)?;
+        let data = T::from_le_bytes(data_bytes);
+        Ok(data)
+    }
+    fn read_mem_args(&mut self) -> Result<(u32, u32)> {
+        let _align = self
+            .reader
+            .next_leb128_u32()
+            .ok_or(Error::UndefinedMemory)?;
+        let offset = self
+            .reader
+            .next_leb128_u32()
+            .ok_or(Error::UndefinedMemory)?;
+        Ok((_align, offset))
     }
 }
 pub const PAGE_SIZE: u32 = 65536;

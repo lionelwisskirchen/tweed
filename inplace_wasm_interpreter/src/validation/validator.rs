@@ -406,6 +406,14 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
+                I64_LOAD => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(8)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
                 _ => return Err(Error::UndefinedOpCode(*byte)),
             };
         }

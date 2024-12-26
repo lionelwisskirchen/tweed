@@ -30,3 +30,4 @@ pub const SELECT: u8 = 0x1B;
 pub const I64_STORE: u8 = 0x37;
 pub const I32_STORE: u8 = 0x36;
 pub const I32_LOAD: u8 = 0x28;
+pub const I64_LOAD: u8 = 0x29;
