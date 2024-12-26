@@ -26,6 +26,9 @@ pub enum Error {
     InvalidSidetableIndex,
     UndefinedInstruction(u8),
     IllegalSelectType(ValType),
+    UndefinedMemory,
+    InvalidAlignment,
+    MemoryAccessOutOfBounds,
 }
 
 impl Display for Error {
@@ -60,6 +63,9 @@ impl Display for Error {
             Error::IllegalSelectType(valtype) => {
                 f.write_fmt(format_args!("Illegal select type: {valtype:?}"))
             }
+            Error::UndefinedMemory => f.write_str("undefined memory"),
+            Error::InvalidAlignment => f.write_str("invalid alignment"),
+            Error::MemoryAccessOutOfBounds => f.write_str("memory out of bounds"),
         }
     }
 }

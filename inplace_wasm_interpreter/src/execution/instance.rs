@@ -1,3 +1,4 @@
+use crate::binary::data_section::SegmentMode;
 use crate::binary::export_section::ExportContext;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::values::Value;
@@ -12,12 +13,14 @@ use crate::{
     },
     validation::side_table::SideTable,
 };
+
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::iter::zip;
 
+use super::constant_expression_executor::execute_const_expr;
 use super::execution_stack::ExecutionStack;
-use super::store::Store;
+use super::store::{DataInstance, MemoryInstance, Store};
 
 #[derive(Debug, Clone)]
 pub struct FunctionInstance {
@@ -189,18 +192,23 @@ impl Instance {
                 }
                 I64_ADD => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
-                    let result = right + left;
+                    let result = right.wrapping_add(left);
+                    self.stack.push(result.into());
+                }
+                I64_SUB => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let result = left.wrapping_sub(right);
                     self.stack.push(result.into());
                 }
                 I32_ADD => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
-                    let result = right + left;
+                    let result = right.wrapping_add(left);
                     self.stack.push(result.into());
                 }
                 I32_SUB => {
-                    let (right, left) = (self.stack.pop()?, self.stack.pop()?);
-
-                    self.stack.push(left - right);
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let result = left.wrapping_sub(right);
+                    self.stack.push(result.into());
                 }
                 I32_EQZ => {
                     let val = self.stack.pop_i32()?;
@@ -309,6 +317,70 @@ impl Instance {
                     self.call_stack.push(frame);
                     break;
                 }
+                I64_STORE => {
+                    let _align = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::UndefinedMemory)?;
+                    let offset = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::UndefinedMemory)?;
+                    let store_data = self.stack.pop_i64()? as u64;
+                    let rel_address = self.stack.pop_i32()? as u32;
+                    let mem = self.store.memories.get_mut(0).unwrap();
+                    let address = offset
+                        .checked_add(rel_address)
+                        .ok_or(Error::MemoryAccessOutOfBounds)?
+                        as usize;
+                    let value_in_bytes = store_data.to_le_bytes();
+                    let end = address + value_in_bytes.len();
+                    mem.data[address..end].copy_from_slice(&value_in_bytes);
+                }
+                I32_STORE => {
+                    let _align = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::UndefinedMemory)?;
+                    let offset = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::UndefinedMemory)?;
+                    let store_data = self.stack.pop_i32()? as u32;
+                    let rel_address = self.stack.pop_i32()? as u32;
+                    let mem = self.store.memories.get_mut(0).unwrap();
+                    let address = offset
+                        .checked_add(rel_address)
+                        .ok_or(Error::MemoryAccessOutOfBounds)?
+                        as usize;
+                    let value_in_bytes = store_data.to_le_bytes();
+                    let end = address + value_in_bytes.len();
+                    mem.data[address..end].copy_from_slice(&value_in_bytes);
+                }
+                I32_LOAD => {
+                    let _align = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::UndefinedMemory)?;
+                    let offset = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::UndefinedMemory)?;
+                    let rel_address = self.stack.pop_i32()? as u32;
+                    let mem = self.store.memories.get_mut(0).unwrap();
+                    let address = offset
+                        .checked_add(rel_address)
+                        .ok_or(Error::MemoryAccessOutOfBounds)?
+                        as usize;
+                    let data_bytes: [u8; 4] = mem
+                        .data
+                        .get(address..address + 4)
+                        .ok_or(Error::MemoryAccessOutOfBounds)?
+                        .try_into()
+                        .expect("Fatal Error");
+                    let data = i32::from_le_bytes(data_bytes);
+                    self.stack.push(Value::I32(data));
+                }
                 _ => return Err(Error::UndefinedInstruction(*instruction)),
             };
         }
@@ -316,8 +388,9 @@ impl Instance {
         Ok(())
     }
 }
+pub const PAGE_SIZE: u32 = 65536;
 
-pub fn instantiate(module: Module) -> Result<Instance> {
+pub fn instantiate(mut module: Module) -> Result<Instance> {
     let function_to_sidetable = zip(module.codesec, module.sidetables);
     let mut functions = Vec::new();
 
@@ -348,8 +421,49 @@ pub fn instantiate(module: Module) -> Result<Instance> {
     for export in module.exportsec {
         exports.insert(export.name.clone(), export.context.clone());
     }
+    let mut memories = Vec::new();
+    for memory in module.memorysec {
+        let data = vec![0; (memory.min * PAGE_SIZE) as usize];
+        memories.push(MemoryInstance {
+            data,
+            max: memory.max,
+        });
+    }
+    let mut data = Vec::new();
+    for data_segment in module.datasec {
+        if let SegmentMode::Active {
+            memory,
+            offset_start,
+            offset_end: _,
+        } = data_segment.mode
+        {
+            let offset = {
+                module.reader.seek(offset_start + 1);
+                let return_values = execute_const_expr(&mut module.reader, &[ValType::I32])?;
+                let Value::I32(value) = return_values.first().ok_or(Error::TypeMismatch)? else {
+                    return Err(Error::TypeMismatch);
+                };
+                *value
+            };
 
-    let store = Store { functions, exports };
+            let mem_inst = memories
+                .get_mut(memory as usize)
+                .ok_or(Error::InvalidFunctionIndex)?; // TODO introduce new Error
+
+            mem_inst.data[offset as usize..offset as usize + data_segment.init.len()]
+                .copy_from_slice(&data_segment.init);
+        };
+        data.push(DataInstance {
+            data: data_segment.init,
+        });
+    }
+
+    let store = Store {
+        functions,
+        exports,
+        memories,
+        data,
+    };
     Ok(Instance {
         reader: module.reader,
         store,
@@ -393,6 +507,7 @@ mod tests {
             }],
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
+            ..Default::default()
         };
 
         let mut instance = instantiate(module).unwrap();
@@ -426,6 +541,7 @@ mod tests {
             }],
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
+            ..Default::default()
         };
 
         let mut instance = instantiate(module).unwrap();
@@ -459,6 +575,7 @@ mod tests {
             }],
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
+            ..Default::default()
         };
 
         let mut instance = instantiate(module).unwrap();
@@ -493,6 +610,7 @@ mod tests {
             }],
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
+            ..Default::default()
         };
 
         let mut instance = instantiate(module).unwrap();
@@ -536,6 +654,7 @@ mod tests {
             }],
             exportsec: vec![],
             sidetables: vec![SideTable { entries: vec![] }],
+            ..Default::default()
         };
         let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(12)];
@@ -604,6 +723,7 @@ mod tests {
                     },
                 ],
             }],
+            ..Default::default()
         };
         let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(3)];
@@ -654,6 +774,7 @@ mod tests {
                     pop: 0,
                 }],
             }],
+            ..Default::default()
         };
         let mut instance = instantiate(module).unwrap();
         let expected_result = vec![Value::I32(10)];
@@ -731,6 +852,7 @@ mod tests {
                     },
                 ],
             }],
+            ..Default::default()
         };
         let mut instance = instantiate(module).unwrap();
 
@@ -813,6 +935,7 @@ mod tests {
                     },
                 ],
             }],
+            ..Default::default()
         };
         let mut instance = instantiate(module).unwrap();
         assert_eq!(

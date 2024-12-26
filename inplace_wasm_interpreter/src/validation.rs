@@ -1,3 +1,4 @@
+pub mod constant_expression_validator;
 pub mod control_stack;
 pub mod control_types;
 pub mod module;

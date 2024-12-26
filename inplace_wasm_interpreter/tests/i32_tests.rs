@@ -230,15 +230,3 @@ fn test_gts() {
         vec![Value::from(0)]
     );
 }
-
-// The following tests can be removed, as soon as I64 is supported
-#[should_panic]
-#[test]
-fn test_type_mismatch_add() {
-    let _ = Value::I32(3) + Value::I64(4);
-}
-#[should_panic]
-#[test]
-fn test_type_mismatch_sub() {
-    let _ = Value::I32(3) - Value::I64(4);
-}

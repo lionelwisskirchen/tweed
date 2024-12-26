@@ -134,20 +134,15 @@ impl<'a, 'b> Validator<'a, 'b> {
                     let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
                     self.abstract_value_stack.pop_expected(*value)?;
                 }
-                I32_ADD => {
+                I32_ADD | I32_SUB => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I64_ADD => {
+                I64_ADD | I64_SUB => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I64);
-                }
-                I32_SUB => {
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
-                    self.abstract_value_stack.push(ValType::I32);
                 }
                 IF => {
                     let index_of_if_bytecode = self.reader.current_index() as i32;
@@ -387,6 +382,30 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected_vec(&sig.parameter)?;
                     self.abstract_value_stack.push_vec(&sig.result);
                 }
+                I32_STORE => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
+                I64_STORE => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(8)?;
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
+                I32_LOAD => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
                 _ => return Err(Error::UndefinedOpCode(*byte)),
             };
         }
@@ -394,6 +413,21 @@ impl<'a, 'b> Validator<'a, 'b> {
         self.reset();
         Ok(result)
     }
+    fn check_align(&mut self, max_align: u32) -> Result<()> {
+        let align = self
+            .reader
+            .next_leb128_u32()
+            .ok_or(Error::UndefinedMemory)?;
+        let _offset = self
+            .reader
+            .next_leb128_u32()
+            .ok_or(Error::UndefinedMemory)?;
+        if align > max_align {
+            return Err(Error::InvalidAlignment)?;
+        }
+        Ok(())
+    }
+
     fn read_depth(&mut self) -> u32 {
         self.reader
             .next_leb128_u32()

@@ -23,6 +23,9 @@ impl ValidationStack {
             top_reachable: true,
         }
     }
+    pub fn is_empty(&mut self) -> bool {
+        self.stack.is_empty()
+    }
     pub fn update(&mut self, height: u32, reachable: bool) {
         self.top_height = height;
         self.top_reachable = reachable;

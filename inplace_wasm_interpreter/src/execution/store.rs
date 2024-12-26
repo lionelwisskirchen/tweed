@@ -10,4 +10,17 @@ use super::instance::FunctionInstance;
 pub struct Store {
     pub functions: Vec<FunctionInstance>,
     pub exports: BTreeMap<String, ExportContext>,
+    pub memories: Vec<MemoryInstance>,
+    pub data: Vec<DataInstance>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MemoryInstance {
+    pub data: Vec<u8>,
+    pub max: Option<u32>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct DataInstance {
+    pub data: Vec<u8>,
 }

@@ -40,6 +40,9 @@ impl ExecutionStack {
     pub fn len(&self) -> usize {
         self.stack.len()
     }
+    pub fn rest(&mut self) -> Vec<Value> {
+        self.stack.clone()
+    }
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()
     }
