@@ -24,6 +24,7 @@ pub enum ControlType {
         side_table_entry: usize,
         reachable: bool,
         height_of_value_stack: u32,
+        has_else: bool,
     },
     For {
         instruction_pointer: usize,

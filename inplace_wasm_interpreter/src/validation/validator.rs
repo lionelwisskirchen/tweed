@@ -161,6 +161,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                         side_table_entry: index_of_if_sidetable_entry,
                         reachable: true,
                         height_of_value_stack: self.abstract_value_stack.height(),
+                        has_else: false,
                     });
 
                     self.abstract_value_stack.push_vec(&signature.parameter);
@@ -177,6 +178,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             sidetable_idxs,
                             side_table_entry,
                             height_of_value_stack,
+                            has_else,
                             ..
                         } => {
                             sidetable_idxs.push(index_of_else_sidetable_entry);
@@ -188,6 +190,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             if *height_of_value_stack != self.abstract_value_stack.height() {
                                 return Err(Error::TypeMismatch);
                             }
+                            *has_else = true;
 
                             self.abstract_value_stack.push_vec(&func_type.parameter);
 
@@ -339,13 +342,21 @@ impl<'a, 'b> Validator<'a, 'b> {
                             sidetable_idxs,
                             height_of_value_stack,
                             ..
+                        } => {
+                            self.check_args(&func_type.result, height_of_value_stack)?;
+                            self.resolve_sidetable_entries(&sidetable_idxs);
                         }
-                        | ControlType::If {
+                        ControlType::If {
                             func_type,
                             sidetable_idxs,
                             height_of_value_stack,
+                            has_else,
+                            side_table_entry,
                             ..
                         } => {
+                            if !has_else {
+                                self.resolve_sidetable_entries(&[side_table_entry]);
+                            }
                             self.check_args(&func_type.result, height_of_value_stack)?;
                             self.resolve_sidetable_entries(&sidetable_idxs);
                         }
