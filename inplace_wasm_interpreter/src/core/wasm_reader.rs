@@ -58,19 +58,56 @@ impl WasmReader {
                 break;
             }
             shift += 7;
-            if shift > 32 {
+            if shift > 64 {
                 return None;
             }
         }
         Some(result)
     }
     pub fn next_leb128_i64(&mut self) -> Option<i64> {
-        let val = self.next_leb128_u64()?;
-        Some(val as i64)
+        let mut result = 0;
+        let mut shift = 0;
+        let mut byte;
+
+        loop {
+            byte = self.next_byte()?;
+            result |= ((byte & 0x7F) as i64) << shift;
+            shift += 7;
+            if byte & 0x80 == 0 {
+                break;
+            }
+
+            if shift >= 64 {
+                return None;
+            }
+        }
+
+        if shift < 64 && (byte & 0x40 != 0) {
+            result |= !0 << shift;
+        }
+
+        Some(result)
     }
     pub fn next_leb128_i32(&mut self) -> Option<i32> {
-        let val = self.next_leb128_u32()?;
-        Some(val as i32)
+        let mut result = 0;
+        let mut shift = 0;
+        let mut byte;
+
+        loop {
+            byte = self.next_byte()?;
+            result |= ((byte & 0x7F) as i32) << shift;
+            shift += 7;
+            if byte & 0x80 == 0 {
+                break;
+            }
+            if shift >= 32 {
+                return None;
+            }
+        }
+        if shift < 32 && (byte & 0x40 != 0) {
+            result |= !0 << shift;
+        }
+        Some(result)
     }
     pub fn calculate_offset(&self, offset: usize) -> usize {
         offset + self.current_index()
@@ -213,5 +250,15 @@ mod tests {
     fn test_next_leb128_u32_zero() {
         let mut decoder = WasmReader::new(vec![0x00]);
         assert_eq!(decoder.next_leb128_u32(), Some(0));
+    }
+    #[test]
+    fn test_next_leb128_i32_negative() {
+        let mut decoder = WasmReader::new(vec![0x7f]);
+        assert_eq!(decoder.next_leb128_i32(), Some(-1));
+    }
+    #[test]
+    fn test_next_leb128_i64_negative() {
+        let mut decoder = WasmReader::new(vec![0x7f]);
+        assert_eq!(decoder.next_leb128_i64(), Some(-1));
     }
 }

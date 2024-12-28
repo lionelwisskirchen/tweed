@@ -100,7 +100,6 @@ impl<'a, 'b> Validator<'a, 'b> {
         let locals = self.initialize_locals(function, signature);
         self.reader.seek(function.start);
         self.push_ctrl(ControlType::Func {
-            instruction_pointer: self.reader.current_index(),
             func_type: signature.clone(),
             sidetable_idxs: Vec::new(),
             height_of_value_stack: self.abstract_value_stack.height(),
@@ -155,7 +154,6 @@ impl<'a, 'b> Validator<'a, 'b> {
                         self.side_table.create_entry(index_of_if_bytecode, 0, 0, 0);
 
                     self.push_ctrl(ControlType::If {
-                        instruction_pointer: self.reader.current_index(),
                         func_type: signature.clone(),
                         sidetable_idxs: Vec::new(),
                         side_table_entry: index_of_if_sidetable_entry,
@@ -271,7 +269,6 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .pop_expected_vec(&signature.parameter)?;
 
                     self.push_ctrl(ControlType::Block {
-                        instruction_pointer: self.reader.current_index(),
                         func_type: signature.clone(),
                         sidetable_idxs: Vec::new(),
                         reachable: true,
