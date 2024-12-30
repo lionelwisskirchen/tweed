@@ -4,7 +4,6 @@ use crate::core::signature_lookup::lookup_signature;
 use crate::core::values::{FromLeBytes, Value};
 use crate::validation::module::Module;
 use crate::{
-    binary::type_section::FuncType,
     core::{
         error::{Error, Result},
         opcode::*,
@@ -20,16 +19,7 @@ use core::iter::zip;
 
 use super::constant_expression_executor::execute_const_expr;
 use super::execution_stack::ExecutionStack;
-use super::store::{DataInstance, MemoryInstance, Store};
-
-#[derive(Debug, Clone)]
-pub struct FunctionInstance {
-    pub signature: FuncType,
-    pub locals: Vec<Value>,
-    pub start: usize,
-    pub end: usize,
-    pub side_table: SideTable,
-}
+use super::store::{DataInstance, FunctionInstance, MemoryInstance, Store};
 
 #[derive(Default, Debug, Clone)]
 pub struct Frame {
@@ -93,8 +83,6 @@ impl Instance {
     }
     fn execute(&mut self) -> Result<Vec<Value>> {
         loop {
-            #[cfg(test)]
-            println!("{:?}", self.call_stack);
             let Some(mut current_frame) = self.call_stack.pop() else {
                 return self.stack.pop_n(self.stack.len());
             };
@@ -112,6 +100,7 @@ impl Instance {
             .next_leb128_u32()
             .ok_or(Error::InvalidSectionBytecode)
     }
+
     fn do_goto(&mut self, current_frame: &mut Frame) -> Result<()> {
         let side_table_entry = current_frame
             .side_table
@@ -443,7 +432,7 @@ pub fn instantiate(mut module: Module) -> Result<Instance> {
 
             let mem_inst = memories
                 .get_mut(memory as usize)
-                .ok_or(Error::InvalidFunctionIndex)?; // TODO introduce new Error
+                .ok_or(Error::InvalidMemoryIndex)?;
 
             mem_inst.data[offset as usize..offset as usize + data_segment.init.len()]
                 .copy_from_slice(&data_segment.init);
@@ -471,7 +460,7 @@ pub fn instantiate(mut module: Module) -> Result<Instance> {
 mod tests {
 
     use crate::{
-        binary::{code_section::FuncCode, function_section::FuncDecl},
+        binary::{code_section::FuncCode, function_section::FuncDecl, type_section::FuncType},
         validation::side_table::SideTableEntry,
     };
 

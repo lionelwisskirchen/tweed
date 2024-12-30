@@ -4,16 +4,16 @@ use alloc::vec::Vec;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ControlType {
     Func {
+        func_type: FuncType,
         sidetable_idxs: Vec<usize>,
         height_of_value_stack: u32,
-        func_type: FuncType,
         reachable: bool,
     },
     Block {
         func_type: FuncType,
         sidetable_idxs: Vec<usize>,
-        reachable: bool,
         height_of_value_stack: u32,
+        reachable: bool,
     },
     If {
         func_type: FuncType,

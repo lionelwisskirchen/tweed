@@ -62,7 +62,7 @@ impl ExecutionStack {
         if count > self.stack.len() {
             return Err(Error::ExpectedAValueOnTheStack);
         }
-        Ok(self.stack.split_off(self.stack.len() - count).to_vec())
+        Ok(self.stack.split_off(self.stack.len() - count))
     }
 }
 

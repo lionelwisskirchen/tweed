@@ -15,6 +15,7 @@ pub enum Error {
     MissingValue,
     InvalidLocalIndex,
     InvalidFunctionIndex,
+    InvalidMemoryIndex,
     UndefinedOpCode(u8),
     UnknownLabel,
     UnknownSectionCode(u8),
@@ -44,6 +45,7 @@ impl Display for Error {
             Error::MissingValue => f.write_str("Missing value on stack."),
             Error::InvalidLocalIndex => f.write_str("Invalid local index"),
             Error::InvalidFunctionIndex => f.write_str("Invalid function index"),
+            Error::InvalidMemoryIndex => f.write_str("Invalid memory index"),
             Error::UndefinedOpCode(opcode) => {
                 f.write_fmt(format_args!("Invalid opcode {opcode:?}"))
             }
