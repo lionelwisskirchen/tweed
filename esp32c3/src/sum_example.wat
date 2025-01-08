@@ -1,5 +1,5 @@
 (module
-  (func (param $x i32) (result i32)
+  (func (export "sum") (param $x i32) (result i32)
         ;; set variables
        (local $i i32)
        (local $res i32)
