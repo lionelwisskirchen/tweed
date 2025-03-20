@@ -51,27 +51,3 @@ fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Re
         sidetables,
     })
 }
-
-// #[cfg(test)]
-// mod tests {
-
-//     use crate::initialize;
-
-//     use super::*;
-//     #[test]
-//     fn figg(){
-//  let bytes = wat::parse_str(
-//             "(module
-//      (func $type-arg-empty-in-select
-//        (block (result i32)
-//          (select (br 0) (i32.const 1) (i32.const 2))
-//        )
-//        (i32.eqz) (drop)
-//      )
-//    )",
-//         )
-//             .unwrap();
-// 	println!("{:?}",initialize(&bytes));
-// 	assert!(initialize(&bytes).is_ok());
-//     }
-//     }

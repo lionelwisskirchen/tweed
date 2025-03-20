@@ -277,12 +277,13 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push_vec(&signature.parameter);
                 }
                 LOOP => {
+                    let index_of_loop_bytecode = self.reader.current_index();
                     let signature = self.read_block_type();
                     self.abstract_value_stack
                         .pop_expected_vec(&signature.parameter)?;
 
                     self.push_ctrl(ControlType::For {
-                        instruction_pointer: self.reader.current_index(),
+                        instruction_pointer: index_of_loop_bytecode,
                         func_type: signature.clone(),
                         side_table_entry: self.side_table.len(),
                         reachable: true,
@@ -524,7 +525,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     .pop_expected_vec(&func_type.parameter)?;
 
                 let stp = *side_table_entry as i32 - (self.side_table.len() as i32) + 1;
-                let ip = *instruction_pointer as i32 - index_of_start_bytecode - 1; // -1 Because current byte is the depth
+                let ip = *instruction_pointer as i32 - index_of_start_bytecode;
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
                 entry.vals = func_type.result.len();
