@@ -18,5 +18,5 @@ fn run_spec_test(path: &Path) {
 
 #[test]
 fn br() {
-    run_spec_test(Path::new("./tests/spec/br.wast"));
+    run_spec_test(Path::new("./tests/spec/br.wast")); // This path will be replaced with the actual testsuite tests
 }
