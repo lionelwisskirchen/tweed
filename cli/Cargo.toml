@@ -1,0 +1,9 @@
+[package]
+name = "tweed-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+inplace_wasm_interpreter = {path = "../inplace_wasm_interpreter"}
+clap = { version = "4", features = ["derive"] }
+anyhow = "1.0.98"
