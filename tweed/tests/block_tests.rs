@@ -1,4 +1,4 @@
-use inplace_wasm_interpreter::{run, Value};
+use tweed::{run, Value};
 
 #[test]
 fn block_underflow() {

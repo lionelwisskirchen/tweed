@@ -1,6 +1,6 @@
 use clap::Subcommand;
 use clap::{Parser, ValueHint};
-use inplace_wasm_interpreter::{execution::instance::instantiate, initialize, invoke, Value};
+use tweed::{instantiate, initialize, invoke, Value};
 use std::fs;
 use std::path::PathBuf;
 #[derive(Parser, Debug)]

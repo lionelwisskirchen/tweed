@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use inplace_wasm_interpreter::{execution::instance::instantiate, initialize, invoke, Value};
+use tweed::{execution::instance::instantiate, initialize, invoke, Value};
 
 const WASM: &[u8] = include_bytes!("../../esp32c3/src/sum_example.wasm");
 

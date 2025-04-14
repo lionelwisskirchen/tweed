@@ -1,4 +1,5 @@
-use inplace_wasm_interpreter::{
+use rstest::rstest;
+use tweed::{
     binary::{
         code_section::process_code_section, export_section::process_export_section,
         function_section::process_function_section, type_section::process_type_section,
@@ -6,7 +7,6 @@ use inplace_wasm_interpreter::{
     core::wasm_reader::WasmReader,
     initialize,
 };
-use rstest::rstest;
 
 #[rstest]
 #[case(b"")] // No section size

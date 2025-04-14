@@ -1,5 +1,5 @@
-use inplace_wasm_interpreter::{initialize, instantiate, validation::module::Module, Value};
 use std::{self, fs};
+use tweed::{initialize, instantiate, validation::module::Module, Value};
 use wast::core::{WastArgCore, WastRetCore};
 use wast::{WastArg, WastDirective, WastRet};
 

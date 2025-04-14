@@ -344,16 +344,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "inplace_wasm_interpreter"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "rstest",
- "wast 221.0.2",
- "wat",
-]
-
-[[package]]
 name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -712,6 +702,16 @@ dependencies = [
  "indexmap 2.9.0",
  "toml_datetime",
  "winnow",
+]
+
+[[package]]
+name = "tweed"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "rstest",
+ "wast 221.0.2",
+ "wat",
 ]
 
 [[package]]

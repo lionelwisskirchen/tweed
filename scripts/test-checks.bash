@@ -3,8 +3,8 @@ set -eu
 
 dir=$(pwd)
 
-pushd "$(dirname "$0")/../inplace_wasm_interpreter" > /dev/null
+pushd "$(dirname "$0")/../tweed" > /dev/null
 
-cargo test --package inplace_wasm_interpreter
+cargo test --package tweed
 
 popd > /dev/null

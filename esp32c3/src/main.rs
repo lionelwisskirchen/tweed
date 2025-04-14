@@ -3,8 +3,8 @@
 
 use esp_backtrace as _;
 use esp_hal::prelude::*;
-use inplace_wasm_interpreter;
-use inplace_wasm_interpreter::Value;
+use tweed;
+use tweed::Value;
 extern crate alloc;
 use alloc::vec;
 use core::mem::MaybeUninit;
@@ -27,7 +27,7 @@ fn main() -> ! {
     init_heap();
     esp_println::logger::init_logger_from_env();
     let byte_code = include_bytes!("sum_example.wasm");
-    let result = inplace_wasm_interpreter::run(byte_code, "sum".to_string(), vec![Value::I32(6)]);
+    let result = tweed::run(byte_code, "sum".to_string(), vec![Value::I32(6)]);
     log::info!("Result: {:?}", result);
 
     loop {}

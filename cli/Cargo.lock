@@ -111,10 +111,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "inplace_wasm_interpreter"
-version = "0.1.0"
-
-[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -162,12 +158,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tweed"
+version = "0.1.0"
+
+[[package]]
 name = "tweed-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "inplace_wasm_interpreter",
+ "tweed",
 ]
 
 [[package]]
