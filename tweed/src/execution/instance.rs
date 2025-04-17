@@ -165,6 +165,15 @@ impl Instance {
                     let new_value = self.stack.pop()?;
                     *local = new_value;
                 }
+                LOCAL_TEE => {
+                    let local = current_frame
+                        .locals
+                        .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
+                        .ok_or(Error::InvalidLocalIndex)?;
+                    let new_value = self.stack.pop()?;
+                    *local = new_value;
+                    self.stack.push(new_value);
+                }
                 DROP => {
                     self.stack.pop()?;
                 }
@@ -189,10 +198,86 @@ impl Instance {
                     let result = left.wrapping_sub(right);
                     self.stack.push(result.into());
                 }
+                I64_MUL => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let result = left.wrapping_mul(right);
+                    self.stack.push(result.into());
+                }
+                I64_AND => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+
+                    let result = right & left;
+                    self.stack.push(result.into());
+                }
+                I64_OR => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+
+                    let result = right | left;
+                    self.stack.push(result.into());
+                }
+                I64_XOR => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+
+                    let result = right ^ left;
+                    self.stack.push(result.into());
+                }
+                I64_SHR_U => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let result = (left as u64).wrapping_shr((right & 63) as u32);
+                    self.stack.push(result.into());
+                }
+                I64_SHR_S => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let result = left.wrapping_shr((right & 63) as u32);
+                    self.stack.push(result.into());
+                }
+                I64_SHL => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let result = left.wrapping_shl((right & 63) as u32);
+                    self.stack.push(result.into());
+                }
                 I32_ADD => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
                     let result = right.wrapping_add(left);
                     self.stack.push(result.into());
+                }
+                I32_MUL => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let result = right.wrapping_mul(left);
+                    self.stack.push(result.into());
+                }
+                I32_DIV_S => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if right == 0 {
+                        return Err(Error::DivisionByZero);
+                    }
+                    if left == i32::MIN && left == -1 {
+                        return Err(Error::UnrepresentableResult);
+                    }
+                    self.stack.push((left / right).into());
+                }
+                I32_DIV_U => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if right == 0 {
+                        return Err(Error::DivisionByZero);
+                    }
+                    self.stack.push(((left as u32) / (right as u32)).into());
+                }
+                I32_REM_S => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if right == 0 {
+                        return Err(Error::DivisionByZero);
+                    }
+                    let result = left.checked_rem(right);
+                    self.stack.push(result.unwrap_or_default().into());
+                }
+                I32_REM_U => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if right == 0 {
+                        return Err(Error::DivisionByZero);
+                    }
+                    let result = (left as u32).checked_rem(right as u32);
+                    self.stack.push(result.unwrap_or_default().into());
                 }
                 I32_SUB => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
@@ -207,9 +292,118 @@ impl Instance {
                         self.stack.push(Value::I32(0));
                     }
                 }
+
+                I32_EQ => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if right == left {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+
+                I32_CLZ => {
+                    let val = self.stack.pop_i32()?;
+                    self.stack.push(val.leading_zeros().into());
+                }
                 I32_LT_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
                     if left < right {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I32_LE_S => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if left <= right {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I32_LT_U => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if (left as u32) < (right as u32) {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I32_LE_U => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if (left as u32) <= (right as u32) {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I32_GT_U => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if (left as u32) > (right as u32) {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I32_GE_U => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if (left as u32) >= (right as u32) {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I32_XOR => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+
+                    let result = right ^ left;
+                    self.stack.push(result.into());
+                }
+
+                I32_NE => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    if left != right {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I32_WRAP_I64 => {
+                    let value = self.stack.pop_i64()?;
+                    self.stack.push((value as i32).into())
+                }
+                I64_EXTEND_I32_U => {
+                    let value = self.stack.pop_i32()?;
+                    self.stack.push((value as u32 as i64).into())
+                }
+                I64_LT_U => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    if (left as u64) < (right as u64) {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I64_GT_U => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    if (left as u64) > (right as u64) {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I64_EQ => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    if left == right {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
+                I64_NE => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    if left != right {
                         self.stack.push(Value::I32(1));
                     } else {
                         self.stack.push(Value::I32(0));
@@ -227,7 +421,7 @@ impl Instance {
                 I32_GE_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
 
-                    if left == right {
+                    if left >= right {
                         self.stack.push(Value::I32(1));
                     } else {
                         self.stack.push(Value::I32(0));
@@ -237,6 +431,12 @@ impl Instance {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
 
                     let result = right & left;
+                    self.stack.push(Value::I32(result));
+                }
+                I32_OR => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+
+                    let result = right | left;
                     self.stack.push(Value::I32(result));
                 }
                 SELECT => {
@@ -318,6 +518,7 @@ impl Instance {
                     let data: i64 = self.load(offset, address, 8)?;
                     self.stack.push(data.into());
                 }
+
                 I32_STORE => {
                     let (_, offset) = self.read_mem_args()?;
                     let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
@@ -329,6 +530,18 @@ impl Instance {
                     let address = self.stack.pop_i32()? as u32;
                     let data: i32 = self.load(offset, address, 4)?;
                     self.stack.push(data.into());
+                }
+                I32_LOAD8_U => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let address = self.stack.pop_i32()? as u32;
+                    let data: u8 = self.load(offset, address, 4)?;
+                    self.stack.push((data as u32).into());
+                }
+                I32_LOAD8_S => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let address = self.stack.pop_i32()? as u32;
+                    let data: i8 = self.load(offset, address, 4)?;
+                    self.stack.push((data as u32).into());
                 }
                 _ => return Err(Error::UndefinedInstruction(*instruction)),
             };
@@ -345,6 +558,7 @@ impl Instance {
         mem.data[address..end].copy_from_slice(data);
         Ok(())
     }
+
     fn load<T>(&mut self, offset: u32, address: u32, bytes: usize) -> Result<T>
     where
         T: FromLeBytes,

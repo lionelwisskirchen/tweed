@@ -81,7 +81,6 @@ impl<'a, 'b> Validator<'a, 'b> {
 
     pub fn validate(&mut self) -> Result<Vec<SideTable>> {
         let mut side_tables = Vec::new();
-
         for (index, fun) in self.module_environment.codesec.iter().enumerate() {
             let signature_index = self
                 .module_environment
@@ -133,12 +132,20 @@ impl<'a, 'b> Validator<'a, 'b> {
                     let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
                     self.abstract_value_stack.pop_expected(*value)?;
                 }
-                I32_ADD | I32_SUB => {
+                LOCAL_TEE => {
+                    let idx = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::InvalidLocalIndex)?;
+                    let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
+                    self.abstract_value_stack.is_on_top(value)?;
+                }
+                I32_ADD | I32_SUB | I32_MUL | I32_DIV_S | I32_DIV_U | I32_REM_S | I32_REM_U => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I64_ADD | I64_SUB => {
+                I64_ADD | I64_SUB | I64_MUL => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I64);
@@ -208,37 +215,37 @@ impl<'a, 'b> Validator<'a, 'b> {
                 DROP => {
                     self.abstract_value_stack.pop_val()?;
                 }
-                I32_LT_S => {
+                I32_GE_U | I32_GT_U | I32_LE_S | I32_LT_S | I32_LT_U | I32_LE_U | I32_NE
+                | I32_GT_S | I32_GE_S | I32_AND | I32_OR | I32_XOR | I32_EQ => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I32_GT_S => {
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                I64_EQ | I64_NE | I64_LT_U | I64_GT_U | I64_GE_U => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                I64_AND | I64_OR | I64_XOR | I64_SHR_U | I64_SHR_S => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
+                I32_CTZ | I32_EQZ => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I32_GE_S => {
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                I32_WRAP_I64 => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I32_AND => {
+                I64_EXTEND_I32_U => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
-                    self.abstract_value_stack.push(ValType::I32);
-                }
-                I32_CTZ => {
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
-                    self.abstract_value_stack.push(ValType::I32);
+                    self.abstract_value_stack.push(ValType::I64);
                 }
                 I64_CTZ => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I64);
-                }
-                I32_EQZ => {
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
-                    self.abstract_value_stack.push(ValType::I32);
                 }
                 SELECT => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -412,6 +419,26 @@ impl<'a, 'b> Validator<'a, 'b> {
                         return Err(Error::UndefinedMemory)?;
                     }
                     self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                I32_LOAD8_U => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(1)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                I32_LOAD8_S => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(1)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                I32_CLZ => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }

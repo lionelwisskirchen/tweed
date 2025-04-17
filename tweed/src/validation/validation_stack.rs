@@ -71,11 +71,31 @@ impl ValidationStack {
         }
         Ok(())
     }
+    pub fn is_on_top(&mut self, expected: &ValType) -> Result<()> {
+        if self.stack.len() == self.top_height as usize && !self.top_reachable {
+            return Ok(());
+        };
+        let val = self.stack.last().ok_or(Error::TypeMismatch)?;
+        if val == expected {
+            Ok(())
+        } else {
+            Err(Error::TypeMismatch)
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_is_on_top() {
+        let mut validator = ValidationStack::new();
+        validator.push(ValType::I32);
+        validator.push(ValType::I64);
+
+        assert!(validator.is_on_top(&ValType::I64).is_ok());
+    }
 
     #[test]
     fn test_pop_expected_with_matching_type() {

@@ -30,6 +30,8 @@ pub enum Error {
     UndefinedMemory,
     InvalidAlignment,
     MemoryAccessOutOfBounds,
+    DivisionByZero,
+    UnrepresentableResult,
 }
 
 impl Display for Error {
@@ -38,12 +40,14 @@ impl Display for Error {
             Error::InvalidMagic => {
                 f.write_str("The magic number of the given Wasm file is invalid.")
             }
+            Error::DivisionByZero => f.write_str("Division by zero."),
+            Error::UnrepresentableResult => f.write_str("Result is not representable."),
             Error::InvalidVersion => f.write_str("The version in the Wasm file is invalid"),
             Error::InvalidSectionBytecode => f.write_str("The section in the Wasm file is invalid"),
             Error::TypeMismatch | Error::InvalidSignatureIndex => f.write_str("type mismatch"),
             Error::InvalidControlFlow => f.write_str("Control flow mismatch"),
             Error::MissingValue => f.write_str("Missing value on stack."),
-            Error::InvalidLocalIndex => f.write_str("Invalid local index"),
+            Error::InvalidLocalIndex => f.write_str("unknown local"),
             Error::InvalidFunctionIndex => f.write_str("Invalid function index"),
             Error::InvalidMemoryIndex => f.write_str("Invalid memory index"),
             Error::UndefinedOpCode(opcode) => {

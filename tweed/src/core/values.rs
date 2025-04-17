@@ -53,6 +53,18 @@ impl FromLeBytes for i64 {
     }
 }
 
+impl FromLeBytes for u8 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        u8::from_le_bytes(bytes.try_into().expect("Invalid length for u8"))
+    }
+}
+
+impl FromLeBytes for i8 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        i8::from_le_bytes(bytes.try_into().expect("Invalid length for u8"))
+    }
+}
+
 impl core::ops::Add for Value {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {

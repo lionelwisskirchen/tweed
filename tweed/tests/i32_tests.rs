@@ -230,3 +230,41 @@ fn test_gts() {
         vec![Value::from(0)]
     );
 }
+
+#[test]
+fn test_mul_i32() {
+    let wasm = wat::parse_str(
+        r#"
+  (func (export "fun") (param $x i32) (param $y i32) (result i32) (i32.mul (local.get $x) (local.get $y)))
+"#,
+    )
+	.unwrap();
+    assert_eq!(
+        run(
+            &wasm,
+            "fun".to_string(),
+            vec![Value::from(3), Value::from(0)]
+        )
+        .unwrap(),
+        vec![Value::from(0)]
+    );
+}
+
+#[test]
+fn test_mul_i64() {
+    let wasm = wat::parse_str(
+        r#"
+  (func (export "fun") (param $x i64) (param $y i64) (result i64) (i64.mul (local.get $x) (local.get $y)))
+"#,
+    )
+	.unwrap();
+    assert_eq!(
+        run(
+            &wasm,
+            "fun".to_string(),
+            vec![Value::from(3 as i64), Value::from(0 as i64)]
+        )
+        .unwrap(),
+        vec![Value::from(0 as i64)]
+    );
+}

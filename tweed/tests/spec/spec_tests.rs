@@ -17,6 +17,9 @@ fn run_spec_test(path: &Path) {
 }
 
 #[test]
-fn br() {
+fn spec_tests() {
     run_spec_test(Path::new("./tests/spec/br.wast")); // This path will be replaced with the actual testsuite tests
+    run_spec_test(Path::new("./tests/spec/testsuite/local_tee.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/i32.wast"));
 }
