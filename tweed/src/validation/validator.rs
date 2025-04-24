@@ -1,3 +1,4 @@
+use crate::binary::data_section::SegmentMode;
 use crate::binary::global_section::GlobalType;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::{Error, Result};
@@ -83,6 +84,7 @@ impl<'a, 'b> Validator<'a, 'b> {
 
     pub fn validate(&mut self) -> Result<Vec<SideTable>> {
         self.validate_globals()?;
+        self.validate_data()?;
         let mut side_tables = Vec::new();
         for (index, fun) in self.module_environment.codesec.iter().enumerate() {
             let signature_index = self
@@ -107,6 +109,19 @@ impl<'a, 'b> Validator<'a, 'b> {
                 &self.module_environment.importsec.globals,
                 &[global.global_type.value_type],
             )?;
+        }
+        Ok(())
+    }
+    fn validate_data(&mut self) -> Result<()> {
+        for data in &self.module_environment.datasec {
+            if let SegmentMode::Active { offset_start, .. } = data.mode {
+                self.reader.seek(offset_start + 1);
+                validate_const_expr(
+                    self.reader,
+                    &self.module_environment.importsec.globals,
+                    &[ValType::I32],
+                )?;
+            }
         }
         Ok(())
     }

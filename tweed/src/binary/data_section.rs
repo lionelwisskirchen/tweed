@@ -1,9 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::core::error::{Error, Result};
-use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
-use crate::validation::constant_expression_validator::validate_const_expr;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SegmentMode {
@@ -39,9 +37,9 @@ pub fn process_data_section(reader: &mut WasmReader) -> Result<Vec<DataSegment>>
             0 => {
                 // Mode active
                 let start = reader.current_index();
-                // TODO Pass imported globals! -> extract this to validator
-                validate_const_expr(reader, &[], &[ValType::I32])?;
-                let end = reader.current_index();
+                let end = reader
+                    .read_until(0xb)
+                    .ok_or(Error::InvalidSectionBytecode)?;
                 let data_size = reader
                     .next_leb128_u32()
                     .ok_or(Error::InvalidSectionBytecode)?;
