@@ -1,3 +1,4 @@
+use crate::binary::import_section::GlobalImport;
 use crate::core::opcode::*;
 
 use crate::core::error::{Error, Result};
@@ -6,7 +7,11 @@ use crate::core::wasm_reader::WasmReader;
 
 use super::validation_stack::ValidationStack;
 
-pub fn validate_const_expr(reader: &mut WasmReader, result: &[ValType]) -> Result<()> {
+pub fn validate_const_expr(
+    reader: &mut WasmReader,
+    globals: &[GlobalImport],
+    result: &[ValType],
+) -> Result<()> {
     let mut abstract_value_stack: ValidationStack = ValidationStack::default();
     loop {
         let byte = reader.next_byte().ok_or(Error::InvalidControlFlow)?;
@@ -29,6 +34,15 @@ pub fn validate_const_expr(reader: &mut WasmReader, result: &[ValType]) -> Resul
                 abstract_value_stack.pop_expected(ValType::I64)?;
                 abstract_value_stack.push(ValType::I64);
             }
+            GLOBAL_GET => {
+                let idx = reader.next_leb128_u32().ok_or(Error::InvalidLocalIndex)?;
+                let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
+
+                if global.context.is_mutable {
+                    return Err(Error::UndefinedContantExpression);
+                }
+                abstract_value_stack.push(global.context.value_type);
+            }
             END => {
                 abstract_value_stack.pop_expected_vec(result)?;
                 if !abstract_value_stack.is_empty() {
@@ -36,7 +50,7 @@ pub fn validate_const_expr(reader: &mut WasmReader, result: &[ValType]) -> Resul
                 }
                 return Ok(());
             }
-            _ => return Err(Error::UndefinedOpCode(*byte)),
+            _ => return Err(Error::UndefinedContantExpression),
         }
     }
 }

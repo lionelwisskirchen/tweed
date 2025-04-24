@@ -14,12 +14,13 @@ use crate::{
 };
 
 use alloc::collections::BTreeMap;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::iter::zip;
 
 use super::constant_expression_executor::execute_const_expr;
 use super::execution_stack::ExecutionStack;
-use super::store::{DataInstance, FunctionInstance, MemoryInstance, Store};
+use super::store::{DataInstance, FunctionInstance, GlobalInstance, MemoryInstance, Store};
 
 #[derive(Default, Debug, Clone)]
 pub struct Frame {
@@ -164,6 +165,24 @@ impl Instance {
                         .ok_or(Error::InvalidLocalIndex)?;
                     let new_value = self.stack.pop()?;
                     *local = new_value;
+                }
+                GLOBAL_GET => {
+                    let global = self
+                        .store
+                        .globals
+                        .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
+                        .ok_or(Error::UnknownGlobal)?;
+
+                    self.stack.push(global.value);
+                }
+                GLOBAL_SET => {
+                    let global = self
+                        .store
+                        .globals
+                        .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
+                        .ok_or(Error::UnknownGlobal)?;
+                    let new_value = self.stack.pop()?;
+                    global.value = new_value;
                 }
                 LOCAL_TEE => {
                     let local = current_frame
@@ -588,86 +607,211 @@ impl Instance {
 }
 pub const PAGE_SIZE: u32 = 65536;
 
-pub fn instantiate(mut module: Module) -> Result<Instance> {
-    let function_to_sidetable = zip(module.codesec, module.sidetables);
-    let mut functions = Vec::new();
+pub struct Linker {
+    module: Module,
+    imported_globals: BTreeMap<ImportName, GlobalInstance>,
+}
 
-    for (index, (function, side_table)) in function_to_sidetable.enumerate() {
-        let locals: Vec<Value> = function
-            .locals
-            .iter()
-            .map(|val_type| (*val_type).into())
-            .collect::<Vec<Value>>();
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ImportName {
+    pub module: String,
+    pub name: String,
+}
 
-        let signature_index = module
-            .funcsec
-            .get(index)
-            .ok_or(Error::InvalidFunctionIndex)?
-            .sig_index;
-        let signature = lookup_signature(signature_index, &module.typesec);
-
-        functions.push(FunctionInstance {
-            signature: signature.clone(),
-            locals,
-            start: function.start,
-            end: function.end,
-            side_table,
-        });
+impl Linker {
+    pub fn new(module: Module) -> Self {
+        Linker {
+            module,
+            imported_globals: BTreeMap::new(),
+        }
     }
-    let mut exports = BTreeMap::new();
 
-    for export in module.exportsec {
-        exports.insert(export.name.clone(), export.context.clone());
+    pub fn auto_link_spectest_globals(&mut self) -> Result<()> {
+        for import in &self.module.importsec.globals.clone() {
+            if import.module == "spectest" {
+                self.add_global_import(
+                    import.module.clone(),
+                    import.name.clone(),
+                    match import.context.value_type {
+                        ValType::I32 => Value::I32(42),
+                        ValType::I64 => Value::I64(42),
+                        _ => panic!("Unknown value type cant be converted to value."),
+                    },
+                )?;
+            }
+        }
+        Ok(())
     }
-    let mut memories = Vec::new();
-    for memory in module.memorysec {
-        let data = vec![0; (memory.min * PAGE_SIZE) as usize];
-        memories.push(MemoryInstance {
-            data,
-            max: memory.max,
-        });
-    }
-    let mut data = Vec::new();
-    for data_segment in module.datasec {
-        if let SegmentMode::Active {
-            memory,
-            offset_start,
-            offset_end: _,
-        } = data_segment.mode
-        {
-            let offset = {
-                module.reader.seek(offset_start + 1);
-                let return_values = execute_const_expr(&mut module.reader, &[ValType::I32])?;
-                let Value::I32(value) = return_values.first().ok_or(Error::TypeMismatch)? else {
-                    return Err(Error::TypeMismatch);
-                };
-                *value
-            };
-
-            let mem_inst = memories
-                .get_mut(memory as usize)
-                .ok_or(Error::InvalidMemoryIndex)?;
-
-            mem_inst.data[offset as usize..offset as usize + data_segment.init.len()]
-                .copy_from_slice(&data_segment.init);
+    pub fn add_global_import(&mut self, module: String, name: String, value: Value) -> Result<()> {
+        let key = ImportName {
+            module: module.clone(),
+            name: name.clone(),
         };
-        data.push(DataInstance {
-            data: data_segment.init,
-        });
+        if let Some(import) = self
+            .module
+            .importsec
+            .globals
+            .iter()
+            .find(|g| g.module == module && g.name == name)
+        {
+            let global_type = import.context.clone();
+            if !global_type.value_type.is_type(value) {
+                return Err(Error::TypeMismatch);
+            }
+            let instance = GlobalInstance { global_type, value };
+            self.imported_globals.insert(key, instance);
+            Ok(())
+        } else {
+            Err(Error::UnknownGlobal)
+        }
+    }
+    pub fn instantiate(&mut self) -> Result<Instance> {
+        let mut imported_globals = self.instantiate_global_imports()?;
+        let exports = self.instantiate_export()?;
+        let functions = self.instantiate_functions()?;
+        let mut memories = self.instantiate_memories()?;
+        let data = self.instantiate_datas(&mut memories, &imported_globals)?;
+        imported_globals.extend(self.instantiate_globals(&imported_globals)?);
+
+        let store = Store {
+            exports,
+            functions,
+            memories,
+            data,
+            globals: imported_globals,
+        };
+        Ok(Instance {
+            store,
+            reader: self.module.reader.clone(),
+            call_stack: vec![],
+            stack: ExecutionStack::default(),
+        })
+    }
+    fn instantiate_global_imports(&mut self) -> Result<Vec<GlobalInstance>> {
+        let mut globals = Vec::new();
+        for import in self.module.importsec.globals.iter() {
+            let key = ImportName {
+                module: import.module.clone(),
+                name: import.name.clone(),
+            };
+            let global = self
+                .imported_globals
+                .get(&key)
+                .ok_or(Error::MissingGlobalImport)?;
+            globals.push(global.clone())
+        }
+        Ok(globals)
+    }
+    fn instantiate_globals(
+        &mut self,
+        imported_globals: &[GlobalInstance],
+    ) -> Result<Vec<GlobalInstance>> {
+        let mut globals = Vec::new();
+
+        for global in self.module.globalsec.iter() {
+            let expr = {
+                self.module.reader.seek(global.start + 1);
+                let return_value = execute_const_expr(
+                    &mut self.module.reader,
+                    imported_globals,
+                    &[global.global_type.value_type],
+                )?;
+                *return_value.first().ok_or(Error::TypeMismatch)?
+            };
+            globals.push(GlobalInstance {
+                global_type: global.global_type.clone(),
+                value: expr,
+            });
+        }
+        Ok(globals)
+    }
+    fn instantiate_export(&mut self) -> Result<BTreeMap<String, ExportContext>> {
+        let mut exports = BTreeMap::new();
+        for export in &self.module.exportsec {
+            exports.insert(export.name.clone(), export.context.clone());
+        }
+        Ok(exports)
+    }
+    fn instantiate_functions(&mut self) -> Result<Vec<FunctionInstance>> {
+        let function_to_sidetable = zip(self.module.codesec.iter(), self.module.sidetables.iter());
+        let mut functions = Vec::new();
+        for (index, (function, side_table)) in function_to_sidetable.enumerate() {
+            let locals: Vec<Value> = function
+                .locals
+                .iter()
+                .map(|val_type| (*val_type).into())
+                .collect::<Vec<Value>>();
+
+            let signature_index = self
+                .module
+                .funcsec
+                .get(index)
+                .ok_or(Error::InvalidFunctionIndex)?
+                .sig_index;
+            let signature = lookup_signature(signature_index, &self.module.typesec);
+
+            functions.push(FunctionInstance {
+                signature: signature.clone(),
+                locals,
+                start: function.start,
+                end: function.end,
+                side_table: side_table.clone(),
+            });
+        }
+        Ok(functions)
     }
 
-    let store = Store {
-        functions,
-        exports,
-        memories,
-        data,
-    };
-    Ok(Instance {
-        reader: module.reader,
-        store,
-        call_stack: vec![],
-        stack: ExecutionStack::default(),
-    })
+    fn instantiate_memories(&mut self) -> Result<Vec<MemoryInstance>> {
+        let mut memories = Vec::new();
+        for memory in self.module.memorysec.iter() {
+            let data = vec![0; (memory.min * PAGE_SIZE) as usize];
+            memories.push(MemoryInstance {
+                data,
+                max: memory.max,
+            });
+        }
+        Ok(memories)
+    }
+    fn instantiate_datas(
+        &mut self,
+        memories: &mut [MemoryInstance],
+        imported_globals: &[GlobalInstance],
+    ) -> Result<Vec<DataInstance>> {
+        let mut data = Vec::new();
+        for data_segment in self.module.datasec.iter() {
+            if let SegmentMode::Active {
+                memory,
+                offset_start,
+                offset_end: _,
+            } = data_segment.mode
+            {
+                let offset = {
+                    self.module.reader.seek(offset_start + 1);
+                    let return_values = execute_const_expr(
+                        &mut self.module.reader,
+                        imported_globals,
+                        &[ValType::I32],
+                    )?;
+                    let Value::I32(value) = return_values.first().ok_or(Error::TypeMismatch)?
+                    else {
+                        return Err(Error::TypeMismatch);
+                    };
+                    *value
+                };
+
+                let mem_inst = memories
+                    .get_mut(memory as usize)
+                    .ok_or(Error::InvalidMemoryIndex)?;
+
+                mem_inst.data[offset as usize..offset as usize + data_segment.init.len()]
+                    .copy_from_slice(&data_segment.init);
+            };
+            data.push(DataInstance {
+                data: data_segment.init.clone(),
+            });
+        }
+        Ok(data)
+    }
 }
 
 #[cfg(test)]
@@ -708,10 +852,11 @@ mod tests {
             ..Default::default()
         };
 
-        let mut instance = instantiate(module).unwrap();
+        let mut instance = Linker::new(module).instantiate().unwrap();
         let expected_result = vec![Value::I32(22)];
         assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
+
     #[should_panic]
     #[test]
     fn test_invalid_instruction() {
@@ -742,7 +887,7 @@ mod tests {
             ..Default::default()
         };
 
-        let mut instance = instantiate(module).unwrap();
+        let mut instance = Linker::new(module).instantiate().unwrap();
         let expected_result = vec![Value::I32(22)];
         assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
@@ -776,7 +921,7 @@ mod tests {
             ..Default::default()
         };
 
-        let mut instance = instantiate(module).unwrap();
+        let mut instance = Linker::new(module).instantiate().unwrap();
         let expected_result = vec![Value::I32(22)];
         assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
@@ -811,7 +956,7 @@ mod tests {
             ..Default::default()
         };
 
-        let mut instance = instantiate(module).unwrap();
+        let mut instance = Linker::new(module).instantiate().unwrap();
         let expected_result = vec![Value::I32(12)];
         assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
@@ -854,7 +999,7 @@ mod tests {
             sidetables: vec![SideTable { entries: vec![] }],
             ..Default::default()
         };
-        let mut instance = instantiate(module).unwrap();
+        let mut instance = Linker::new(module).instantiate().unwrap();
         let expected_result = vec![Value::I32(12)];
         assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
@@ -923,7 +1068,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let mut instance = instantiate(module).unwrap();
+        let mut instance = Linker::new(module).instantiate().unwrap();
         let expected_result = vec![Value::I32(3)];
         assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
@@ -974,7 +1119,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let mut instance = instantiate(module).unwrap();
+        let mut instance = Linker::new(module).instantiate().unwrap();
         let expected_result = vec![Value::I32(10)];
         assert_eq!(instance.call(0, vec![]).unwrap(), expected_result);
     }
@@ -1052,8 +1197,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let mut instance = instantiate(module).unwrap();
-
+        let mut instance = Linker::new(module).instantiate().unwrap();
         assert_eq!(
             instance.call(0, vec![Value::I32(1)]).unwrap(),
             vec![Value::I32(1)]
@@ -1135,7 +1279,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let mut instance = instantiate(module).unwrap();
+        let mut instance = Linker::new(module).instantiate().unwrap();
         assert_eq!(
             instance.call(0, vec![Value::I32(0)]).unwrap(),
             vec![Value::I32(102)]

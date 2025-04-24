@@ -39,8 +39,8 @@ pub fn process_data_section(reader: &mut WasmReader) -> Result<Vec<DataSegment>>
             0 => {
                 // Mode active
                 let start = reader.current_index();
-
-                validate_const_expr(reader, &[ValType::I32])?;
+                // TODO Pass imported globals! -> extract this to validator
+                validate_const_expr(reader, &[], &[ValType::I32])?;
                 let end = reader.current_index();
                 let data_size = reader
                     .next_leb128_u32()

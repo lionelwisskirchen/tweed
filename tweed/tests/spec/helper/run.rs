@@ -1,5 +1,6 @@
 use std::{self, fs};
-use tweed::{initialize, instantiate, validation::module::Module, Value};
+use tweed::execution::instance::{Instance, Linker};
+use tweed::{initialize, Value};
 use wast::core::{WastArgCore, WastRetCore};
 use wast::{WastArg, WastDirective, WastRet};
 
@@ -13,14 +14,16 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         file: path.to_string(),
         ..Default::default()
     };
-    let mut test_module = Module {
-        ..Default::default()
-    };
+    let mut instance: Instance = Default::default();
+
     for directive in wast.directives {
         match directive {
             WastDirective::Module(mut module) => {
                 let module_binary = module.encode()?;
-                test_module = initialize(&module_binary).unwrap();
+                let test_module = initialize(&module_binary).unwrap();
+                let mut linker = Linker::new(test_module);
+                linker.auto_link_spectest_globals().unwrap();
+                instance = linker.instantiate().unwrap();
             }
             WastDirective::AssertInvalid {
                 span,
@@ -54,7 +57,6 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     _ => unreachable!(),
                 };
 
-                let mut instance = instantiate(test_module.clone()).unwrap();
                 let args: Vec<Value> = args.iter().map(args_to_runtime_value).collect();
                 let expected_results: Vec<Value> =
                     results.iter().map(result_to_runtime_value).collect();
@@ -69,6 +71,35 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     report.failure.push(result);
                 };
             }
+            WastDirective::AssertMalformed {
+                span,
+                mut module,
+                message,
+            } => match module {
+                wast::QuoteWat::QuoteModule(_, _) => {
+                    // Ignore this branch as it is only relevant for wat parsing
+                }
+                _ => match module.encode() {
+                    Ok(bytes) => {
+                        let result = WastResult::AssertResult {
+                            name: "Invalid test".to_string(),
+                            line: span.linecol_in(&input).0 + 1,
+                        };
+                        if let Err(e) = initialize(&bytes) {
+                            if format!("{e}") == message {
+                                report.success.push(result);
+                            } else {
+                                report.failure.push(result);
+                                println!("{e}");
+                            }
+                        } else {
+                            report.failure.push(result);
+                        }
+                    }
+                    _ => panic!("Testsuit: Error encoding the test wat."),
+                },
+            },
+
             _ => {}
         }
     }

@@ -15,13 +15,13 @@ use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
 use binary::module_environment::{create_module_environment, ModuleEnvironment};
-use execution::instance::{self, Instance};
+use execution::instance::{Instance, Linker};
 use validation::{module::Module, validator::Validator};
 
 pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>> {
     let module = initialize(input)?;
-    let instance = instantiate(module)?;
-    invoke(instance, name, params)
+    let mut instance = instantiate(module)?;
+    invoke(&mut instance, name, params)
 }
 pub fn initialize(input: &[u8]) -> Result<Module> {
     let mut reader = WasmReader::new(input.to_vec());
@@ -30,10 +30,11 @@ pub fn initialize(input: &[u8]) -> Result<Module> {
 }
 
 pub fn instantiate(module: Module) -> Result<Instance> {
-    instance::instantiate(module)
+    let mut linker = Linker::new(module);
+    linker.instantiate()
 }
 
-pub fn invoke(mut instance: Instance, name: String, params: Vec<Value>) -> Result<Vec<Value>> {
+pub fn invoke(instance: &mut Instance, name: String, params: Vec<Value>) -> Result<Vec<Value>> {
     instance.call_by_name(&name, params)
 }
 
@@ -48,6 +49,8 @@ fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Re
         exportsec: module_environment.exportsec,
         memorysec: module_environment.memorysec,
         datasec: module_environment.datasec,
+        globalsec: module_environment.globalsec,
+        importsec: module_environment.importsec,
         sidetables,
     })
 }

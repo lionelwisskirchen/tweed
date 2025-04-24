@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 use crate::{
-    binary::{export_section::ExportContext, type_section::FuncType},
+    binary::{export_section::ExportContext, global_section::GlobalType, type_section::FuncType},
     validation::side_table::SideTable,
     Value,
 };
@@ -14,6 +14,7 @@ pub struct Store {
     pub exports: BTreeMap<String, ExportContext>,
     pub memories: Vec<MemoryInstance>,
     pub data: Vec<DataInstance>,
+    pub globals: Vec<GlobalInstance>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -33,4 +34,10 @@ pub struct FunctionInstance {
     pub start: usize,
     pub end: usize,
     pub side_table: SideTable,
+}
+
+#[derive(Debug, Clone)]
+pub struct GlobalInstance {
+    pub global_type: GlobalType,
+    pub value: Value,
 }

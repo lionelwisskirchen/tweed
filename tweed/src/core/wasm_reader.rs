@@ -22,6 +22,14 @@ impl WasmReader {
     pub fn seek(&mut self, position: usize) {
         self.byte_pointer = position
     }
+    pub fn read_until(&mut self, target: u8) -> Option<usize> {
+        while let Some(byte) = self.next_byte() {
+            if byte == &target {
+                return Some(self.current_index());
+            }
+        }
+        None
+    }
     pub fn current_index(&self) -> usize {
         self.byte_pointer.saturating_sub(1)
     }

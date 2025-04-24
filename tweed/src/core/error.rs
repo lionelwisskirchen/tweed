@@ -6,6 +6,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
+    MalformedMutability,
     InvalidMagic,
     InvalidVersion,
     InvalidSectionBytecode,
@@ -17,7 +18,10 @@ pub enum Error {
     InvalidFunctionIndex,
     InvalidMemoryIndex,
     UndefinedOpCode(u8),
+    UndefinedContantExpression,
     UnknownLabel,
+    UnknownGlobal,
+    MissingGlobalImport,
     UnknownSectionCode(u8),
     UnsupportedExportKind,
     UnsupportedValueType,
@@ -32,14 +36,17 @@ pub enum Error {
     MemoryAccessOutOfBounds,
     DivisionByZero,
     UnrepresentableResult,
+    GlobalIsImmutable,
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Error::MalformedMutability => f.write_str("malformed mutability"),
             Error::InvalidMagic => {
                 f.write_str("The magic number of the given Wasm file is invalid.")
             }
+            Error::GlobalIsImmutable => f.write_str("global is immutable"),
             Error::DivisionByZero => f.write_str("Division by zero."),
             Error::UnrepresentableResult => f.write_str("Result is not representable."),
             Error::InvalidVersion => f.write_str("The version in the Wasm file is invalid"),
@@ -50,6 +57,8 @@ impl Display for Error {
             Error::InvalidLocalIndex => f.write_str("unknown local"),
             Error::InvalidFunctionIndex => f.write_str("Invalid function index"),
             Error::InvalidMemoryIndex => f.write_str("Invalid memory index"),
+            Error::UndefinedContantExpression => f.write_str("constant expression required"),
+
             Error::UndefinedOpCode(opcode) => {
                 f.write_fmt(format_args!("Invalid opcode {opcode:?}"))
             }
@@ -59,6 +68,8 @@ impl Display for Error {
             Error::UnknownSectionCode(seccode) => {
                 f.write_fmt(format_args!("Invalid sectioncode {seccode:?}"))
             }
+
+            Error::UnknownGlobal => f.write_fmt(format_args!("unknown global")),
             Error::UnsupportedExportKind => f.write_str("unsupported export kind"),
             Error::UnknownLabel => f.write_str("unknown label"),
             Error::UnsupportedValueType => f.write_str("unknown value type"),
@@ -69,6 +80,7 @@ impl Display for Error {
             Error::IllegalSelectType(valtype) => {
                 f.write_fmt(format_args!("Illegal select type: {valtype:?}"))
             }
+            Error::MissingGlobalImport => f.write_str("missing global import"),
             Error::UndefinedMemory => f.write_str("undefined memory"),
             Error::InvalidAlignment => f.write_str("invalid alignment"),
             Error::MemoryAccessOutOfBounds => f.write_str("memory out of bounds"),

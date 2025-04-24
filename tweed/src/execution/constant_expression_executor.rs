@@ -6,9 +6,14 @@ use crate::core::values::Value;
 use crate::core::wasm_reader::WasmReader;
 
 use super::execution_stack::ExecutionStack;
+use super::store::GlobalInstance;
 use crate::core::error::{Error, Result};
 
-pub fn execute_const_expr(reader: &mut WasmReader, result: &[ValType]) -> Result<Vec<Value>> {
+pub fn execute_const_expr(
+    reader: &mut WasmReader,
+    globals: &[GlobalInstance],
+    result: &[ValType],
+) -> Result<Vec<Value>> {
     let mut value_stack: ExecutionStack = ExecutionStack::default();
     loop {
         let byte = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
@@ -25,6 +30,15 @@ pub fn execute_const_expr(reader: &mut WasmReader, result: &[ValType]) -> Result
                 let (right, left) = (value_stack.pop_i64()?, value_stack.pop_i64()?);
                 let result = right + left;
                 value_stack.push(result.into());
+            }
+            GLOBAL_GET => {
+                let idx = reader.next_leb128_u32().ok_or(Error::InvalidLocalIndex)?;
+                let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
+
+                if global.global_type.is_mutable {
+                    return Err(Error::UndefinedContantExpression);
+                }
+                value_stack.push(global.value);
             }
             I32_ADD => {
                 let (right, left) = (value_stack.pop_i32()?, value_stack.pop_i32()?);
@@ -53,7 +67,7 @@ pub fn execute_const_expr(reader: &mut WasmReader, result: &[ValType]) -> Result
                 }
                 return Ok(unpacked_result);
             }
-            _ => return Err(Error::UndefinedOpCode(*byte)),
+            _ => return Err(Error::UndefinedContantExpression),
         }
     }
 }

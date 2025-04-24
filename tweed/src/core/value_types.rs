@@ -1,4 +1,8 @@
-use crate::core::error::{Error, Result};
+use crate::{
+    core::error::{Error, Result},
+    Value,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValType {
     I32,
@@ -17,8 +21,13 @@ impl ValType {
     pub fn is_numeric(&self) -> bool {
         match self {
             ValType::I32 | ValType::I64 | ValType::Unknown => true,
-            //            _ => return false,
         }
+    }
+    pub fn is_type(&self, val: Value) -> bool {
+        matches!(
+            (self, val),
+            (ValType::I32, Value::I32(_)) | (ValType::I64, Value::I64(_))
+        )
     }
 }
 

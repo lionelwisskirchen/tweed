@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use tweed::{execution::instance::instantiate, initialize, invoke, Value};
+use tweed::{initialize, instantiate, invoke, Value};
 
 const WASM: &[u8] = include_bytes!("../../esp32c3/src/sum_example.wasm");
 
@@ -12,8 +12,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("Tweed", val), &val, |b, &_val| {
             b.iter(|| {
                 let module = initialize(WASM).expect("Initialization failed");
-                let instance = instantiate(module.clone()).expect("Instantiation failed");
-                invoke(instance, "sum".to_string(), vec![Value::I32(val)])
+                let mut instance = instantiate(module.clone()).expect("Instantiation failed");
+                invoke(&mut instance, "sum".to_string(), vec![Value::I32(val)])
                     .expect("Execution failed");
             })
         });

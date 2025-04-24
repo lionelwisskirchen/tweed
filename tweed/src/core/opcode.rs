@@ -32,7 +32,6 @@ pub const I32_CTZ: u8 = 0x68;
 pub const I64_CTZ: u8 = 0x7A;
 pub const I32_EQZ: u8 = 0x45;
 pub const I32_EQ: u8 = 0x46;
-
 pub const DROP: u8 = 0x1A;
 pub const SELECT: u8 = 0x1B;
 pub const I64_STORE: u8 = 0x37;
@@ -40,13 +39,11 @@ pub const I32_STORE: u8 = 0x36;
 pub const I32_LOAD: u8 = 0x28;
 pub const I64_LOAD: u8 = 0x29;
 pub const LOCAL_TEE: u8 = 0x22;
-
 pub const I32_DIV_S: u8 = 0x6d;
 pub const I32_DIV_U: u8 = 0x6e;
 pub const I32_REM_S: u8 = 0x6f;
 pub const I32_REM_U: u8 = 0x70;
 pub const I32_XOR: u8 = 0x73;
-
 pub const I64_SHR_U: u8 = 0x88;
 pub const I64_SHL: u8 = 0x86;
 pub const I64_SHR_S: u8 = 0x87;
@@ -59,7 +56,6 @@ pub const I64_XOR: u8 = 0x85;
 pub const I32_NE: u8 = 0x47;
 pub const I32_OR: u8 = 0x72;
 pub const I32_LE_S: u8 = 0x4C;
-
 pub const I64_AND: u8 = 0x83;
 pub const I64_OR: u8 = 0x84;
 pub const I64_LT_U: u8 = 0x54;
@@ -67,3 +63,5 @@ pub const I64_GE_U: u8 = 0x5A;
 pub const I64_EQ: u8 = 0x51;
 pub const I64_GT_U: u8 = 0x56;
 pub const I64_NE: u8 = 0x52;
+pub const GLOBAL_GET: u8 = 0x23;
+pub const GLOBAL_SET: u8 = 0x24;

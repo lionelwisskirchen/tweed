@@ -1,3 +1,4 @@
+use crate::binary::global_section::GlobalType;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::{Error, Result};
 use crate::core::value_types::ValType;
@@ -14,6 +15,7 @@ use crate::validation::control_types::ControlType;
 use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
 
+use super::constant_expression_validator::validate_const_expr;
 use super::side_table::SideTable;
 
 pub struct Validator<'a, 'b> {
@@ -80,6 +82,7 @@ impl<'a, 'b> Validator<'a, 'b> {
     }
 
     pub fn validate(&mut self) -> Result<Vec<SideTable>> {
+        self.validate_globals()?;
         let mut side_tables = Vec::new();
         for (index, fun) in self.module_environment.codesec.iter().enumerate() {
             let signature_index = self
@@ -90,13 +93,44 @@ impl<'a, 'b> Validator<'a, 'b> {
                 .sig_index;
 
             let signature = lookup_signature(signature_index, &self.module_environment.typesec);
-            let side_table = self.validate0(fun, &signature)?;
+
+            let side_table = self.validate_code(fun, &signature)?;
             side_tables.push(side_table);
         }
         Ok(side_tables)
     }
-    fn validate0(&mut self, function: &FuncCode, signature: &FuncType) -> Result<SideTable> {
+    fn validate_globals(&mut self) -> Result<()> {
+        for global in &self.module_environment.globalsec {
+            self.reader.seek(global.start + 1);
+            validate_const_expr(
+                self.reader,
+                &self.module_environment.importsec.globals,
+                &[global.global_type.value_type],
+            )?;
+        }
+        Ok(())
+    }
+    fn initialize_globals(&mut self) -> Vec<GlobalType> {
+        let mut imported_globals: Vec<GlobalType> = self
+            .module_environment
+            .importsec
+            .globals
+            .iter()
+            .map(|g| g.context.clone())
+            .collect();
+
+        let globals: Vec<GlobalType> = self
+            .module_environment
+            .globalsec
+            .iter()
+            .map(|g| g.global_type.clone())
+            .collect();
+        imported_globals.extend(globals);
+        imported_globals
+    }
+    fn validate_code(&mut self, function: &FuncCode, signature: &FuncType) -> Result<SideTable> {
         let locals = self.initialize_locals(function, signature);
+        let globals = self.initialize_globals();
         self.reader.seek(function.start);
         self.push_ctrl(ControlType::Func {
             func_type: signature.clone(),
@@ -210,6 +244,22 @@ impl<'a, 'b> Validator<'a, 'b> {
                             return Err(Error::InvalidControlFlow);
                         }
                     }
+                }
+                GLOBAL_GET => {
+                    let idx = self.reader.next_leb128_u32().ok_or(Error::UnknownGlobal)?;
+                    let value = globals
+                        .get(idx as usize)
+                        .ok_or(Error::UnknownGlobal)?
+                        .value_type;
+                    self.abstract_value_stack.push(value);
+                }
+                GLOBAL_SET => {
+                    let idx = self.reader.next_leb128_u32().ok_or(Error::UnknownGlobal)?;
+                    let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
+                    if !global.is_mutable {
+                        return Err(Error::GlobalIsImmutable);
+                    }
+                    self.abstract_value_stack.pop_expected(global.value_type)?;
                 }
                 NOP => {}
                 DROP => {

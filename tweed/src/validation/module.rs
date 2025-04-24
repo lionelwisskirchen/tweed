@@ -1,7 +1,8 @@
 use crate::{
     binary::{
         code_section::FuncCode, data_section::DataSegment, export_section::Export,
-        function_section::FuncDecl, memory_section::Limits, type_section::FuncType,
+        function_section::FuncDecl, global_section::Global, import_section::Imports,
+        memory_section::Limits, type_section::FuncType,
     },
     core::wasm_reader::WasmReader,
 };
@@ -18,5 +19,7 @@ pub struct Module {
     pub memorysec: Vec<Limits>,
     pub exportsec: Vec<Export>,
     pub datasec: Vec<DataSegment>,
+    pub globalsec: Vec<Global>,
+    pub importsec: Imports,
     pub sidetables: Vec<SideTable>,
 }
