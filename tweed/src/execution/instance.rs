@@ -51,9 +51,80 @@ impl Instance {
         };
         match export_instance {
             ExportContext::FunctionExport(index) => self.call(*index as usize, args),
+            _ => Err(Error::UnknownExportCall),
         }
     }
-    pub fn call(&mut self, index: usize, args: Vec<Value>) -> Result<Vec<Value>> {
+    pub fn get_mut_memory_by_name(&mut self, name: &str) -> Result<&mut MemoryInstance> {
+        let Some(export_instance) = self.store.exports.get(name) else {
+            return Err(Error::UnknownExportCall);
+        };
+
+        match export_instance {
+            ExportContext::MemoryExport(index) => self
+                .store
+                .memories
+                .get_mut(*index as usize)
+                .ok_or(Error::UnknownExportCall),
+            _ => Err(Error::UnknownExportCall),
+        }
+    }
+    pub fn get_memory_by_name(&mut self, name: &str) -> Result<&MemoryInstance> {
+        let Some(export_instance) = self.store.exports.get(name) else {
+            return Err(Error::UnknownExportCall);
+        };
+
+        match export_instance {
+            ExportContext::MemoryExport(index) => self
+                .store
+                .memories
+                .get(*index as usize)
+                .ok_or(Error::UnknownExportCall),
+            _ => Err(Error::UnknownExportCall),
+        }
+    }
+    pub fn get_global_by_name(&mut self, name: &str) -> Result<&Value> {
+        let Some(export_instance) = self.store.exports.get(name) else {
+            return Err(Error::UnknownExportCall);
+        };
+
+        match export_instance {
+            ExportContext::GlobalExport(index) => {
+                let gl = self
+                    .store
+                    .globals
+                    .get(*index as usize)
+                    .ok_or(Error::UnknownExportCall)?;
+                Ok(&gl.value)
+            }
+            _ => Err(Error::UnknownExportCall),
+        }
+    }
+    pub fn set_global_by_name(&mut self, name: &str, value: Value) -> Result<()> {
+        let Some(export_instance) = self.store.exports.get(name) else {
+            return Err(Error::UnknownExportCall);
+        };
+
+        match export_instance {
+            ExportContext::GlobalExport(index) => {
+                let gl = self
+                    .store
+                    .globals
+                    .get_mut(*index as usize)
+                    .ok_or(Error::UnknownExportCall)?;
+                if !gl.global_type.is_mutable {
+                    return Err(Error::GlobalIsImmutable);
+                }
+                if !gl.global_type.value_type.is_type(value) {
+                    return Err(Error::TypeMismatch);
+                }
+                gl.value = value;
+                Ok(())
+            }
+            _ => Err(Error::UnknownExportCall),
+        }
+    }
+
+    fn call(&mut self, index: usize, args: Vec<Value>) -> Result<Vec<Value>> {
         self.stack.reset(); // Reset stack. Maybe not the perfect location
         self.stack.push_vec(&args);
         self.invoke(index)
@@ -553,13 +624,13 @@ impl Instance {
                 I32_LOAD8_U => {
                     let (_, offset) = self.read_mem_args()?;
                     let address = self.stack.pop_i32()? as u32;
-                    let data: u8 = self.load(offset, address, 4)?;
+                    let data: u8 = self.load(offset, address, 1)?;
                     self.stack.push((data as u32).into());
                 }
                 I32_LOAD8_S => {
                     let (_, offset) = self.read_mem_args()?;
                     let address = self.stack.pop_i32()? as u32;
-                    let data: i8 = self.load(offset, address, 4)?;
+                    let data: i8 = self.load(offset, address, 1)?;
                     self.stack.push((data as u32).into());
                 }
                 _ => return Err(Error::UndefinedInstruction(*instruction)),
@@ -573,8 +644,7 @@ impl Instance {
         let address = offset
             .checked_add(address)
             .ok_or(Error::MemoryAccessOutOfBounds)? as usize;
-        let end = address + data.len();
-        mem.data[address..end].copy_from_slice(data);
+        mem.store(address, data)?;
         Ok(())
     }
 
@@ -586,12 +656,7 @@ impl Instance {
         let address = offset
             .checked_add(address)
             .ok_or(Error::MemoryAccessOutOfBounds)? as usize;
-        let data_bytes = mem
-            .data
-            .get(address..address + bytes)
-            .ok_or(Error::MemoryAccessOutOfBounds)?;
-        let data = T::from_le_bytes(data_bytes);
-        Ok(data)
+        mem.load(address, bytes)
     }
     fn read_mem_args(&mut self) -> Result<(u32, u32)> {
         let _align = self
@@ -765,10 +830,7 @@ impl Linker {
         let mut memories = Vec::new();
         for memory in self.module.memorysec.iter() {
             let data = vec![0; (memory.min * PAGE_SIZE) as usize];
-            memories.push(MemoryInstance {
-                data,
-                max: memory.max,
-            });
+            memories.push(MemoryInstance::new(data, memory.max));
         }
         Ok(memories)
     }
@@ -802,9 +864,7 @@ impl Linker {
                 let mem_inst = memories
                     .get_mut(memory as usize)
                     .ok_or(Error::InvalidMemoryIndex)?;
-
-                mem_inst.data[offset as usize..offset as usize + data_segment.init.len()]
-                    .copy_from_slice(&data_segment.init);
+                mem_inst.store(offset as usize, &data_segment.init)?;
             };
             data.push(DataInstance {
                 data: data_segment.init.clone(),

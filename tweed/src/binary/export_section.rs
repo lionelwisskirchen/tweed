@@ -7,6 +7,8 @@ use alloc::vec::Vec;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExportContext {
     FunctionExport(u32),
+    MemoryExport(u32),
+    GlobalExport(u32),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -32,14 +34,27 @@ pub fn process_export_section(reader: &mut WasmReader) -> Result<Vec<Export>> {
             .next_chunk_as_string(length_of_export_name as usize)
             .ok_or(Error::InvalidSectionBytecode)?;
 
-        let export_kind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
+        let export_kind = *reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
+        let index = reader
+            .next_leb128_u32()
+            .ok_or(Error::InvalidSectionBytecode)?;
         match export_kind {
             0x00 => {
-                // Function index
-                let index = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
                 let context = ExportContext::FunctionExport(index);
+                aggregated_exports.push(Export {
+                    name: export_name,
+                    context,
+                });
+            }
+            0x02 => {
+                let context = ExportContext::MemoryExport(index);
+                aggregated_exports.push(Export {
+                    name: export_name,
+                    context,
+                });
+            }
+            0x03 => {
+                let context = ExportContext::GlobalExport(index);
                 aggregated_exports.push(Export {
                     name: export_name,
                     context,

@@ -2,8 +2,10 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
+use crate::core::error::{Error, Result};
 use crate::{
     binary::{export_section::ExportContext, global_section::GlobalType, type_section::FuncType},
+    core::values::FromLeBytes,
     validation::side_table::SideTable,
     Value,
 };
@@ -19,8 +21,30 @@ pub struct Store {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MemoryInstance {
-    pub data: Vec<u8>,
-    pub max: Option<u32>,
+    data: Vec<u8>,
+    max: Option<u32>,
+}
+
+impl MemoryInstance {
+    pub fn new(data: Vec<u8>, max: Option<u32>) -> Self {
+        MemoryInstance { data, max }
+    }
+    pub fn load<T>(&mut self, address: usize, bytes: usize) -> Result<T>
+    where
+        T: FromLeBytes,
+    {
+        let data_bytes = self
+            .data
+            .get(address..address + bytes)
+            .ok_or(Error::MemoryAccessOutOfBounds)?;
+        let data = T::from_le_bytes(data_bytes);
+        Ok(data)
+    }
+    pub fn store(&mut self, address: usize, data: &[u8]) -> Result<()> {
+        let end = address + data.len();
+        self.data[address..end].copy_from_slice(data);
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
