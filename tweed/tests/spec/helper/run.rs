@@ -1,5 +1,6 @@
 use std::{self, fs};
-use tweed::execution::instance::{Instance, Linker};
+use tweed::execution::instance::Instance;
+use tweed::execution::linker::Linker;
 use tweed::{initialize, Value};
 use wast::core::{WastArgCore, WastRetCore};
 use wast::{WastArg, WastDirective, WastRet};

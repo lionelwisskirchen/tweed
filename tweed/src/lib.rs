@@ -15,7 +15,8 @@ use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
 use binary::module_environment::{create_module_environment, ModuleEnvironment};
-use execution::instance::{Instance, Linker};
+use execution::instance::Instance;
+use execution::linker::Linker;
 use validation::{module::Module, validator::Validator};
 
 pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>> {
