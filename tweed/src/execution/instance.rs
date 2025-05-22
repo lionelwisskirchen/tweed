@@ -347,7 +347,7 @@ impl Instance {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
                     trace!("I64_SHR_U({left}, {right})");
 
-                    let result = (left as u64).wrapping_shr((right & 63) as u32);
+                    let result = (left as u64).wrapping_shr((right & 63) as u32) as i64;
                     self.stack.push(result.into());
                 }
                 I64_SHR_S => {
@@ -360,6 +360,24 @@ impl Instance {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
                     trace!("I64_SHL({left}, {right})");
                     let result = left.wrapping_shl((right & 63) as u32);
+                    self.stack.push(result.into());
+                }
+                I32_SHR_S => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_SHR_S({left}, {right})");
+                    let result = left.wrapping_shr((right) as u32);
+                    self.stack.push(result.into());
+                }
+                I32_SHR_U => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_SHR_U({left}, {right})");
+                    let result = (left as u32).wrapping_shr((right) as u32) as i32;
+                    self.stack.push(result.into());
+                }
+                I32_SHL => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_SHL({left}, {right})");
+                    let result = left.wrapping_shl((right) as u32);
                     self.stack.push(result.into());
                 }
                 I32_ADD => {

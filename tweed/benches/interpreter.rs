@@ -1,20 +1,26 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use tweed::{initialize, instantiate, invoke, Value};
+use tweed::{initialize, instantiate, invoke};
 
-const WASM: &[u8] = include_bytes!("../../esp32c3/src/sum_example.wasm");
+const AHA_MONT64: &[u8] = include_bytes!("./aha-mont64.wasm");
+const CRC32: &[u8] = include_bytes!("./crc32.wasm");
 
+#[cfg(feature = "std")]
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let test_values = vec![1792938];
+    let test_values = vec![("AHA_MONT64", AHA_MONT64), ("CRC32", CRC32)];
 
     let mut group = c.benchmark_group("Interpreter Benchmark");
 
     for &val in &test_values {
-        group.bench_with_input(BenchmarkId::new("Tweed", val), &val, |b, &_val| {
+        group.bench_with_input(BenchmarkId::new("Tweed", &val.0), &val, |b, &_val| {
             b.iter(|| {
-                let module = initialize(WASM).expect("Initialization failed");
-                let mut instance = instantiate(module.clone()).expect("Instantiation failed");
-                invoke(&mut instance, "sum".to_string(), vec![Value::I32(val)])
-                    .expect("Execution failed");
+                let module = initialize(val.1).unwrap_or_else(|e| {
+                    panic!("Initialization failed: {e}");
+                });
+
+                let mut instance = instantiate(module).unwrap_or_else(|e| {
+                    panic!("Instantiation failed: {e}");
+                });
+                invoke(&mut instance, "_run".to_string(), vec![]).expect("Execution failed");
             })
         });
     }

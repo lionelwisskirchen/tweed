@@ -276,7 +276,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_val()?;
                 }
                 I32_GE_U | I32_GT_U | I32_LE_S | I32_LT_S | I32_LT_U | I32_LE_U | I32_NE
-                | I32_GT_S | I32_GE_S | I32_AND | I32_OR | I32_XOR | I32_EQ => {
+                | I32_GT_S | I32_GE_S | I32_AND | I32_OR | I32_XOR | I32_EQ | I32_SHL
+                | I32_SHR_U | I32_SHR_S => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
