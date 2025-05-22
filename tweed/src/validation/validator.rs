@@ -194,11 +194,6 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I64_ADD | I64_SUB | I64_MUL => {
-                    self.abstract_value_stack.pop_expected(ValType::I64)?;
-                    self.abstract_value_stack.pop_expected(ValType::I64)?;
-                    self.abstract_value_stack.push(ValType::I64);
-                }
                 IF => {
                     let index_of_if_bytecode = self.reader.current_index() as i32;
                     let signature = self.read_block_type();
@@ -291,7 +286,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I64_AND | I64_OR | I64_XOR | I64_SHR_U | I64_SHR_S => {
+                I64_ADD | I64_SUB | I64_MUL | I64_AND | I64_OR | I64_XOR | I64_SHR_U
+                | I64_SHR_S | I64_SHL => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I64);
@@ -446,8 +442,6 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .reader
                         .next_leb128_u32()
                         .ok_or(Error::InvalidFunctionIndex)?;
-                    #[cfg(test)]
-                    println!("Func index: {:?}", self.module_environment.funcsec);
 
                     let type_idx = self
                         .module_environment
@@ -468,6 +462,14 @@ impl<'a, 'b> Validator<'a, 'b> {
                         return Err(Error::UndefinedMemory)?;
                     }
                     self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
+                I32_STORE8 => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -515,6 +517,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
+                UNREACHABLE => self.unreachable(),
                 _ => return Err(Error::UndefinedOpCode(*byte)),
             };
         }

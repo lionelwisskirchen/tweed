@@ -35,17 +35,17 @@ fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", cli.path.display(), e))?;
 
     let module =
-        initialize(&wasm_bytes).map_err(|_| anyhow::anyhow!("Failed to initialize the module"))?;
+        initialize(&wasm_bytes).map_err(|e| anyhow::anyhow!("Failed to initialize the module: {:?}", e))?;
 
-    let instance =
-        instantiate(module).map_err(|_| anyhow::anyhow!("Failed to instantiate the module"))?;
+    let mut instance =
+        instantiate(module).map_err(|e| anyhow::anyhow!("Failed to instantiate the module: {:?}", e))?;
 
     match cli.command {
         Commands::Invoke { function, params } => {
             let values: Vec<Value> = params.into_iter().map(Value::I32).collect();
 
-            let result = invoke(instance, function, values)
-                .map_err(|_| anyhow::anyhow!("Function invocation failed"))?;
+            let result = invoke(&mut instance, function, values)
+                .map_err(|e| anyhow::anyhow!("Function invocation failed: {:?}", e))?;
 
             println!("Result: {:?}", result);
         }

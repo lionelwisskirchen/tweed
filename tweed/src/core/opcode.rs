@@ -48,6 +48,7 @@ pub const I64_SHR_U: u8 = 0x88;
 pub const I64_SHL: u8 = 0x86;
 pub const I64_SHR_S: u8 = 0x87;
 pub const I32_LOAD8_U: u8 = 0x2D;
+pub const I32_STORE8: u8 = 0x3A;
 pub const I32_LOAD8_S: u8 = 0x2C;
 pub const I32_WRAP_I64: u8 = 0xA7;
 pub const I32_CLZ: u8 = 0x67;

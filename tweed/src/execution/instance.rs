@@ -199,6 +199,7 @@ impl Instance {
                 .reader
                 .next_byte()
                 .ok_or(Error::InvalidSectionBytecode)?;
+
             match *instruction {
                 I32_CONST => {
                     let value = Value::I32(self.reader.next_leb128_i32().unwrap());
@@ -468,6 +469,14 @@ impl Instance {
                     let value = self.stack.pop_i32()?;
                     self.stack.push((value as u32 as i64).into())
                 }
+                I64_GE_U => {
+                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    if (left as u64) >= (right as u64) {
+                        self.stack.push(Value::I32(1));
+                    } else {
+                        self.stack.push(Value::I32(0));
+                    }
+                }
                 I64_LT_U => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
                     if (left as u64) < (right as u64) {
@@ -563,8 +572,6 @@ impl Instance {
                         current_frame.side_table_pointer += branch_index as usize;
                     }
                     self.do_goto(current_frame)?;
-                    #[cfg(test)]
-                    println!("{:?}", self.reader.rest());
                 }
                 RETURN => {
                     let count = current_frame.return_value.len();
@@ -611,6 +618,12 @@ impl Instance {
                 }
 
                 I32_STORE => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
+                    let rel_address = self.stack.pop_i32()? as u32;
+                    self.store(offset, &store_data, rel_address)?;
+                }
+                I32_STORE8 => {
                     let (_, offset) = self.read_mem_args()?;
                     let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
