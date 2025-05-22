@@ -199,21 +199,28 @@ impl Instance {
                 .reader
                 .next_byte()
                 .ok_or(Error::InvalidSectionBytecode)?;
-
             match *instruction {
                 I32_CONST => {
-                    let value = Value::I32(self.reader.next_leb128_i32().unwrap());
-                    self.stack.push(value);
+                    let value = self.reader.next_leb128_i32().unwrap();
+                    trace!("I32_CONST({})", value);
+                    self.stack.push(Value::I32(value));
                 }
                 I64_CONST => {
-                    let value = Value::I64(self.reader.next_leb128_i64().unwrap());
-                    self.stack.push(value);
+                    let value = self.reader.next_leb128_i64().unwrap();
+                    trace!("I64_CONST({})", value);
+                    self.stack.push(Value::I64(value));
                 }
-                BLOCK | LOOP => {
+                BLOCK => {
+                    trace!("BLOCK");
+                    self.skip_block_type()?;
+                }
+                LOOP => {
+                    trace!("LOOP");
                     self.skip_block_type()?;
                 }
                 IF => {
                     let bool_val = self.stack.pop()?;
+                    trace!("IF({:?})", bool_val);
                     if bool_val == Value::I32(0) {
                         self.do_goto(current_frame)?;
                     } else {
@@ -222,124 +229,154 @@ impl Instance {
                     }
                 }
                 ELSE => {
+                    trace!("ELSE");
                     self.do_goto(current_frame)?;
                 }
                 LOCAL_GET => {
+                    let idx = self.reader.next_leb128_u32().unwrap() as usize;
+                    trace!("LOCAL_GET({})", idx);
                     let local = current_frame
                         .locals
-                        .get(self.reader.next_leb128_u32().unwrap() as usize)
+                        .get(idx)
                         .ok_or(Error::InvalidLocalIndex)?;
                     self.stack.push(*local);
                 }
                 LOCAL_SET => {
+                    let idx = self.reader.next_leb128_u32().unwrap() as usize;
                     let local = current_frame
                         .locals
-                        .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
+                        .get_mut(idx)
                         .ok_or(Error::InvalidLocalIndex)?;
                     let new_value = self.stack.pop()?;
+                    trace!("LOCAL_SET({}) TO {:?}", idx, new_value);
                     *local = new_value;
                 }
                 GLOBAL_GET => {
+                    let idx = self.reader.next_leb128_u32().unwrap() as usize;
+                    trace!("GLOBAL_GET({})", idx);
                     let global = self
                         .store
                         .globals
-                        .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
+                        .get_mut(idx)
                         .ok_or(Error::UnknownGlobal)?;
 
                     self.stack.push(global.value);
                 }
                 GLOBAL_SET => {
+                    let idx = self.reader.next_leb128_u32().unwrap() as usize;
+
                     let global = self
                         .store
                         .globals
-                        .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
+                        .get_mut(idx)
                         .ok_or(Error::UnknownGlobal)?;
                     let new_value = self.stack.pop()?;
+                    trace!("LOCAL_SET({}) TO {:?}", idx, new_value);
                     global.value = new_value;
                 }
                 LOCAL_TEE => {
+                    let idx = self.reader.next_leb128_u32().unwrap() as usize;
                     let local = current_frame
                         .locals
-                        .get_mut(self.reader.next_leb128_u32().unwrap() as usize)
+                        .get_mut(idx)
                         .ok_or(Error::InvalidLocalIndex)?;
                     let new_value = self.stack.pop()?;
+                    trace!("LOCAL_TEE({}) TO {:?}", idx, new_value);
                     *local = new_value;
                     self.stack.push(new_value);
                 }
                 DROP => {
-                    self.stack.pop()?;
+                    let val = self.stack.pop()?;
+                    trace!("DROP {:?}", val);
                 }
-                NOP => {}
+                NOP => {
+                    trace!("NOP");
+                }
                 I32_CTZ => {
                     let val = self.stack.pop_i32()?;
+                    trace!("I32_CTZ({val})");
                     let result = val.trailing_zeros() as i32;
                     self.stack.push(result.into());
                 }
                 I64_CTZ => {
                     let val = self.stack.pop_i64()?;
+                    trace!("I64_CTZ({val})");
                     let result = val.trailing_zeros() as i64;
                     self.stack.push(result.into());
                 }
                 I64_ADD => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_ADD({left}, {right})");
                     let result = right.wrapping_add(left);
                     self.stack.push(result.into());
                 }
                 I64_SUB => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_SUB({left}, {right})");
                     let result = left.wrapping_sub(right);
                     self.stack.push(result.into());
                 }
                 I64_MUL => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_MUL({left}, {right})");
                     let result = left.wrapping_mul(right);
                     self.stack.push(result.into());
                 }
                 I64_AND => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_AND({left}, {right})");
 
                     let result = right & left;
                     self.stack.push(result.into());
                 }
                 I64_OR => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_OR({left}, {right})");
 
                     let result = right | left;
                     self.stack.push(result.into());
                 }
                 I64_XOR => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_XOR({left}, {right})");
 
                     let result = right ^ left;
                     self.stack.push(result.into());
                 }
                 I64_SHR_U => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_SHR_U({left}, {right})");
+
                     let result = (left as u64).wrapping_shr((right & 63) as u32);
                     self.stack.push(result.into());
                 }
                 I64_SHR_S => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_SHR_S({left}, {right})");
                     let result = left.wrapping_shr((right & 63) as u32);
                     self.stack.push(result.into());
                 }
                 I64_SHL => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_SHL({left}, {right})");
                     let result = left.wrapping_shl((right & 63) as u32);
                     self.stack.push(result.into());
                 }
                 I32_ADD => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_ADD({left}, {right})");
                     let result = right.wrapping_add(left);
                     self.stack.push(result.into());
                 }
                 I32_MUL => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_MUL({left}, {right})");
                     let result = right.wrapping_mul(left);
                     self.stack.push(result.into());
                 }
                 I32_DIV_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_DIV_S({left}, {right})");
                     if right == 0 {
                         return Err(Error::DivisionByZero);
                     }
@@ -350,6 +387,7 @@ impl Instance {
                 }
                 I32_DIV_U => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_DIV_U({left}, {right})");
                     if right == 0 {
                         return Err(Error::DivisionByZero);
                     }
@@ -357,6 +395,8 @@ impl Instance {
                 }
                 I32_REM_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_REM_S({left}, {right})");
+
                     if right == 0 {
                         return Err(Error::DivisionByZero);
                     }
@@ -365,6 +405,8 @@ impl Instance {
                 }
                 I32_REM_U => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_REM_U({left}, {right})");
+
                     if right == 0 {
                         return Err(Error::DivisionByZero);
                     }
@@ -373,11 +415,13 @@ impl Instance {
                 }
                 I32_SUB => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_SUB({left}, {right})");
                     let result = left.wrapping_sub(right);
                     self.stack.push(result.into());
                 }
                 I32_EQZ => {
                     let val = self.stack.pop_i32()?;
+                    trace!("I32_EQZ({val})");
                     if val == 0 {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -387,6 +431,7 @@ impl Instance {
 
                 I32_EQ => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_EQ({left}, {right})");
                     if right == left {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -396,10 +441,12 @@ impl Instance {
 
                 I32_CLZ => {
                     let val = self.stack.pop_i32()?;
+                    trace!("I32_CLZ({val})");
                     self.stack.push(val.leading_zeros().into());
                 }
                 I32_LT_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_LT_S({left}, {right})");
                     if left < right {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -408,6 +455,7 @@ impl Instance {
                 }
                 I32_LE_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_LE_S({left}, {right})");
                     if left <= right {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -416,6 +464,7 @@ impl Instance {
                 }
                 I32_LT_U => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_LT_U({left}, {right})");
                     if (left as u32) < (right as u32) {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -424,6 +473,7 @@ impl Instance {
                 }
                 I32_LE_U => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_LE_U({left}, {right})");
                     if (left as u32) <= (right as u32) {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -432,6 +482,7 @@ impl Instance {
                 }
                 I32_GT_U => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_GT_U({left}, {right})");
                     if (left as u32) > (right as u32) {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -440,6 +491,7 @@ impl Instance {
                 }
                 I32_GE_U => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_GT_U({left}, {right})");
                     if (left as u32) >= (right as u32) {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -448,13 +500,14 @@ impl Instance {
                 }
                 I32_XOR => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
-
+                    trace!("I32_XOR({left}, {right})");
                     let result = right ^ left;
                     self.stack.push(result.into());
                 }
 
                 I32_NE => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    trace!("I32_NE({left}, {right})");
                     if left != right {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -463,14 +516,17 @@ impl Instance {
                 }
                 I32_WRAP_I64 => {
                     let value = self.stack.pop_i64()?;
+                    trace!("I32_WRAP_I64({value})");
                     self.stack.push((value as i32).into())
                 }
                 I64_EXTEND_I32_U => {
                     let value = self.stack.pop_i32()?;
+                    trace!("I64_EXTEND_I32_U({value})");
                     self.stack.push((value as u32 as i64).into())
                 }
                 I64_GE_U => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_GE_U({left}, {right})");
                     if (left as u64) >= (right as u64) {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -479,6 +535,7 @@ impl Instance {
                 }
                 I64_LT_U => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_LT_U({left}, {right})");
                     if (left as u64) < (right as u64) {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -487,6 +544,7 @@ impl Instance {
                 }
                 I64_GT_U => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_GT_U({left}, {right})");
                     if (left as u64) > (right as u64) {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -495,6 +553,7 @@ impl Instance {
                 }
                 I64_EQ => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_EQ({left}, {right})");
                     if left == right {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -503,6 +562,7 @@ impl Instance {
                 }
                 I64_NE => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    trace!("I64_NE({left}, {right})");
                     if left != right {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -511,7 +571,7 @@ impl Instance {
                 }
                 I32_GT_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
-
+                    trace!("I64_GT_S({left}, {right})");
                     if left > right {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -520,7 +580,7 @@ impl Instance {
                 }
                 I32_GE_S => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
-
+                    trace!("I32_GE_S({left}, {right})");
                     if left >= right {
                         self.stack.push(Value::I32(1));
                     } else {
@@ -529,19 +589,20 @@ impl Instance {
                 }
                 I32_AND => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
-
+                    trace!("I32_AND({left}, {right})");
                     let result = right & left;
                     self.stack.push(Value::I32(result));
                 }
                 I32_OR => {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
-
+                    trace!("I32_OR({left}, {right})");
                     let result = right | left;
                     self.stack.push(Value::I32(result));
                 }
                 SELECT => {
                     let (cond, b, a) =
                         (self.stack.pop_i32()?, self.stack.pop()?, self.stack.pop()?);
+                    trace!("SELECT({cond} ? {a:?} : {b:?})");
                     if cond == 0 {
                         self.stack.push(b);
                     } else {
@@ -549,10 +610,12 @@ impl Instance {
                     }
                 }
                 BR => {
+                    trace!("BR");
                     self.do_goto(current_frame)?;
                 }
                 BR_IF => {
                     let bool_val = self.stack.pop_i32()?;
+                    trace!("BR_IF({bool_val})");
                     if bool_val == 0 {
                         self.skip_depth()?;
                         current_frame.side_table_pointer += 1;
@@ -562,6 +625,7 @@ impl Instance {
                 }
                 BR_TABLE => {
                     let branch_index = self.stack.pop_i32()?;
+                    trace!("BR_TABLE({branch_index})");
                     let number_of_branches =
                         self.reader
                             .next_leb128_u32()
@@ -574,6 +638,7 @@ impl Instance {
                     self.do_goto(current_frame)?;
                 }
                 RETURN => {
+                    trace!("RETURN");
                     let count = current_frame.return_value.len();
                     let results = self.stack.pop_n(count)?;
                     self.stack.unwind_to(current_frame.stack_pointer);
@@ -581,6 +646,7 @@ impl Instance {
                     break;
                 }
                 END => {
+                    trace!("END");
                     if self.reader.current_index() == current_frame.end {
                         break;
                     }
@@ -590,6 +656,7 @@ impl Instance {
                         .reader
                         .next_leb128_u32()
                         .ok_or(Error::InvalidFunctionIndex)?;
+                    trace!("CALL({index})");
                     let function = self
                         .store
                         .functions
@@ -608,12 +675,16 @@ impl Instance {
                     let (_, offset) = self.read_mem_args()?;
                     let store_data = (self.stack.pop_i64()? as u64).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
+                    trace!("I64_STORE({store_data:?} to {rel_address:?})");
+
                     self.store(offset, &store_data, rel_address)?;
                 }
                 I64_LOAD => {
                     let (_, offset) = self.read_mem_args()?;
                     let address = self.stack.pop_i32()? as u32;
                     let data: i64 = self.load(offset, address, 8)?;
+                    trace!("I64_LOAD({data:?} from {address:?})");
+
                     self.stack.push(data.into());
                 }
 
@@ -621,30 +692,38 @@ impl Instance {
                     let (_, offset) = self.read_mem_args()?;
                     let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
+                    trace!("I32_STORE({store_data:?} to {rel_address:?})");
+
                     self.store(offset, &store_data, rel_address)?;
                 }
                 I32_STORE8 => {
                     let (_, offset) = self.read_mem_args()?;
                     let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
+                    trace!("I32_STORE8({store_data:?} to {rel_address:?})");
+
                     self.store(offset, &store_data, rel_address)?;
                 }
                 I32_LOAD => {
                     let (_, offset) = self.read_mem_args()?;
                     let address = self.stack.pop_i32()? as u32;
                     let data: i32 = self.load(offset, address, 4)?;
+                    trace!("I32_LOAD({data:?} from {address:?})");
+
                     self.stack.push(data.into());
                 }
                 I32_LOAD8_U => {
                     let (_, offset) = self.read_mem_args()?;
                     let address = self.stack.pop_i32()? as u32;
                     let data: u8 = self.load(offset, address, 1)?;
+                    trace!("I32_LOAD8_U({data:?} from {address:?})");
                     self.stack.push((data as u32).into());
                 }
                 I32_LOAD8_S => {
                     let (_, offset) = self.read_mem_args()?;
                     let address = self.stack.pop_i32()? as u32;
                     let data: i8 = self.load(offset, address, 1)?;
+                    trace!("I32_LOAD8_S({data:?} from {address:?})");
                     self.stack.push((data as u32).into());
                 }
                 _ => return Err(Error::UndefinedInstruction(*instruction)),

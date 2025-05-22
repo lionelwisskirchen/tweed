@@ -1,6 +1,8 @@
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 #[macro_use]
 extern crate alloc;
+#[macro_use]
+extern crate log;
 
 pub mod binary;
 pub mod core;
@@ -8,10 +10,10 @@ pub mod execution;
 pub mod validation;
 
 pub use core::values::Value;
+pub use log::LevelFilter;
 
 use crate::core::error::Result;
 use crate::core::wasm_reader::WasmReader;
-
 use alloc::string::String;
 use alloc::vec::Vec;
 use binary::module_environment::{create_module_environment, ModuleEnvironment};
@@ -25,21 +27,25 @@ pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>>
     invoke(&mut instance, name, params)
 }
 pub fn initialize(input: &[u8]) -> Result<Module> {
+    info!("Initialize module");
     let mut reader = WasmReader::new(input.to_vec());
     let module_environment = create_module_environment(&mut reader)?;
     validate(reader, module_environment)
 }
 
 pub fn instantiate(module: Module) -> Result<Instance> {
+    info!("Instantiate module");
     let mut linker = Linker::new(module);
     linker.instantiate()
 }
 
 pub fn invoke(instance: &mut Instance, name: String, params: Vec<Value>) -> Result<Vec<Value>> {
+    info!("Invoke `{name}` with {params:?}");
     instance.call_by_name(&name, params)
 }
 
 fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Result<Module> {
+    info!("Validate module");
     let mut validator = Validator::new(&mut reader, &module_environment);
     let sidetables = validator.validate()?;
     Ok(Module {

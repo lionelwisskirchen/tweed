@@ -709,6 +709,7 @@ name = "tweed"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "log",
  "rstest",
  "wast 221.0.2",
  "wat",

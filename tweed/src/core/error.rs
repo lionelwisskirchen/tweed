@@ -60,13 +60,13 @@ impl Display for Error {
             Error::UndefinedContantExpression => f.write_str("constant expression required"),
 
             Error::UndefinedOpCode(opcode) => {
-                f.write_fmt(format_args!("Invalid opcode {opcode:?}"))
+                f.write_fmt(format_args!("Invalid opcode {opcode:#04X}"))
             }
             Error::UndefinedInstruction(instruction) => {
-                f.write_fmt(format_args!("Invalid instruction {instruction:?}"))
+                f.write_fmt(format_args!("Invalid instruction {instruction:#04X}"))
             }
             Error::UnknownSectionCode(seccode) => {
-                f.write_fmt(format_args!("Invalid sectioncode {seccode:?}"))
+                f.write_fmt(format_args!("Invalid sectioncode {seccode:#04X}"))
             }
 
             Error::UnknownGlobal => f.write_fmt(format_args!("unknown global")),
