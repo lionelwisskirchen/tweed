@@ -46,6 +46,7 @@ pub fn invoke(instance: &mut Instance, name: String, params: Vec<Value>) -> Resu
 
 fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Result<Module> {
     info!("Validate module");
+    debug!("Module Environment{:?}", module_environment);
     let mut validator = Validator::new(&mut reader, &module_environment);
     let sidetables = validator.validate()?;
     Ok(Module {

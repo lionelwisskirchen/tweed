@@ -542,6 +542,11 @@ impl Instance {
                     trace!("I64_EXTEND_I32_U({value})");
                     self.stack.push((value as u32 as i64).into())
                 }
+                I64_EXTEND_I32_S => {
+                    let value = self.stack.pop_i32()?;
+                    trace!("I64_EXTEND_I32_S({value})");
+                    self.stack.push((value as i64).into())
+                }
                 I64_GE_U => {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
                     trace!("I64_GE_U({left}, {right})");
@@ -743,6 +748,13 @@ impl Instance {
                     let data: i8 = self.load(offset, address, 1)?;
                     trace!("I32_LOAD8_S({data:?} from {address:?})");
                     self.stack.push((data as u32).into());
+                }
+                I64_LOAD32_S => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let address = self.stack.pop_i32()? as u32;
+                    let data: i32 = self.load(offset, address, 4)?;
+                    trace!("I64_LOAD32_S({data:?} from {address:?})");
+                    self.stack.push((data as i64).into());
                 }
                 _ => return Err(Error::UndefinedInstruction(*instruction)),
             };

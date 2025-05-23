@@ -15,7 +15,10 @@ impl ValType {
         match val {
             0x7F => Ok(ValType::I32),
             0x7E => Ok(ValType::I64),
-            _ => Err(Error::UnsupportedValueType),
+            _ => {
+                warn!("Unsupported Value type {val:#04X}");
+                Err(Error::UnsupportedValueType)
+            }
         }
     }
     pub fn is_numeric(&self) -> bool {

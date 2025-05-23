@@ -27,6 +27,13 @@ pub struct ModuleEnvironment {
     pub importsec: Imports,
 }
 
+fn skip_section(reader: &mut WasmReader) -> Result<()> {
+    let section_size = reader
+        .next_leb128_u32()
+        .ok_or(Error::InvalidSectionBytecode)?;
+    reader.seek(reader.current_index() + section_size as usize + 1);
+    Ok(())
+}
 pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnvironment> {
     let mut module = ModuleEnvironment {
         ..Default::default()
@@ -50,6 +57,9 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             0x03 => {
                 module.funcsec = process_function_section(reader)?;
+            }
+            0x04 => {
+                skip_section(reader)?;
             }
             0x05 => {
                 module.memorysec = process_memory_section(reader)?;

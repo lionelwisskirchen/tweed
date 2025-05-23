@@ -45,10 +45,10 @@ fn main() -> anyhow::Result<()> {
     }
 
     let module = initialize(&wasm_bytes)
-        .map_err(|e| anyhow::anyhow!("Failed to initialize the module: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to initialize the module: {}", e))?;
 
     let mut instance = instantiate(module)
-        .map_err(|e| anyhow::anyhow!("Failed to instantiate the module: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to instantiate the module: {}", e))?;
 
     match cli.command {
         Commands::Invoke { function, params } => {

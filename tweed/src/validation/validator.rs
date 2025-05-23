@@ -155,8 +155,10 @@ impl<'a, 'b> Validator<'a, 'b> {
         });
 
         loop {
-            let byte = self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
-            match *byte {
+            let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
+            trace!("Validating Byte: {byte:#04X}");
+            trace!("Stack: {:?}", self.abstract_value_stack);
+            match byte {
                 I32_CONST => {
                     self.reader.next_leb128_i32().ok_or(Error::MissingValue)?;
                     self.abstract_value_stack.push(ValType::I32);
@@ -291,6 +293,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 | I64_SHR_S | I64_SHL => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
+
                     self.abstract_value_stack.push(ValType::I64);
                 }
                 I32_CTZ | I32_EQZ => {
@@ -301,7 +304,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I64_EXTEND_I32_U => {
+                I64_EXTEND_I32_U | I64_EXTEND_I32_S => {
+                    trace!("{:?}", self.abstract_value_stack);
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
@@ -518,8 +522,16 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
+                I64_LOAD32_S => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
                 UNREACHABLE => self.unreachable(),
-                _ => return Err(Error::UndefinedOpCode(*byte)),
+                _ => return Err(Error::UndefinedOpCode(byte)),
             };
         }
         let result = self.side_table.clone();
