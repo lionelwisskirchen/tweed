@@ -79,4 +79,5 @@ pub const GLOBAL_SET: u8 = 0x24;
 pub const EXTENSION_PREFIX: u8 = 0xFC;
 pub mod extensions {
     pub const MEMORY_COPY: u8 = 0x0A;
+    pub const MEMORY_FILL: u8 = 0x0B;
 }

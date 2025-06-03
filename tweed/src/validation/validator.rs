@@ -15,7 +15,7 @@ use crate::validation::control_stack::ControlStack;
 use crate::validation::control_types::ControlType;
 use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
-use extensions::MEMORY_COPY;
+use extensions::{MEMORY_COPY, MEMORY_FILL};
 
 use super::constant_expression_validator::validate_const_expr;
 use super::side_table::SideTable;
@@ -565,6 +565,20 @@ impl<'a, 'b> Validator<'a, 'b> {
                             if self.module_environment.memorysec.is_empty() {
                                 return Err(Error::UndefinedMemory)?;
                             }
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                        }
+                        MEMORY_FILL => {
+                            let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
+                            if idx != 0 {
+                                return Err(Error::MultipleMemoriesNotImplemented);
+                            }
+
+                            if self.module_environment.memorysec.is_empty() {
+                                return Err(Error::UndefinedMemory)?;
+                            }
+
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;

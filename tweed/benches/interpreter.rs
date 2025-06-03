@@ -15,6 +15,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             wat::parse_file("benches/depthconv.wat").unwrap(),
         ),
         ("EDN", wat::parse_file("benches/edn.wat").unwrap()),
+        (
+            "HUFFBENCH",
+            wat::parse_file("benches/huffbench.wat").unwrap(),
+        ),
     ];
 
     let mut group = c.benchmark_group("Interpreter Benchmark");

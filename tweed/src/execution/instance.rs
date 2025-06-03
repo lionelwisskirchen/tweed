@@ -11,7 +11,7 @@ use crate::{
 };
 
 use alloc::vec::Vec;
-use extensions::MEMORY_COPY;
+use extensions::{MEMORY_COPY, MEMORY_FILL};
 
 use super::execution_stack::ExecutionStack;
 use super::store::{FunctionInstance, MemoryInstance, Store};
@@ -809,6 +809,16 @@ impl Instance {
                             let dest_mem = self.store.memories.get_mut(dest as usize).unwrap();
                             dest_mem.store(dest_address, &data)?;
                             trace!("MEMORY_COPY: {number_of_bytes} bytes from {src}:{src_address} to {dest}:{dest_address}");
+                        }
+                        MEMORY_FILL => {
+                            let idx = *self.reader.next_byte().unwrap(); // validated
+                            let mem = self.store.memories.get_mut(idx as usize).unwrap(); // always 0
+                            let number_of_bytes = self.stack.pop_i32()? as usize;
+                            let val = self.stack.pop_i32()? as u8;
+                            let data = vec![val; number_of_bytes];
+                            let address = self.stack.pop_i32()? as usize;
+                            mem.store(address, &data)?;
+                            trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");
                         }
                         _ => return Err(Error::UndefinedOpCode(byte)),
                     }
