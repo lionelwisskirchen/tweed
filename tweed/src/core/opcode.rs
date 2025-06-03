@@ -52,8 +52,13 @@ pub const I64_SHL: u8 = 0x86;
 pub const I64_SHR_S: u8 = 0x87;
 pub const I32_LOAD8_U: u8 = 0x2D;
 pub const I32_STORE8: u8 = 0x3A;
+pub const I32_STORE16: u8 = 0x3B;
 pub const I32_LOAD8_S: u8 = 0x2C;
+pub const I32_LOAD16_U: u8 = 0x2F;
+pub const I32_LOAD16_S: u8 = 0x2E;
 pub const I32_WRAP_I64: u8 = 0xA7;
+pub const I32_EXTEND8_S: u8 = 0xC0;
+pub const I32_EXTEND16_S: u8 = 0xC1;
 pub const I32_CLZ: u8 = 0x67;
 pub const I64_EXTEND_I32_U: u8 = 0xAD;
 pub const I64_EXTEND_I32_S: u8 = 0xAC;
@@ -71,3 +76,7 @@ pub const I64_GT_U: u8 = 0x56;
 pub const I64_NE: u8 = 0x52;
 pub const GLOBAL_GET: u8 = 0x23;
 pub const GLOBAL_SET: u8 = 0x24;
+pub const EXTENSION_PREFIX: u8 = 0xFC;
+pub mod extensions {
+    pub const MEMORY_COPY: u8 = 0x0A;
+}

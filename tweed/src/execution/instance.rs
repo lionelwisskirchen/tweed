@@ -11,6 +11,7 @@ use crate::{
 };
 
 use alloc::vec::Vec;
+use extensions::MEMORY_COPY;
 
 use super::execution_stack::ExecutionStack;
 use super::store::{FunctionInstance, MemoryInstance, Store};
@@ -537,6 +538,18 @@ impl Instance {
                     trace!("I32_WRAP_I64({value})");
                     self.stack.push((value as i32).into())
                 }
+                I32_EXTEND8_S => {
+                    let value = self.stack.pop_i32()?;
+                    trace!("I32_EXTEND8_S({value})");
+                    let extended = (value as i8) as i32;
+                    self.stack.push(extended.into())
+                }
+                I32_EXTEND16_S => {
+                    let value = self.stack.pop_i32()?;
+                    trace!("I32_EXTEND16_S({value})");
+                    let extended = (value as i16) as i32;
+                    self.stack.push(extended.into())
+                }
                 I64_EXTEND_I32_U => {
                     let value = self.stack.pop_i32()?;
                     trace!("I64_EXTEND_I32_U({value})");
@@ -721,9 +734,17 @@ impl Instance {
                 }
                 I32_STORE8 => {
                     let (_, offset) = self.read_mem_args()?;
-                    let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
+                    let store_data = (self.stack.pop_i32()? as u8).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("I32_STORE8({store_data:?} to {rel_address:?})");
+
+                    self.store(offset, &store_data, rel_address)?;
+                }
+                I32_STORE16 => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let store_data = (self.stack.pop_i32()? as u16).to_le_bytes();
+                    let rel_address = self.stack.pop_i32()? as u32;
+                    trace!("I32_STORE16({store_data:?} to {rel_address:?})");
 
                     self.store(offset, &store_data, rel_address)?;
                 }
@@ -742,6 +763,20 @@ impl Instance {
                     trace!("I32_LOAD8_U({data:?} from {address:?})");
                     self.stack.push((data as u32).into());
                 }
+                I32_LOAD16_U => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let address = self.stack.pop_i32()? as u32;
+                    let data: u16 = self.load(offset, address, 2)?;
+                    trace!("I32_LOAD16_U({data:?} from {address:?})");
+                    self.stack.push((data as u32).into());
+                }
+                I32_LOAD16_S => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let address = self.stack.pop_i32()? as u32;
+                    let data: i16 = self.load(offset, address, 2)?;
+                    trace!("I32_LOAD16_S({data:?} from {address:?})");
+                    self.stack.push((data as u32).into());
+                }
                 I32_LOAD8_S => {
                     let (_, offset) = self.read_mem_args()?;
                     let address = self.stack.pop_i32()? as u32;
@@ -755,6 +790,28 @@ impl Instance {
                     let data: i32 = self.load(offset, address, 4)?;
                     trace!("I64_LOAD32_S({data:?} from {address:?})");
                     self.stack.push((data as i64).into());
+                }
+                EXTENSION_PREFIX => {
+                    let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
+                    match byte {
+                        MEMORY_COPY => {
+                            let (dest, src) = (
+                                *self.reader.next_byte().unwrap(), // validated and 0
+                                *self.reader.next_byte().unwrap(), // validated and 0
+                            );
+                            let number_of_bytes = self.stack.pop_i32()? as usize;
+                            let src_address = self.stack.pop_i32()? as usize;
+                            let dest_address = self.stack.pop_i32()? as usize;
+                            let data = {
+                                let src_mem = self.store.memories.get_mut(src as usize).unwrap();
+                                src_mem.load_slice(src_address, number_of_bytes)?.to_vec()
+                            };
+                            let dest_mem = self.store.memories.get_mut(dest as usize).unwrap();
+                            dest_mem.store(dest_address, &data)?;
+                            trace!("MEMORY_COPY: {number_of_bytes} bytes from {src}:{src_address} to {dest}:{dest_address}");
+                        }
+                        _ => return Err(Error::UndefinedOpCode(byte)),
+                    }
                 }
                 _ => return Err(Error::UndefinedInstruction(*instruction)),
             };

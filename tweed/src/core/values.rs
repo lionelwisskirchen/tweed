@@ -59,6 +59,16 @@ impl FromLeBytes for u8 {
     }
 }
 
+impl FromLeBytes for u16 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        u16::from_le_bytes(bytes.try_into().expect("Invalid length for u16"))
+    }
+}
+impl FromLeBytes for i16 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        i16::from_le_bytes(bytes.try_into().expect("Invalid length for i16"))
+    }
+}
 impl FromLeBytes for i8 {
     fn from_le_bytes(bytes: &[u8]) -> Self {
         i8::from_le_bytes(bytes.try_into().expect("Invalid length for u8"))

@@ -6,6 +6,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
+    MultipleMemoriesNotImplemented,
     MalformedMutability,
     InvalidMagic,
     InvalidVersion,
@@ -58,7 +59,9 @@ impl Display for Error {
             Error::InvalidFunctionIndex => f.write_str("Invalid function index"),
             Error::InvalidMemoryIndex => f.write_str("Invalid memory index"),
             Error::UndefinedContantExpression => f.write_str("constant expression required"),
-
+            Error::MultipleMemoriesNotImplemented => {
+                f.write_str("Multiple Memory proposal is not implemented")
+            }
             Error::UndefinedOpCode(opcode) => {
                 f.write_fmt(format_args!("Invalid opcode {opcode:#04X}"))
             }

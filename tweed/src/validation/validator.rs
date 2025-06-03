@@ -15,6 +15,7 @@ use crate::validation::control_stack::ControlStack;
 use crate::validation::control_types::ControlType;
 use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
+use extensions::MEMORY_COPY;
 
 use super::constant_expression_validator::validate_const_expr;
 use super::side_table::SideTable;
@@ -305,9 +306,12 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I64_EXTEND_I32_U | I64_EXTEND_I32_S => {
-                    trace!("{:?}", self.abstract_value_stack);
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
+                }
+                I32_EXTEND8_S | I32_EXTEND16_S => {
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
                 }
                 I64_CTZ => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
@@ -478,6 +482,14 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
+                I32_STORE16 => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(2)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
                 I64_STORE => {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
@@ -510,6 +522,14 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
+                I32_LOAD16_U | I32_LOAD16_S => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(2)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
                 I32_CLZ => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
@@ -530,6 +550,29 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
+                EXTENSION_PREFIX => {
+                    let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
+                    match byte {
+                        MEMORY_COPY => {
+                            let (dest, src) = (
+                                *self.reader.next_byte().ok_or(Error::MissingValue)?,
+                                *self.reader.next_byte().ok_or(Error::MissingValue)?,
+                            );
+                            if dest != 0 || src != 0 {
+                                return Err(Error::MultipleMemoriesNotImplemented);
+                            }
+
+                            if self.module_environment.memorysec.is_empty() {
+                                return Err(Error::UndefinedMemory)?;
+                            }
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                        }
+                        _ => return Err(Error::UndefinedOpCode(byte)),
+                    }
+                }
+
                 UNREACHABLE => self.unreachable(),
                 _ => return Err(Error::UndefinedOpCode(byte)),
             };

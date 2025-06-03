@@ -29,19 +29,24 @@ impl MemoryInstance {
     pub fn new(data: Vec<u8>, max: Option<u32>) -> Self {
         MemoryInstance { data, max }
     }
+    pub fn load_slice(&mut self, address: usize, bytes: usize) -> Result<&[u8]> {
+        self.data
+            .get(address..address + bytes)
+            .ok_or(Error::MemoryAccessOutOfBounds)
+    }
     pub fn load<T>(&mut self, address: usize, bytes: usize) -> Result<T>
     where
         T: FromLeBytes,
     {
-        let data_bytes = self
-            .data
-            .get(address..address + bytes)
-            .ok_or(Error::MemoryAccessOutOfBounds)?;
+        let data_bytes = self.load_slice(address, bytes)?;
         let data = T::from_le_bytes(data_bytes);
         Ok(data)
     }
     pub fn store(&mut self, address: usize, data: &[u8]) -> Result<()> {
         let end = address + data.len();
+        if end > self.data.len() {
+            return Err(Error::MemoryAccessOutOfBounds);
+        }
         self.data[address..end].copy_from_slice(data);
         Ok(())
     }
