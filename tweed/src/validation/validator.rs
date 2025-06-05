@@ -1,4 +1,3 @@
-use crate::binary::data_section::SegmentMode;
 use crate::binary::global_section::GlobalType;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::{Error, Result};
@@ -17,7 +16,6 @@ use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
 use extensions::{MEMORY_COPY, MEMORY_FILL};
 
-use super::constant_expression_validator::validate_const_expr;
 use super::side_table::SideTable;
 
 pub struct Validator<'a, 'b> {
@@ -84,8 +82,6 @@ impl<'a, 'b> Validator<'a, 'b> {
     }
 
     pub fn validate(&mut self) -> Result<Vec<SideTable>> {
-        self.validate_globals()?;
-        self.validate_data()?;
         let mut side_tables = Vec::new();
         for (index, fun) in self.module_environment.codesec.iter().enumerate() {
             let signature_index = self
@@ -101,30 +97,6 @@ impl<'a, 'b> Validator<'a, 'b> {
             side_tables.push(side_table);
         }
         Ok(side_tables)
-    }
-    fn validate_globals(&mut self) -> Result<()> {
-        for global in &self.module_environment.globalsec {
-            self.reader.seek(global.start + 1);
-            validate_const_expr(
-                self.reader,
-                &self.module_environment.importsec.globals,
-                &[global.global_type.value_type],
-            )?;
-        }
-        Ok(())
-    }
-    fn validate_data(&mut self) -> Result<()> {
-        for data in &self.module_environment.datasec {
-            if let SegmentMode::Active { offset_start, .. } = data.mode {
-                self.reader.seek(offset_start + 1);
-                validate_const_expr(
-                    self.reader,
-                    &self.module_environment.importsec.globals,
-                    &[ValType::I32],
-                )?;
-            }
-        }
-        Ok(())
     }
     fn initialize_globals(&mut self) -> Vec<GlobalType> {
         let mut imported_globals: Vec<GlobalType> = self
@@ -280,7 +252,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 }
                 I32_GE_U | I32_GT_U | I32_LE_S | I32_LT_S | I32_LT_U | I32_LE_U | I32_NE
                 | I32_GT_S | I32_GE_S | I32_AND | I32_OR | I32_XOR | I32_EQ | I32_SHL
-                | I32_SHR_U | I32_SHR_S => {
+                | I32_SHR_U | I32_SHR_S | I32_ROTL | I32_ROTR => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);

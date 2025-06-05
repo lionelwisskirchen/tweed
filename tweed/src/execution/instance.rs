@@ -533,6 +533,18 @@ impl Instance {
                         self.stack.push(Value::I32(0));
                     }
                 }
+                I32_ROTR => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let result = left.rotate_right(right as u32);
+                    trace!("I32_ROTR [{left} {right}] -> [{result}]");
+                    self.stack.push(Value::I32(result));
+                }
+                I32_ROTL => {
+                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let result = left.rotate_left(right as u32);
+                    trace!("I32_ROTL [{left} {right}] -> [{result}]");
+                    self.stack.push(Value::I32(result));
+                }
                 I32_WRAP_I64 => {
                     let value = self.stack.pop_i64()?;
                     trace!("I32_WRAP_I64({value})");

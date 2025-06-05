@@ -76,6 +76,8 @@ pub const I64_GT_U: u8 = 0x56;
 pub const I64_NE: u8 = 0x52;
 pub const GLOBAL_GET: u8 = 0x23;
 pub const GLOBAL_SET: u8 = 0x24;
+pub const I32_ROTL: u8 = 0x77;
+pub const I32_ROTR: u8 = 0x78;
 pub const EXTENSION_PREFIX: u8 = 0xFC;
 pub mod extensions {
     pub const MEMORY_COPY: u8 = 0x0A;

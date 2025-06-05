@@ -49,32 +49,41 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
         match section_code {
             0x00 => break,
             0x01 => {
+                trace!("Process Type Section");
                 module.typesec = process_type_section(reader)?;
             }
 
             0x02 => {
+                trace!("Process Import Section");
                 module.importsec = process_import_section(reader)?;
             }
             0x03 => {
+                trace!("Process Function Section");
                 module.funcsec = process_function_section(reader)?;
             }
             0x04 => {
                 skip_section(reader)?;
             }
             0x05 => {
+                trace!("Process Memory Section");
                 module.memorysec = process_memory_section(reader)?;
             }
             0x0a => {
+                trace!("Process Code Section");
                 module.codesec = process_code_section(reader)?;
             }
             0x06 => {
-                module.globalsec = process_global_section(reader)?;
+                trace!("Process Global Section");
+                module.globalsec = process_global_section(reader, &module.importsec.globals)?;
             }
             0x07 => {
+                trace!("Process Export Section");
+
                 module.exportsec = process_export_section(reader)?;
             }
             0x0B => {
-                module.datasec = process_data_section(reader)?;
+                trace!("Process Data Section");
+                module.datasec = process_data_section(reader, &module.importsec.globals)?;
             }
             _ => {
                 return Err(Error::UnknownSectionCode(*section_code));

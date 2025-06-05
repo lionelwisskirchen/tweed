@@ -1,7 +1,11 @@
 use alloc::vec::Vec;
 
 use crate::core::error::{Error, Result};
+use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
+use crate::validation::constant_expression_validator::validate_const_expr;
+
+use super::import_section::GlobalImport;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SegmentMode {
@@ -19,7 +23,10 @@ pub struct DataSegment {
     pub init: Vec<u8>,
 }
 
-pub fn process_data_section(reader: &mut WasmReader) -> Result<Vec<DataSegment>> {
+pub fn process_data_section(
+    reader: &mut WasmReader,
+    global_imports: &[GlobalImport],
+) -> Result<Vec<DataSegment>> {
     reader
         .next_leb128_u32()
         .ok_or(Error::InvalidSectionBytecode)?;
@@ -37,9 +44,12 @@ pub fn process_data_section(reader: &mut WasmReader) -> Result<Vec<DataSegment>>
             0 => {
                 // Mode active
                 let start = reader.current_index();
-                let end = reader
-                    .read_until(0xb)
-                    .ok_or(Error::InvalidSectionBytecode)?;
+
+                /* We need to validate the constant expression here, as the size of the expression body is implicit.
+                We can't seek to the end (0x0b) byte because there may be a 0x0b byte before it.
+                For example, i32.const(900b). */
+                validate_const_expr(reader, global_imports, &[ValType::I32])?;
+                let end = reader.current_index();
                 let data_size = reader
                     .next_leb128_u32()
                     .ok_or(Error::InvalidSectionBytecode)?;
