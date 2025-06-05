@@ -470,6 +470,30 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
+                I64_STORE8 => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(1)?;
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
+                I64_STORE16 => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(2)?;
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
+                I64_STORE32 => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
                 I32_LOAD => {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;

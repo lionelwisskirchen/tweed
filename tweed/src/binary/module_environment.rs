@@ -68,10 +68,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 trace!("Process Memory Section");
                 module.memorysec = process_memory_section(reader)?;
             }
-            0x0a => {
-                trace!("Process Code Section");
-                module.codesec = process_code_section(reader)?;
-            }
+
             0x06 => {
                 trace!("Process Global Section");
                 module.globalsec = process_global_section(reader, &module.importsec.globals)?;
@@ -80,6 +77,10 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 trace!("Process Export Section");
 
                 module.exportsec = process_export_section(reader)?;
+            }
+            0x0A => {
+                trace!("Process Code Section");
+                module.codesec = process_code_section(reader)?;
             }
             0x0B => {
                 trace!("Process Data Section");

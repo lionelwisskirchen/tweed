@@ -727,6 +727,30 @@ impl Instance {
 
                     self.store(offset, &store_data, rel_address)?;
                 }
+                I64_STORE8 => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let store_data = (self.stack.pop_i64()? as u8).to_le_bytes();
+                    let rel_address = self.stack.pop_i32()? as u32;
+                    trace!("I64_STORE8({store_data:?} to {rel_address:?})");
+
+                    self.store(offset, &store_data, rel_address)?;
+                }
+                I64_STORE16 => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let store_data = (self.stack.pop_i64()? as u16).to_le_bytes();
+                    let rel_address = self.stack.pop_i32()? as u32;
+                    trace!("I64_STORE16({store_data:?} to {rel_address:?})");
+
+                    self.store(offset, &store_data, rel_address)?;
+                }
+                I64_STORE32 => {
+                    let (_, offset) = self.read_mem_args()?;
+                    let store_data = (self.stack.pop_i64()? as u32).to_le_bytes();
+                    let rel_address = self.stack.pop_i32()? as u32;
+                    trace!("I64_STORE32({store_data:?} to {rel_address:?})");
+
+                    self.store(offset, &store_data, rel_address)?;
+                }
                 I64_LOAD => {
                     let (_, offset) = self.read_mem_args()?;
                     let address = self.stack.pop_i32()? as u32;

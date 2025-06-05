@@ -19,6 +19,21 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             "HUFFBENCH",
             wat::parse_file("benches/huffbench.wat").unwrap(),
         ),
+        (
+            "MATMULT_INT",
+            wat::parse_file("benches/matmult-int.wat").unwrap(),
+        ),
+        ("MD5SUM", wat::parse_file("benches/md5sum.wat").unwrap()),
+        (
+            "NETTLE_AES",
+            wat::parse_file("benches/nettle-aes.wat").unwrap(),
+        ),
+        (
+            "NETTLE_SHA256",
+            wat::parse_file("benches/nettle-sha256.wat").unwrap(),
+        ),
+        ("NSICHNEU", wat::parse_file("benches/nsichneu.wat").unwrap()),
+        ("QRDUINO", wat::parse_file("benches/qrduino.wat").unwrap()),
     ];
 
     let mut group = c.benchmark_group("Interpreter Benchmark");
