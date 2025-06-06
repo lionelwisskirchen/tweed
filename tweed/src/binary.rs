@@ -1,9 +1,11 @@
 pub mod code_section;
 pub mod data_section;
+pub mod element_section;
 pub mod export_section;
 pub mod function_section;
 pub mod global_section;
 pub mod import_section;
 pub mod memory_section;
 pub mod module_environment;
+pub mod table_section;
 pub mod type_section;

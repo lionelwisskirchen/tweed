@@ -1,17 +1,22 @@
-use crate::core::{
-    error::{Error, Result},
-    wasm_reader::WasmReader,
+use crate::{
+    binary::element_section::process_element_section,
+    core::{
+        error::{Error, Result},
+        wasm_reader::WasmReader,
+    },
 };
 use alloc::vec::Vec;
 
 use super::{
     code_section::{process_code_section, FuncCode},
     data_section::{process_data_section, DataSegment},
+    element_section::ElementSegment,
     export_section::{process_export_section, Export},
     function_section::{process_function_section, FuncDecl},
     global_section::{process_global_section, Global},
     import_section::{process_import_section, Imports},
     memory_section::{process_memory_section, Limits},
+    table_section::{process_table_section, Table},
     type_section::{process_type_section, FuncType},
 };
 
@@ -24,16 +29,11 @@ pub struct ModuleEnvironment {
     pub memorysec: Vec<Limits>,
     pub datasec: Vec<DataSegment>,
     pub globalsec: Vec<Global>,
+    pub tablesec: Vec<Table>,
+    pub elementsec: Vec<ElementSegment>,
     pub importsec: Imports,
 }
 
-fn skip_section(reader: &mut WasmReader) -> Result<()> {
-    let section_size = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
-    reader.seek(reader.current_index() + section_size as usize + 1);
-    Ok(())
-}
 pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnvironment> {
     let mut module = ModuleEnvironment {
         ..Default::default()
@@ -62,7 +62,8 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 module.funcsec = process_function_section(reader)?;
             }
             0x04 => {
-                skip_section(reader)?;
+                trace!("Process Table Section");
+                module.tablesec = process_table_section(reader)?;
             }
             0x05 => {
                 trace!("Process Memory Section");
@@ -71,12 +72,18 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
 
             0x06 => {
                 trace!("Process Global Section");
-                module.globalsec = process_global_section(reader, &module.importsec.globals)?;
+                module.globalsec =
+                    process_global_section(reader, &module.importsec.globals, &module.funcsec)?;
             }
             0x07 => {
                 trace!("Process Export Section");
-
                 module.exportsec = process_export_section(reader)?;
+            }
+            0x09 => {
+                trace!("Process Element Section");
+
+                module.elementsec =
+                    process_element_section(reader, &module.importsec.globals, &module.funcsec)?;
             }
             0x0A => {
                 trace!("Process Code Section");
@@ -84,7 +91,8 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             0x0B => {
                 trace!("Process Data Section");
-                module.datasec = process_data_section(reader, &module.importsec.globals)?;
+                module.datasec =
+                    process_data_section(reader, &module.importsec.globals, &module.funcsec)?;
             }
             _ => {
                 return Err(Error::UnknownSectionCode(*section_code));

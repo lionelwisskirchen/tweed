@@ -33,6 +33,7 @@ pub enum Error {
     UndefinedInstruction(u8),
     IllegalSelectType(ValType),
     UndefinedMemory,
+    UndefinedTable,
     InvalidAlignment,
     MemoryAccessOutOfBounds,
     DivisionByZero,
@@ -85,6 +86,7 @@ impl Display for Error {
             }
             Error::MissingGlobalImport => f.write_str("missing global import"),
             Error::UndefinedMemory => f.write_str("undefined memory"),
+            Error::UndefinedTable => f.write_str("undefined table"),
             Error::InvalidAlignment => f.write_str("invalid alignment"),
             Error::MemoryAccessOutOfBounds => f.write_str("memory out of bounds"),
         }

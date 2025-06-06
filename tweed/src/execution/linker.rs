@@ -1,4 +1,5 @@
 use crate::binary::data_section::SegmentMode;
+use crate::binary::element_section::{ElementItems, Mode};
 use crate::binary::export_section::ExportContext;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::values::Value;
@@ -15,7 +16,10 @@ use core::iter::zip;
 
 use super::constant_expression_executor::execute_const_expr;
 use super::instance::Instance;
-use super::store::{DataInstance, FunctionInstance, GlobalInstance, MemoryInstance, Store};
+use super::store::{
+    DataInstance, ElementInstance, FunctionInstance, GlobalInstance, MemoryInstance, Store,
+    TableInstance,
+};
 pub const PAGE_SIZE: u32 = 65536;
 
 pub struct Linker {
@@ -81,8 +85,10 @@ impl Linker {
         let exports = self.instantiate_export()?;
         let functions = self.instantiate_functions()?;
         let mut memories = self.instantiate_memories()?;
-        let data = self.instantiate_datas(&mut memories, &imported_globals)?;
-        imported_globals.extend(self.instantiate_globals(&imported_globals)?);
+        let data = self.instantiate_datas(&mut memories, &imported_globals, &functions)?;
+        let mut tables = self.instantiate_tables()?;
+        let elements = self.instantiate_elements(&imported_globals, &mut tables, &functions)?;
+        imported_globals.extend(self.instantiate_globals(&imported_globals, &functions)?);
 
         let store = Store {
             exports,
@@ -90,6 +96,8 @@ impl Linker {
             memories,
             data,
             globals: imported_globals,
+            tables,
+            elements,
         };
         Ok(Instance::new(store, self.module.reader.clone()))
     }
@@ -111,6 +119,7 @@ impl Linker {
     fn instantiate_globals(
         &mut self,
         imported_globals: &[GlobalInstance],
+        functions: &[FunctionInstance],
     ) -> Result<Vec<GlobalInstance>> {
         let mut globals = Vec::new();
 
@@ -121,6 +130,7 @@ impl Linker {
                     &mut self.module.reader,
                     imported_globals,
                     &[global.global_type.value_type],
+                    functions,
                 )?;
                 *return_value.first().ok_or(Error::TypeMismatch)?
             };
@@ -175,10 +185,83 @@ impl Linker {
         }
         Ok(memories)
     }
+    fn instantiate_elements(
+        &mut self,
+        imported_globals: &[GlobalInstance],
+        tables: &mut [TableInstance],
+        functions: &[FunctionInstance],
+    ) -> Result<Vec<ElementInstance>> {
+        let mut elements = Vec::new();
+
+        for element in self.module.elementsec.iter() {
+            let instance = match &element.items {
+                ElementItems::RefFuncs(refs) => {
+                    let resolved_refs: Vec<Value> = refs
+                        .iter()
+                        .map(|reference| Value::FuncRef(*reference as usize))
+                        .collect();
+                    ElementInstance::new(&element.ref_type, resolved_refs)
+                }
+                ElementItems::Exprs(ty, spans) => {
+                    let mut resolved_refs = vec![];
+                    for span in spans {
+                        self.module.reader.seek(span.start + 1);
+                        resolved_refs.push(
+                            *execute_const_expr(
+                                &mut self.module.reader,
+                                imported_globals,
+                                &[*ty],
+                                functions,
+                            )?
+                            .first()
+                            .ok_or(Error::TypeMismatch)?,
+                        );
+                    }
+                    ElementInstance::new(&element.ref_type, resolved_refs)
+                }
+            };
+            match element.mode {
+                Mode::Active {
+                    table,
+                    offset_start,
+                    offset_end: _,
+                } => {
+                    self.module.reader.seek(offset_start + 1);
+                    let result = *execute_const_expr(
+                        &mut self.module.reader,
+                        imported_globals,
+                        &[ValType::I32],
+                        functions,
+                    )?
+                    .first()
+                    .ok_or(Error::TypeMismatch)?;
+                    let Value::I32(offset) = result else {
+                        return Err(Error::TypeMismatch);
+                    };
+                    let target_table = tables.get_mut(table as usize).ok_or(Error::TypeMismatch)?;
+                    target_table.insert(offset as usize, &instance.references)?;
+                    elements.push(instance)
+                }
+                Mode::Passive => elements.push(instance),
+                Mode::Declarative => {
+                    // do nothing
+                }
+            }
+        }
+        Ok(elements)
+    }
+    fn instantiate_tables(&mut self) -> Result<Vec<TableInstance>> {
+        let mut tables = Vec::new();
+        for table in self.module.tablesec.iter() {
+            tables.push(TableInstance::new(table));
+        }
+        Ok(tables)
+    }
     fn instantiate_datas(
         &mut self,
         memories: &mut [MemoryInstance],
         imported_globals: &[GlobalInstance],
+        functions: &[FunctionInstance],
     ) -> Result<Vec<DataInstance>> {
         let mut data = Vec::new();
         for data_segment in self.module.datasec.iter() {
@@ -194,6 +277,7 @@ impl Linker {
                         &mut self.module.reader,
                         imported_globals,
                         &[ValType::I32],
+                        functions,
                     )?;
                     let Value::I32(value) = return_values.first().ok_or(Error::TypeMismatch)?
                     else {
@@ -226,6 +310,7 @@ mod tests {
     };
 
     use super::*;
+
     #[test]
     fn test_simple_add() {
         let bytes = wat::parse_str(

@@ -1,3 +1,4 @@
+use crate::binary::function_section::FuncDecl;
 use crate::binary::import_section::GlobalImport;
 use crate::core::opcode::*;
 
@@ -11,6 +12,7 @@ pub fn validate_const_expr(
     reader: &mut WasmReader,
     globals: &[GlobalImport],
     result: &[ValType],
+    functions: &[FuncDecl],
 ) -> Result<()> {
     let mut abstract_value_stack: ValidationStack = ValidationStack::default();
     loop {
@@ -42,6 +44,16 @@ pub fn validate_const_expr(
                     return Err(Error::UndefinedContantExpression);
                 }
                 abstract_value_stack.push(global.context.value_type);
+            }
+            REF_NULL => {
+                let ref_type = reader.next_byte().ok_or(Error::MissingValue)?;
+                abstract_value_stack.push(ValType::lookup(ref_type)?);
+            }
+            REF_FUNC => {
+                let func_idx = reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+
+                functions.get(func_idx).ok_or(Error::InvalidFunctionIndex)?;
+                abstract_value_stack.push(ValType::FuncRef);
             }
             END => {
                 abstract_value_stack.pop_expected_vec(result)?;

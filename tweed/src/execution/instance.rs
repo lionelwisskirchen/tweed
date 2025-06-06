@@ -1,4 +1,5 @@
 use crate::binary::export_section::ExportContext;
+use crate::core::value_types::RefType;
 use crate::core::values::{FromLeBytes, Value};
 use crate::{
     core::{
@@ -826,6 +827,43 @@ impl Instance {
                     let data: i32 = self.load(offset, address, 4)?;
                     trace!("I64_LOAD32_S({data:?} from {address:?})");
                     self.stack.push((data as i64).into());
+                }
+                TABLE_GET => {
+                    let table_idx =
+                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    let offset = self.stack.pop_i32()? as usize;
+                    let table = &self.store.tables[table_idx]; // validated
+                    let value = table.get(offset)?;
+                    self.stack.push(value);
+                    trace!("TABLE_GET '{}' [{}] -> [{:?}]", table_idx, offset, value);
+                }
+                TABLE_SET => {
+                    let table_idx =
+                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    let table = &mut self.store.tables[table_idx]; // validated
+                    let val = self.stack.pop()?;
+                    let index = self.stack.pop_i32()? as usize;
+                    table.insert(index, &[val])?;
+                    trace!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val)
+                }
+
+                REF_NULL => {
+                    let ref_type =
+                        RefType::from_byte(*self.reader.next_byte().ok_or(Error::MissingValue)?)
+                            .ok_or(Error::UnexpectedValueType)?;
+                    self.stack.push(Value::RefNull(ref_type));
+                }
+                REF_IS_NULL => {
+                    let value = self.stack.pop()?;
+                    match value {
+                        Value::RefNull(_) => self.stack.push(Value::I32(1)),
+                        _ => self.stack.push(Value::I32(0)),
+                    }
+                }
+                REF_FUNC => {
+                    let func_idx =
+                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    self.stack.push(Value::FuncRef(func_idx));
                 }
                 EXTENSION_PREFIX => {
                     let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;

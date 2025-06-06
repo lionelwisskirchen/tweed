@@ -2,12 +2,35 @@ use crate::{
     core::error::{Error, Result},
     Value,
 };
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefType {
+    FuncRef,
+    ExternRef,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValType {
     I32,
     I64,
+    FuncRef,
+    ExternRef,
     Unknown,
+}
+
+impl RefType {
+    pub fn from_byte(byte: u8) -> Option<Self> {
+        match byte {
+            0x70 => Some(RefType::FuncRef),
+            0x6F => Some(RefType::ExternRef),
+            _ => None,
+        }
+    }
+    pub fn to_val_type(self) -> ValType {
+        match self {
+            Self::FuncRef => ValType::FuncRef,
+            Self::ExternRef => ValType::ExternRef,
+        }
+    }
 }
 
 impl ValType {
@@ -15,6 +38,8 @@ impl ValType {
         match val {
             0x7F => Ok(ValType::I32),
             0x7E => Ok(ValType::I64),
+            0x70 => Ok(ValType::FuncRef),
+            0x6F => Ok(ValType::ExternRef),
             _ => {
                 warn!("Unsupported Value type {val:#04X}");
                 Err(Error::UnsupportedValueType)
@@ -22,14 +47,20 @@ impl ValType {
         }
     }
     pub fn is_numeric(&self) -> bool {
-        match self {
-            ValType::I32 | ValType::I64 | ValType::Unknown => true,
-        }
+        matches!(self, ValType::I32 | ValType::I64 | ValType::Unknown)
+    }
+    pub fn is_ref(&self) -> bool {
+        matches!(self, ValType::FuncRef | ValType::ExternRef)
     }
     pub fn is_type(&self, val: Value) -> bool {
         matches!(
             (self, val),
-            (ValType::I32, Value::I32(_)) | (ValType::I64, Value::I64(_))
+            (ValType::I32, Value::I32(_))
+                | (ValType::I64, Value::I64(_))
+                | (ValType::FuncRef, Value::FuncRef(_))
+                | (ValType::ExternRef, Value::ExternRef(_))
+                | (ValType::FuncRef, Value::RefNull(RefType::FuncRef))
+                | (ValType::ExternRef, Value::RefNull(RefType::ExternRef))
         )
     }
 }

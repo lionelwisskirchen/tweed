@@ -82,6 +82,11 @@ pub const GLOBAL_SET: u8 = 0x24;
 pub const I32_ROTL: u8 = 0x77;
 pub const I32_ROTR: u8 = 0x78;
 pub const EXTENSION_PREFIX: u8 = 0xFC;
+pub const REF_NULL: u8 = 0xD0;
+pub const REF_IS_NULL: u8 = 0xD1;
+pub const REF_FUNC: u8 = 0xD2;
+pub const TABLE_GET: u8 = 0x25;
+pub const TABLE_SET: u8 = 0x26;
 pub mod extensions {
     pub const MEMORY_COPY: u8 = 0x0A;
     pub const MEMORY_FILL: u8 = 0x0B;

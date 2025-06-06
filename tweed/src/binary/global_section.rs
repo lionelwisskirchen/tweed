@@ -4,6 +4,7 @@ use crate::core::wasm_reader::WasmReader;
 use crate::validation::constant_expression_validator::validate_const_expr;
 use alloc::vec::Vec;
 
+use super::function_section::FuncDecl;
 use super::import_section::GlobalImport;
 
 #[derive(Debug, Clone)]
@@ -22,6 +23,7 @@ pub struct GlobalType {
 pub fn process_global_section(
     reader: &mut WasmReader,
     global_imports: &[GlobalImport],
+    functions: &[FuncDecl],
 ) -> Result<Vec<Global>> {
     reader
         .next_leb128_u32()
@@ -44,7 +46,7 @@ pub fn process_global_section(
         /* We need to validate the constant expression here, as the size of the expression body is implicit.
         We can't seek to the end (0x0b) byte because there may be a 0x0b byte before it.
         For example, i32.const(900b). */
-        validate_const_expr(reader, global_imports, &[value_type])?;
+        validate_const_expr(reader, global_imports, &[value_type], functions)?;
         let end = reader.current_index();
         let global_type = GlobalType {
             value_type,

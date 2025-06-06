@@ -58,6 +58,12 @@ impl ExecutionStack {
         };
         Ok(value)
     }
+    pub fn pop_func_ref(&mut self) -> Result<usize> {
+        let Value::FuncRef(value) = self.pop()? else {
+            return Err(Error::UnexpectedValueType);
+        };
+        Ok(value)
+    }
     pub fn pop_n(&mut self, count: usize) -> Result<Vec<Value>> {
         if count > self.stack.len() {
             return Err(Error::ExpectedAValueOnTheStack);

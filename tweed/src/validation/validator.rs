@@ -289,6 +289,41 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
+                TABLE_GET => {
+                    let table_idx =
+                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+
+                    if self.module_environment.tablesec.len() <= table_idx {
+                        return Err(Error::UndefinedTable);
+                    }
+                    let ref_type = self
+                        .module_environment
+                        .tablesec
+                        .get(table_idx)
+                        .unwrap()
+                        .ref_type;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ref_type.to_val_type());
+                }
+                TABLE_SET => {
+                    let table_idx =
+                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+
+                    if self.module_environment.tablesec.len() <= table_idx {
+                        return Err(Error::UndefinedTable);
+                    }
+
+                    let ref_type = self
+                        .module_environment
+                        .tablesec
+                        .get(table_idx)
+                        .unwrap()
+                        .ref_type;
+
+                    self.abstract_value_stack
+                        .pop_expected(ref_type.to_val_type())?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
                 SELECT => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     let val1 = self.abstract_value_stack.pop_val()?;
@@ -545,6 +580,27 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.check_align(4)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
+                }
+                REF_IS_NULL => {
+                    let value = self.abstract_value_stack.pop_val()?;
+                    if !value.is_ref() {
+                        return Err(Error::TypeMismatch);
+                    }
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                REF_NULL => {
+                    let ref_type = self.reader.next_byte().ok_or(Error::MissingValue)?;
+                    self.abstract_value_stack.push(ValType::lookup(ref_type)?);
+                }
+                REF_FUNC => {
+                    let func_idx =
+                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+
+                    self.module_environment
+                        .funcsec
+                        .get(func_idx)
+                        .ok_or(Error::InvalidFunctionIndex)?;
+                    self.abstract_value_stack.push(ValType::FuncRef);
                 }
                 EXTENSION_PREFIX => {
                     let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;

@@ -1,9 +1,12 @@
-use super::value_types::ValType;
+use super::value_types::{RefType, ValType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Value {
     I32(i32),
     I64(i64),
+    FuncRef(usize),
+    ExternRef(usize),
+    RefNull(RefType),
 }
 
 impl From<i32> for Value {
@@ -23,9 +26,11 @@ impl From<ValType> for Value {
             ValType::I32 => Value::I32(0),
             ValType::I64 => Value::I64(0),
             ValType::Unknown => panic!("Unknown value type cant be converted to value."),
+            _ => panic!("Value not implemented yet"),
         }
     }
 }
+
 impl From<u32> for Value {
     fn from(value: u32) -> Self {
         Value::I32(value as i32)
