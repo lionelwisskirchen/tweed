@@ -17,14 +17,15 @@ use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
 use binary::module_environment::{create_module_environment, ModuleEnvironment};
-use execution::instance::Instance;
 use execution::linker::Linker;
+use execution::{instance::Instance, store::Store};
 use validation::{module::Module, validator::Validator};
 
 pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>> {
-    let module = initialize(input)?;
-    let mut instance = instantiate(module)?;
-    invoke(&mut instance, name, params)
+    let mut module = initialize(input)?;
+    let mut store = Store::default();
+    let mut instance = instantiate(&mut module, &mut store, None)?;
+    invoke(&mut instance, name, params, &mut store, &mut module.reader)
 }
 pub fn initialize(input: &[u8]) -> Result<Module> {
     info!("Initialize module");
@@ -33,15 +34,21 @@ pub fn initialize(input: &[u8]) -> Result<Module> {
     validate(reader, module_environment)
 }
 
-pub fn instantiate(module: Module) -> Result<Instance> {
+pub fn instantiate(module: &mut Module, store: &mut Store, name: Option<&str>) -> Result<Instance> {
     info!("Instantiate module");
     let mut linker = Linker::new(module);
-    linker.instantiate()
+    linker.instantiate(store, name)
 }
 
-pub fn invoke(instance: &mut Instance, name: String, params: Vec<Value>) -> Result<Vec<Value>> {
+pub fn invoke(
+    instance: &mut Instance,
+    name: String,
+    params: Vec<Value>,
+    store: &mut Store,
+    reader: &mut WasmReader,
+) -> Result<Vec<Value>> {
     info!("Invoke `{name}` with {params:?}");
-    instance.call_by_name(&name, params)
+    instance.call_by_name(&name, params, store, reader)
 }
 
 fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Result<Module> {
@@ -64,3 +71,61 @@ fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Re
         sidetables,
     })
 }
+
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+
+//     #[test]
+//     fn test_element_section() {
+//         let bytes = wat::parse_str(
+//             r#"(module
+//   (table $t2 2 externref)
+//   (table $t3 3 funcref)
+//   (elem (table $t3) (i32.const 1) func $dummy)
+//   (func $dummy)
+
+//   (func (export "init") (param $r externref)
+//     (table.set $t2 (i32.const 1) (local.get $r))
+//     (table.set $t3 (i32.const 2) (table.get $t3 (i32.const 1)))
+//   )
+
+//   (func (export "get-externref") (param $i i32) (result externref)
+//     (table.get (local.get $i))
+//   )
+//   (func $f3 (export "get-funcref") (param $i i32) (result funcref)
+//     (table.get $t3 (local.get $i))
+//   )
+
+//   (func (export "is_null-funcref") (param $i i32) (result i32)
+//     (ref.is_null (call $f3 (local.get $i)))
+//   )
+// )"#,
+//         )
+//         .unwrap();
+
+//         let mut module = initialize(&bytes).unwrap();
+//         let mut store = Store::default();
+//         let mut instance = instantiate(&mut module, &mut store).unwrap();
+//         println!("{:?}",instance);
+// 	println!("{:?}", store);
+//         invoke(
+//             &mut instance,
+//             "init".to_string(),
+//             vec![Value::ExternRef(1)],
+//             &mut store,
+//             &mut module.reader,
+//         )
+//         .unwrap();
+//         let result = invoke(
+//             &mut instance,
+//             "get-externref".to_string(),
+//             vec![Value::I32(0)],
+//             &mut store,
+//             &mut module.reader,
+//         )
+//         .unwrap();
+//         println!("{:?}", result);
+//         assert!(false);
+//     }
+// }

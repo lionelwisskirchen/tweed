@@ -41,14 +41,21 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     for val in test_values {
         group.bench_with_input(BenchmarkId::new("Tweed", &val.0), &val, |b, _val| {
             b.iter(|| {
-                let module = initialize(&val.1).unwrap_or_else(|e| {
+                let mut module = initialize(&val.1).unwrap_or_else(|e| {
                     panic!("Initialization failed: {e}");
                 });
-
-                let mut instance = instantiate(module).unwrap_or_else(|e| {
+                let mut store = Default::default();
+                let mut instance = instantiate(&mut module, &mut store).unwrap_or_else(|e| {
                     panic!("Instantiation failed: {e}");
                 });
-                invoke(&mut instance, "_run".to_string(), vec![]).expect("Execution failed");
+                invoke(
+                    &mut instance,
+                    "_run".to_string(),
+                    vec![],
+                    &mut store,
+                    &mut module.reader,
+                )
+                .expect("Execution failed");
             })
         });
     }

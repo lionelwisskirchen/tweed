@@ -23,4 +23,5 @@ fn spec_tests() {
     run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/i32.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/global.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/table_get.wast"));
 }

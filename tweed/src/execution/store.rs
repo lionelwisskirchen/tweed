@@ -1,26 +1,78 @@
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use std::collections::BTreeMap;
+
+use alloc::vec::Vec;
 
 use crate::binary::table_section::Table;
 use crate::core::error::{Error, Result};
 use crate::core::value_types::ValType;
 use crate::{
-    binary::{export_section::ExportContext, global_section::GlobalType, type_section::FuncType},
+    binary::{global_section::GlobalType, type_section::FuncType},
     core::values::FromLeBytes,
     validation::side_table::SideTable,
     Value,
 };
+use alloc::string::String;
+
+use super::execution_stack::ExecutionStack;
+use super::executor::Frame;
+use super::instance::Instance;
+
+pub const DEFAULT_MODULE: &str = "__interpreter_default__";
 
 #[derive(Debug, Default)]
 pub struct Store {
     pub functions: Vec<FunctionInstance>,
-    pub exports: BTreeMap<String, ExportContext>,
     pub memories: Vec<MemoryInstance>,
-    pub data: Vec<DataInstance>,
+    pub datas: Vec<DataInstance>,
     pub globals: Vec<GlobalInstance>,
     pub tables: Vec<TableInstance>,
     pub elements: Vec<ElementInstance>,
+    pub instances: BTreeMap<String, Instance>,
+    pub call_stack: Vec<Frame>,
+    pub stack: ExecutionStack,
+}
+pub fn add_instances<T>(target: &mut Vec<T>, mut new: Vec<T>) -> Vec<usize> {
+    let start_index = target.len().saturating_sub(1);
+    target.append(&mut new);
+    let end_index = target.len().saturating_sub(1);
+    (start_index..=end_index).collect()
+}
+impl Store {
+    pub fn add_instance(&mut self, instance: Instance, name: Option<&str>) -> Result<Instance> {
+        let na = match name {
+            Some(n) => n,
+            None => DEFAULT_MODULE,
+        };
+        self.instances.insert(na.to_string(), instance.clone());
+        Ok(instance.clone())
+    }
+    pub fn get_instance(&self, name: Option<&str>) -> Result<Instance> {
+        let res = match name {
+            Some(n) => self.instances.get(n),
+            None => self.instances.get(DEFAULT_MODULE),
+        };
+        Ok(res.ok_or(Error::InvalidFunctionIndex)?.clone())
+    }
+    pub fn add_globals(&mut self, instances: Vec<GlobalInstance>) -> Vec<usize> {
+        add_instances(&mut self.globals, instances)
+    }
+    pub fn add_functions(&mut self, instances: Vec<FunctionInstance>) -> Vec<usize> {
+        add_instances(&mut self.functions, instances)
+    }
+    pub fn add_memories(&mut self, instances: Vec<MemoryInstance>) -> Vec<usize> {
+        add_instances(&mut self.memories, instances)
+    }
+    pub fn add_datas(&mut self, instances: Vec<DataInstance>) -> Vec<usize> {
+        add_instances(&mut self.datas, instances)
+    }
+    pub fn add_tables(&mut self, instances: Vec<TableInstance>) -> Vec<usize> {
+        add_instances(&mut self.tables, instances)
+    }
+    pub fn add_elements(&mut self, instances: Vec<ElementInstance>) -> Vec<usize> {
+        add_instances(&mut self.elements, instances)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
