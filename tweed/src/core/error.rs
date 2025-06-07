@@ -34,11 +34,13 @@ pub enum Error {
     IllegalSelectType(ValType),
     UndefinedMemory,
     UndefinedTable,
+    TableAccessOutOfBounds,
     InvalidAlignment,
     MemoryAccessOutOfBounds,
     DivisionByZero,
     UnrepresentableResult,
     GlobalIsImmutable,
+    IntegerOverflow,
 }
 
 impl Display for Error {
@@ -49,7 +51,8 @@ impl Display for Error {
                 f.write_str("The magic number of the given Wasm file is invalid.")
             }
             Error::GlobalIsImmutable => f.write_str("global is immutable"),
-            Error::DivisionByZero => f.write_str("Division by zero."),
+            Error::DivisionByZero => f.write_str("integer divide by zero"),
+            Error::IntegerOverflow => f.write_str("integer overflow"),
             Error::UnrepresentableResult => f.write_str("Result is not representable."),
             Error::InvalidVersion => f.write_str("The version in the Wasm file is invalid"),
             Error::InvalidSectionBytecode => f.write_str("The section in the Wasm file is invalid"),
@@ -89,6 +92,7 @@ impl Display for Error {
             Error::UndefinedTable => f.write_str("undefined table"),
             Error::InvalidAlignment => f.write_str("invalid alignment"),
             Error::MemoryAccessOutOfBounds => f.write_str("memory out of bounds"),
+            Error::TableAccessOutOfBounds => f.write_str("out of bounds table access"),
         }
     }
 }

@@ -124,7 +124,42 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     .call_by_name(invoke.name, args, &mut store, &mut reader)
                     .unwrap();
             }
-            _ => {}
+
+            WastDirective::AssertTrap {
+                span,
+                exec,
+                message,
+            } => match exec {
+                wast::WastExecute::Invoke(invoke) => {
+                    let args = invoke.args.iter().map(args_to_runtime_value).collect();
+                    let name = match invoke.module {
+                        Some(n) => Some(n.name()),
+                        None => None,
+                    };
+                    let mut instance = store.get_instance(name).unwrap();
+                    let result = instance.call_by_name(invoke.name, args, &mut store, &mut reader);
+                    let report_result = WastResult::AssertResult {
+                        name: invoke.name.to_string(),
+                        line: span.linecol_in(&input).0 + 1,
+                    };
+                    match result {
+                        Err(e) => {
+                            if format!("{e}") == message {
+                                report.success.push(report_result);
+                            } else {
+                                report.failure.push(report_result);
+                            }
+                        }
+                        Ok(_) => {
+                            report.failure.push(report_result);
+                        }
+                    };
+                }
+                _ => todo!(),
+            },
+            _ => {
+                unreachable!()
+            }
         }
     }
     Ok(report)

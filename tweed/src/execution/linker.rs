@@ -306,7 +306,6 @@ mod tests {
     use crate::{
         binary::{code_section::FuncCode, function_section::FuncDecl, type_section::FuncType},
         validation::side_table::SideTable,
-        validation::side_table::SideTableEntry,
         WasmReader,
     };
 

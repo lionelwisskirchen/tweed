@@ -323,8 +323,8 @@ impl<'store, 'reader, 'instance> Executor<'store, 'reader, 'instance> {
                     if right == 0 {
                         return Err(Error::DivisionByZero);
                     }
-                    if left == i32::MIN && left == -1 {
-                        return Err(Error::UnrepresentableResult);
+                    if left == i32::MIN && right == -1 {
+                        return Err(Error::IntegerOverflow);
                     }
                     self.store.stack.push((left / right).into());
                 }
@@ -771,7 +771,7 @@ impl<'store, 'reader, 'instance> Executor<'store, 'reader, 'instance> {
                         .instance
                         .tableaddr
                         .get(table_idx)
-                        .ok_or(Error::UndefinedTable)?;
+                        .ok_or(Error::TableAccessOutOfBounds)?;
                     let offset = self.store.stack.pop_i32()? as usize;
                     let table = self.store.tables.get_mut(*table_addr).unwrap(); // validated
                     let value = table.get(offset)?;
@@ -785,7 +785,7 @@ impl<'store, 'reader, 'instance> Executor<'store, 'reader, 'instance> {
                         .instance
                         .tableaddr
                         .get(table_idx)
-                        .ok_or(Error::UndefinedTable)?;
+                        .ok_or(Error::TableAccessOutOfBounds)?;
                     let table = self.store.tables.get_mut(*table_addr).unwrap(); // validated
                     let val = self.store.stack.pop()?;
                     let index = self.store.stack.pop_i32()? as usize;

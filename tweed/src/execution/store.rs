@@ -144,15 +144,15 @@ impl TableInstance {
         let res = self
             .reference_values
             .get(index)
-            .ok_or(Error::MemoryAccessOutOfBounds)?;
+            .ok_or(Error::TableAccessOutOfBounds)?;
         Ok(*res)
     }
     pub fn insert(&mut self, offset: usize, vals: &[Value]) -> Result<()> {
         let end = offset
             .checked_add(vals.len())
-            .ok_or(Error::MemoryAccessOutOfBounds)?;
+            .ok_or(Error::TableAccessOutOfBounds)?;
         if end > self.reference_values.len() {
-            return Err(Error::MemoryAccessOutOfBounds);
+            return Err(Error::TableAccessOutOfBounds);
         }
         for (i, val) in vals.iter().enumerate() {
             self.reference_values[offset + i] = *val;
