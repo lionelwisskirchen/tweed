@@ -1,9 +1,7 @@
 use std::{self, fs};
-use tweed::core::wasm_reader::WasmReader;
-use tweed::execution::instance::Instance;
 use tweed::execution::linker::Linker;
 use tweed::execution::store::Store;
-use tweed::{initialize, Value};
+use tweed::{initialize, invoke, Value};
 use wast::core::{HeapType, WastArgCore, WastRetCore};
 use wast::token::Index;
 use wast::{WastArg, WastDirective, WastRet};
@@ -18,9 +16,8 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         file: path.to_string(),
         ..Default::default()
     };
-    let mut instance: Instance = Default::default();
+    let mut instance: String = Default::default();
     let mut store: Store = Default::default();
-    let mut reader: WasmReader = Default::default();
     for directive in wast.directives {
         match directive {
             WastDirective::Module(mut module) => {
@@ -34,7 +31,6 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 };
 
                 instance = linker.instantiate(&mut store, name).unwrap();
-                reader = test_module.reader;
             }
             WastDirective::AssertInvalid {
                 span,
@@ -71,9 +67,8 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 let args: Vec<Value> = args.iter().map(args_to_runtime_value).collect();
                 let expected_results: Vec<Value> =
                     results.iter().map(result_to_runtime_value).collect();
-                let actual_results = instance
-                    .call_by_name(name, args, &mut store, &mut reader)
-                    .unwrap();
+                let actual_results =
+                    invoke(instance.clone(), name.to_string(), args, &mut store).unwrap();
                 let result = WastResult::AssertResult {
                     name: name.to_string(),
                     line: span.linecol_in(&input).0 + 1,
@@ -113,16 +108,23 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     _ => panic!("Testsuit: Error encoding the test wat."),
                 },
             },
-            WastDirective::Invoke(invoke) => {
-                let args: Vec<Value> = invoke.args.iter().map(args_to_runtime_value).collect();
-                let name = match invoke.module {
-                    Some(n) => Some(n.name()),
-                    None => None,
+            WastDirective::Invoke(invoke_confs) => {
+                let args: Vec<Value> = invoke_confs
+                    .args
+                    .iter()
+                    .map(args_to_runtime_value)
+                    .collect();
+                let name = match invoke_confs.module {
+                    Some(n) => n.name(),
+                    None => &instance,
                 };
-                let mut instance = store.get_instance(name).unwrap();
-                instance
-                    .call_by_name(invoke.name, args, &mut store, &mut reader)
-                    .unwrap();
+                invoke(
+                    name.to_string(),
+                    invoke_confs.name.to_string(),
+                    args,
+                    &mut store,
+                )
+                .unwrap();
             }
 
             WastDirective::AssertTrap {
@@ -130,16 +132,24 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 exec,
                 message,
             } => match exec {
-                wast::WastExecute::Invoke(invoke) => {
-                    let args = invoke.args.iter().map(args_to_runtime_value).collect();
-                    let name = match invoke.module {
-                        Some(n) => Some(n.name()),
-                        None => None,
+                wast::WastExecute::Invoke(invoke_confs) => {
+                    let args: Vec<Value> = invoke_confs
+                        .args
+                        .iter()
+                        .map(args_to_runtime_value)
+                        .collect();
+                    let name = match invoke_confs.module {
+                        Some(n) => n.name(),
+                        None => &instance,
                     };
-                    let mut instance = store.get_instance(name).unwrap();
-                    let result = instance.call_by_name(invoke.name, args, &mut store, &mut reader);
+                    let result = invoke(
+                        name.to_string(),
+                        invoke_confs.name.to_string(),
+                        args,
+                        &mut store,
+                    );
                     let report_result = WastResult::AssertResult {
-                        name: invoke.name.to_string(),
+                        name: invoke_confs.name.to_string(),
                         line: span.linecol_in(&input).0 + 1,
                     };
                     match result {

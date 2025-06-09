@@ -1,20 +1,17 @@
 use crate::binary::export_section::ExportContext;
 
+use crate::core::error::{Error, Result};
 use crate::core::values::Value;
-use crate::core::{
-    error::{Error, Result},
-    wasm_reader::WasmReader,
-};
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use super::executor::Executor;
 use super::store::{MemoryInstance, Store};
 
 // An instantiated Module
 #[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
 pub struct Instance {
+    pub name: String,
     pub funcaddr: Vec<usize>,
     pub tableaddr: Vec<usize>,
     pub memaddr: Vec<usize>,
@@ -25,51 +22,18 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(
-        funcaddr: Vec<usize>,
-        tableaddr: Vec<usize>,
-        memaddr: Vec<usize>,
-        globaladdr: Vec<usize>,
-        elemaddr: Vec<usize>,
-        dataddr: Vec<usize>,
-        exports: BTreeMap<String, ExportContext>,
-    ) -> Self {
-        Instance {
-            funcaddr,
-            tableaddr,
-            memaddr,
-            globaladdr,
-            elemaddr,
-            dataddr,
-            exports,
-        }
-    }
-    pub fn call_by_name(
-        &mut self,
-        name: &str,
-        args: Vec<Value>,
-        store: &mut Store,
-        reader: &mut WasmReader,
-    ) -> Result<Vec<Value>> {
+    pub fn get_func_by_name(&self, name: &str) -> Result<usize> {
         let Some(export_instance) = self.exports.get(name) else {
             return Err(Error::UnknownExportCall);
         };
-        match export_instance {
-            ExportContext::FunctionExport(index) => self.call(*index as usize, args, store, reader),
+        let res = match export_instance {
+            ExportContext::FunctionExport(index) => self
+                .funcaddr
+                .get(*index as usize)
+                .ok_or(Error::UnknownExportCall),
             _ => Err(Error::UnknownExportCall),
-        }
-    }
-    pub fn call(
-        &self,
-        index: usize,
-        args: Vec<Value>,
-        store: &mut Store,
-        reader: &mut WasmReader,
-    ) -> Result<Vec<Value>> {
-        store.stack.reset(); // Reset stack. Maybe not the perfect location
-        store.stack.push_vec(&args);
-        let mut executor = Executor::new(self, store, reader);
-        executor.invoke(index)
+        };
+        Ok(*res?)
     }
     pub fn get_mut_memory_by_name<'a>(
         &mut self,
@@ -82,6 +46,7 @@ impl Instance {
 
         match export_instance {
             ExportContext::MemoryExport(index) => store
+                .data
                 .memories
                 .get_mut(*index as usize)
                 .ok_or(Error::UnknownExportCall),
@@ -99,6 +64,7 @@ impl Instance {
 
         match export_instance {
             ExportContext::MemoryExport(index) => store
+                .data
                 .memories
                 .get(*index as usize)
                 .ok_or(Error::UnknownExportCall),
@@ -117,6 +83,7 @@ impl Instance {
         match export_instance {
             ExportContext::GlobalExport(index) => {
                 let gl = store
+                    .data
                     .globals
                     .get(*index as usize)
                     .ok_or(Error::UnknownExportCall)?;
@@ -138,6 +105,7 @@ impl Instance {
         match export_instance {
             ExportContext::GlobalExport(index) => {
                 let gl = store
+                    .data
                     .globals
                     .get_mut(*index as usize)
                     .ok_or(Error::UnknownExportCall)?;

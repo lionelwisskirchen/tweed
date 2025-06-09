@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 use crate::binary::table_section::Table;
 use crate::core::error::{Error, Result};
 use crate::core::value_types::ValType;
+use crate::core::wasm_reader::WasmReader;
 use crate::{
     binary::{global_section::GlobalType, type_section::FuncType},
     core::values::FromLeBytes,
@@ -15,23 +16,23 @@ use crate::{
 };
 use alloc::string::String;
 
-use super::execution_stack::ExecutionStack;
-use super::executor::Frame;
 use super::instance::Instance;
 
-pub const DEFAULT_MODULE: &str = "__interpreter_default__";
-
 #[derive(Debug, Default)]
-pub struct Store {
+pub struct StoreData {
     pub functions: Vec<FunctionInstance>,
     pub memories: Vec<MemoryInstance>,
     pub datas: Vec<DataInstance>,
     pub globals: Vec<GlobalInstance>,
     pub tables: Vec<TableInstance>,
     pub elements: Vec<ElementInstance>,
+}
+
+#[derive(Debug, Default)]
+pub struct Store {
+    pub data: StoreData,
     pub instances: BTreeMap<String, Instance>,
-    pub call_stack: Vec<Frame>,
-    pub stack: ExecutionStack,
+    pub reader: BTreeMap<String, WasmReader>,
 }
 pub fn add_instances<T>(target: &mut Vec<T>, mut new: Vec<T>) -> Vec<usize> {
     let start_index = target.len().saturating_sub(1);
@@ -39,40 +40,72 @@ pub fn add_instances<T>(target: &mut Vec<T>, mut new: Vec<T>) -> Vec<usize> {
     let end_index = target.len().saturating_sub(1);
     (start_index..=end_index).collect()
 }
+
 impl Store {
-    pub fn add_instance(&mut self, instance: Instance, name: Option<&str>) -> Result<Instance> {
-        let na = match name {
-            Some(n) => n,
-            None => DEFAULT_MODULE,
-        };
-        self.instances.insert(na.to_string(), instance.clone());
-        Ok(instance.clone())
+    pub fn add_instance(
+        &mut self,
+        instance: Instance,
+        name: &str,
+        reader: &WasmReader,
+    ) -> Result<()> {
+        self.instances.insert(name.to_string(), instance.clone());
+        self.reader.insert(name.to_string(), reader.clone());
+        Ok(())
     }
-    pub fn get_instance(&self, name: Option<&str>) -> Result<Instance> {
-        let res = match name {
-            Some(n) => self.instances.get(n),
-            None => self.instances.get(DEFAULT_MODULE),
-        };
-        Ok(res.ok_or(Error::InvalidFunctionIndex)?.clone())
+    pub fn get_func(&self, instance_name: &str, func_name: &str) -> Result<&FunctionInstance> {
+        let instance = self.get_instance(instance_name)?;
+        let func_addr = instance.get_func_by_name(func_name)?;
+        self.data
+            .functions
+            .get(func_addr)
+            .ok_or(Error::UnknownExportCall)
+    }
+    pub fn get_instance(&self, name: &str) -> Result<&Instance> {
+        let instance = self
+            .instances
+            .get(name)
+            .ok_or(Error::InvalidFunctionIndex)?;
+        Ok(instance)
+    }
+    pub fn get_instance_count(&self) -> usize {
+        self.instances.len()
+    }
+    pub fn instance_exists(&self, name: &str) -> bool {
+        self.instances.contains_key(name)
     }
     pub fn add_globals(&mut self, instances: Vec<GlobalInstance>) -> Vec<usize> {
-        add_instances(&mut self.globals, instances)
+        add_instances(&mut self.data.globals, instances)
     }
     pub fn add_functions(&mut self, instances: Vec<FunctionInstance>) -> Vec<usize> {
-        add_instances(&mut self.functions, instances)
+        add_instances(&mut self.data.functions, instances)
     }
     pub fn add_memories(&mut self, instances: Vec<MemoryInstance>) -> Vec<usize> {
-        add_instances(&mut self.memories, instances)
+        add_instances(&mut self.data.memories, instances)
     }
     pub fn add_datas(&mut self, instances: Vec<DataInstance>) -> Vec<usize> {
-        add_instances(&mut self.datas, instances)
+        add_instances(&mut self.data.datas, instances)
     }
     pub fn add_tables(&mut self, instances: Vec<TableInstance>) -> Vec<usize> {
-        add_instances(&mut self.tables, instances)
+        add_instances(&mut self.data.tables, instances)
     }
     pub fn add_elements(&mut self, instances: Vec<ElementInstance>) -> Vec<usize> {
-        add_instances(&mut self.elements, instances)
+        add_instances(&mut self.data.elements, instances)
     }
+}
+
+pub fn map_memory<'a>(
+    index: usize,
+    instance: &Instance,
+    store: &'a mut StoreData,
+) -> Result<&'a mut MemoryInstance> {
+    let mem_addr = instance
+        .memaddr
+        .get(index) // only one memory allowed
+        .ok_or(Error::InvalidMemoryIndex)?;
+    store
+        .memories
+        .get_mut(*mem_addr)
+        .ok_or(Error::InvalidMemoryIndex)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -98,12 +131,15 @@ impl MemoryInstance {
         let data = T::from_le_bytes(data_bytes);
         Ok(data)
     }
-    pub fn store(&mut self, address: usize, data: &[u8]) -> Result<()> {
-        let end = address + data.len();
+    pub fn store(&mut self, address: usize, offset: usize, data: &[u8]) -> Result<()> {
+        let abs_address = offset
+            .checked_add(address)
+            .ok_or(Error::MemoryAccessOutOfBounds)?;
+        let end = abs_address + data.len();
         if end > self.data.len() {
             return Err(Error::MemoryAccessOutOfBounds);
         }
-        self.data[address..end].copy_from_slice(data);
+        self.data[abs_address..end].copy_from_slice(data);
         Ok(())
     }
 }
@@ -119,6 +155,7 @@ pub struct FunctionInstance {
     pub start: usize,
     pub end: usize,
     pub side_table: SideTable,
+    pub instance: String,
 }
 
 #[derive(Debug, Clone)]

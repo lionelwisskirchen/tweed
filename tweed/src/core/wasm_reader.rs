@@ -1,3 +1,4 @@
+use crate::core::error::{Error, Result};
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -18,6 +19,17 @@ impl WasmReader {
         let curr = self.bytecode.get(self.byte_pointer);
         self.byte_pointer += 1;
         curr
+    }
+    pub fn skip_block_type(&mut self) -> Result<u32> {
+        self.next_leb128_u32().ok_or(Error::InvalidSectionBytecode)
+    }
+    pub fn skip_depth(&mut self) -> Result<u32> {
+        self.next_leb128_u32().ok_or(Error::InvalidSectionBytecode)
+    }
+    pub fn read_mem_args(&mut self) -> Result<(u32, u32)> {
+        let _align = self.next_leb128_u32().ok_or(Error::UndefinedMemory)?;
+        let offset = self.next_leb128_u32().ok_or(Error::UndefinedMemory)?;
+        Ok((_align, offset))
     }
     pub fn seek(&mut self, position: usize) {
         self.byte_pointer = position

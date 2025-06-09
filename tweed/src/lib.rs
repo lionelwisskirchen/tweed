@@ -10,6 +10,7 @@ pub mod execution;
 pub mod validation;
 
 pub use core::values::Value;
+use execution::executor::Executor;
 pub use log::LevelFilter;
 
 use crate::core::error::Result;
@@ -18,14 +19,14 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use binary::module_environment::{create_module_environment, ModuleEnvironment};
 use execution::linker::Linker;
-use execution::{instance::Instance, store::Store};
+use execution::store::Store;
 use validation::{module::Module, validator::Validator};
 
 pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>> {
     let mut module = initialize(input)?;
     let mut store = Store::default();
-    let mut instance = instantiate(&mut module, &mut store, None)?;
-    invoke(&mut instance, name, params, &mut store, &mut module.reader)
+    let instance_name = instantiate(&mut module, &mut store, None)?;
+    invoke(instance_name, name, params, &mut store)
 }
 pub fn initialize(input: &[u8]) -> Result<Module> {
     info!("Initialize module");
@@ -34,21 +35,21 @@ pub fn initialize(input: &[u8]) -> Result<Module> {
     validate(reader, module_environment)
 }
 
-pub fn instantiate(module: &mut Module, store: &mut Store, name: Option<&str>) -> Result<Instance> {
+pub fn instantiate(module: &mut Module, store: &mut Store, name: Option<&str>) -> Result<String> {
     info!("Instantiate module");
     let mut linker = Linker::new(module);
     linker.instantiate(store, name)
 }
 
 pub fn invoke(
-    instance: &mut Instance,
+    instance_name: String,
     name: String,
     params: Vec<Value>,
     store: &mut Store,
-    reader: &mut WasmReader,
 ) -> Result<Vec<Value>> {
     info!("Invoke `{name}` with {params:?}");
-    instance.call_by_name(&name, params, store, reader)
+    let mut exec = Executor::new(store);
+    exec.invoke(&instance_name, &name, &params)
 }
 
 fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Result<Module> {

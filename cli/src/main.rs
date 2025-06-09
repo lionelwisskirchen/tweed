@@ -22,6 +22,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Invoke a function in the WASM module
+    Init,
     Invoke {
         /// Function to invoke
         #[arg(value_name = "FUNCTION")]
@@ -43,21 +44,26 @@ fn main() -> anyhow::Result<()> {
     } else {
         STDLogger::init(LevelFilter::Info);
     }
-
-    let module = initialize(&wasm_bytes)
+    let mut store = Default::default();
+    let mut module = initialize(&wasm_bytes)
         .map_err(|e| anyhow::anyhow!("Failed to initialize the module: {}", e))?;
 
-    let mut instance = instantiate(module)
+    let instance = instantiate(&mut module, &mut store, None)
         .map_err(|e| anyhow::anyhow!("Failed to instantiate the module: {}", e))?;
 
     match cli.command {
         Commands::Invoke { function, params } => {
-            let values: Vec<Value> = params.into_iter().map(Value::I32).collect();
-
-            let result = invoke(&mut instance, function, values)
+            let values: Vec<Value> = params
+                .into_iter()
+                .map(|arg0: i32| Value::I32(arg0))
+                .collect();
+            let result = invoke(instance.clone(), function, values, &mut store)
                 .map_err(|e| anyhow::anyhow!("Function invocation failed: {:?}", e))?;
 
             println!("Result: {:?}", result);
+        }
+        Commands::Init => {
+            println!("Instance: {:?}", instance);
         }
     }
 

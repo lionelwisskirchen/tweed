@@ -41,6 +41,7 @@ pub enum Error {
     UnrepresentableResult,
     GlobalIsImmutable,
     IntegerOverflow,
+    InstanceNameTaken,
 }
 
 impl Display for Error {
@@ -50,6 +51,7 @@ impl Display for Error {
             Error::InvalidMagic => {
                 f.write_str("The magic number of the given Wasm file is invalid.")
             }
+            Error::InstanceNameTaken => f.write_str("instance name is taken"),
             Error::GlobalIsImmutable => f.write_str("global is immutable"),
             Error::DivisionByZero => f.write_str("integer divide by zero"),
             Error::IntegerOverflow => f.write_str("integer overflow"),
