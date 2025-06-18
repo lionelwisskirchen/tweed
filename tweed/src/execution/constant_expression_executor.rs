@@ -7,20 +7,19 @@ use crate::core::values::Value;
 use crate::core::wasm_reader::WasmReader;
 
 use super::execution_stack::ExecutionStack;
-use super::store::{FunctionInstance, GlobalInstance};
+use super::store::{FuncInstance, GlobalInstance};
 use crate::core::error::{Error, Result};
 
 pub fn execute_const_expr(
     reader: &mut WasmReader,
     globals: &[GlobalInstance],
     result: &[ValType],
-    functions: &[FunctionInstance],
+    functions: &[FuncInstance],
 ) -> Result<Vec<Value>> {
     let mut value_stack: ExecutionStack = ExecutionStack::default();
     loop {
         let byte = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
         trace!("Execute Const Expression Byte: {byte:#04X}");
-        trace!("Stack: {:?}", value_stack);
         match *byte {
             I32_CONST => {
                 let value = Value::I32(reader.next_leb128_i32().unwrap());

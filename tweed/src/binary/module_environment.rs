@@ -55,11 +55,19 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
 
             0x02 => {
                 trace!("Process Import Section");
-                module.importsec = process_import_section(reader)?;
+                let imports = process_import_section(reader)?;
+                let signatures = imports
+                    .functions
+                    .clone()
+                    .into_iter()
+                    .map(|f| f.context)
+                    .collect();
+                module.funcsec = signatures;
+                module.importsec = imports;
             }
             0x03 => {
                 trace!("Process Function Section");
-                module.funcsec = process_function_section(reader)?;
+                module.funcsec.extend(process_function_section(reader)?);
             }
             0x04 => {
                 trace!("Process Table Section");

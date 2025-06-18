@@ -1,6 +1,7 @@
 #[path = "helper/mod.rs"]
 mod helper;
 use std::path::Path;
+use test_log;
 
 use helper::run::execute_spec_test;
 fn run_spec_test(path: &Path) {
@@ -16,8 +17,9 @@ fn run_spec_test(path: &Path) {
     }
 }
 
-#[test]
+#[test_log::test]
 fn spec_tests() {
+    run_spec_test(Path::new("./tests/spec/testsuite/linking.wast"));
     run_spec_test(Path::new("./tests/spec/br.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/local_tee.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));

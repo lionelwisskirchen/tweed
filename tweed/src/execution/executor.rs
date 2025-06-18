@@ -10,7 +10,7 @@ use crate::core::wasm_reader::WasmReader;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
 
 use super::execution_stack::ExecutionStack;
-use super::store::{map_memory, FunctionInstance, MemoryInstance, Store};
+use super::store::{map_memory, FuncInstance, HostEnv, Internal, MemoryInstance, Store};
 
 #[derive(Default, Debug, Clone)]
 pub struct Frame {
@@ -24,7 +24,7 @@ pub struct Frame {
     pub side_table: SideTable,
     pub side_table_pointer: usize,
 }
-fn build_frame(function: &FunctionInstance, stack: &mut ExecutionStack) -> Result<Frame> {
+fn build_frame(function: &Internal, stack: &mut ExecutionStack) -> Result<Frame> {
     let mut locals = stack.pop_n(function.signature.parameter.len())?;
     locals.append(&mut function.locals.clone()); // Locals = Params + Locals
     Ok(Frame {
@@ -63,11 +63,35 @@ impl<'store> Executor<'store> {
     ) -> Result<Vec<Value>> {
         self.stack.reset();
         self.stack.push_vec(args);
+        let func_inst_id = self
+            .store
+            .instances
+            .get(instance_name)
+            .unwrap()
+            .get_func_by_name(func_name)?;
 
-        let func_inst = self.store.get_func(instance_name, func_name)?;
-        let frame = build_frame(func_inst, &mut self.stack)?;
-        self.call_stack.push(frame);
-        self.execute()
+        let mut func_inst = self
+            .store
+            .data
+            .functions
+            .get_mut(func_inst_id)
+            .unwrap()
+            .clone();
+        let mut env: HostEnv = (&self.store.data).into();
+        match func_inst {
+            FuncInstance::Internal(instance) => {
+                let frame = build_frame(&instance, &mut self.stack)?;
+                self.call_stack.push(frame);
+                self.execute()
+            }
+            FuncInstance::External(ref mut host_function) => {
+                let args = self.stack.pop_n(host_function.ty.parameter.len())?;
+                let mut func_ref = host_function.func.borrow_mut();
+                let results = func_ref(&mut env, args)?;
+                self.stack.push_vec(&results);
+                Ok(results)
+            }
+        }
     }
     fn execute(&mut self) -> Result<Vec<Value>> {
         loop {
@@ -599,24 +623,36 @@ impl<'store> Executor<'store> {
                         .next_leb128_u32()
                         .ok_or(Error::InvalidFunctionIndex)?;
                     trace!("CALL({index})");
+
                     let function_addr = instance
                         .funcaddr
                         .get(index as usize)
                         .ok_or(Error::InvalidFunctionIndex)?;
+
                     let function = self
                         .store
                         .data
                         .functions
-                        .get(*function_addr)
-                        .ok_or(Error::InvalidFunctionIndex)?;
-
-                    // TODO External/internal functions
-                    let frame = build_frame(function, &mut self.stack)?;
-                    current_frame.program_counter =
-                        reader.current_index() - current_frame.start + 1;
-                    self.call_stack.push(current_frame.clone());
-                    self.call_stack.push(frame);
-                    break;
+                        .get_mut(*function_addr)
+                        .ok_or(Error::InvalidFunctionIndex)?
+                        .clone();
+                    match function {
+                        FuncInstance::Internal(instance) => {
+                            let frame = build_frame(&instance, &mut self.stack)?;
+                            current_frame.program_counter =
+                                reader.current_index() - current_frame.start + 1;
+                            self.call_stack.push(current_frame.clone());
+                            self.call_stack.push(frame);
+                            break;
+                        }
+                        FuncInstance::External(host_function) => {
+                            let mut env: HostEnv = (&self.store.data).into();
+                            let args = self.stack.pop_n(host_function.ty.parameter.len())?;
+                            let mut func_ref = host_function.func.borrow_mut();
+                            let results = func_ref(&mut env, args)?;
+                            self.stack.push_vec(&results);
+                        }
+                    }
                 }
                 I64_STORE => {
                     let (_, offset) = reader.read_mem_args()?;

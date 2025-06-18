@@ -16,7 +16,17 @@ pub enum ValType {
     ExternRef,
     Unknown,
 }
-
+impl From<Value> for ValType {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::I32(_) => ValType::I32,
+            Value::I64(_) => ValType::I64,
+            Value::ExternRef(_) => ValType::ExternRef,
+            Value::FuncRef(_) => ValType::FuncRef,
+            _ => panic!("Value not implemented yet"),
+        }
+    }
+}
 impl RefType {
     pub fn from_byte(byte: u8) -> Option<Self> {
         match byte {

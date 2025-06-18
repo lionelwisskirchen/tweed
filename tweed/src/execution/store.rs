@@ -2,8 +2,6 @@ extern crate alloc;
 
 use std::collections::BTreeMap;
 
-use alloc::vec::Vec;
-
 use crate::binary::table_section::Table;
 use crate::core::error::{Error, Result};
 use crate::core::value_types::ValType;
@@ -14,13 +12,16 @@ use crate::{
     validation::side_table::SideTable,
     Value,
 };
+use alloc::rc::Rc;
 use alloc::string::String;
+use alloc::vec::Vec;
+use core::cell::RefCell;
 
 use super::instance::Instance;
 
 #[derive(Debug, Default)]
 pub struct StoreData {
-    pub functions: Vec<FunctionInstance>,
+    pub functions: Vec<FuncInstance>,
     pub memories: Vec<MemoryInstance>,
     pub datas: Vec<DataInstance>,
     pub globals: Vec<GlobalInstance>,
@@ -34,13 +35,27 @@ pub struct Store {
     pub instances: BTreeMap<String, Instance>,
     pub reader: BTreeMap<String, WasmReader>,
 }
+
+#[derive(Debug)]
+pub struct HostEnv<'store> {
+    pub memories: &'store Vec<MemoryInstance>,
+    pub globals: &'store Vec<GlobalInstance>,
+}
+
 pub fn add_instances<T>(target: &mut Vec<T>, mut new: Vec<T>) -> Vec<usize> {
-    let start_index = target.len().saturating_sub(1);
+    let start_index = target.len();
     target.append(&mut new);
     let end_index = target.len().saturating_sub(1);
     (start_index..=end_index).collect()
 }
-
+impl<'a> From<&'a StoreData> for HostEnv<'a> {
+    fn from(store: &'a StoreData) -> Self {
+        HostEnv {
+            memories: &store.memories,
+            globals: &store.globals,
+        }
+    }
+}
 impl Store {
     pub fn add_instance(
         &mut self,
@@ -52,12 +67,12 @@ impl Store {
         self.reader.insert(name.to_string(), reader.clone());
         Ok(())
     }
-    pub fn get_func(&self, instance_name: &str, func_name: &str) -> Result<&FunctionInstance> {
+    pub fn get_func(&mut self, instance_name: &str, func_name: &str) -> Result<&mut FuncInstance> {
         let instance = self.get_instance(instance_name)?;
         let func_addr = instance.get_func_by_name(func_name)?;
         self.data
             .functions
-            .get(func_addr)
+            .get_mut(func_addr)
             .ok_or(Error::UnknownExportCall)
     }
     pub fn get_instance(&self, name: &str) -> Result<&Instance> {
@@ -76,7 +91,7 @@ impl Store {
     pub fn add_globals(&mut self, instances: Vec<GlobalInstance>) -> Vec<usize> {
         add_instances(&mut self.data.globals, instances)
     }
-    pub fn add_functions(&mut self, instances: Vec<FunctionInstance>) -> Vec<usize> {
+    pub fn add_functions(&mut self, instances: Vec<FuncInstance>) -> Vec<usize> {
         add_instances(&mut self.data.functions, instances)
     }
     pub fn add_memories(&mut self, instances: Vec<MemoryInstance>) -> Vec<usize> {
@@ -149,7 +164,28 @@ pub struct DataInstance {
     pub data: Vec<u8>,
 }
 #[derive(Debug, Clone)]
-pub struct FunctionInstance {
+pub enum FuncInstance {
+    Internal(Internal),
+    External(HostFunc),
+}
+
+pub type Func = Rc<RefCell<dyn FnMut(&mut HostEnv, Vec<Value>) -> Result<Vec<Value>>>>;
+
+#[derive(Clone)]
+pub struct HostFunc {
+    pub ty: FuncType,
+    pub func: Func,
+}
+impl core::fmt::Debug for HostFunc {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        f.debug_struct("HostFunc")
+            .field("ty", &self.ty)
+            .field("func", &"<host func>")
+            .finish()
+    }
+}
+#[derive(Debug, Clone)]
+pub struct Internal {
     pub signature: FuncType,
     pub locals: Vec<Value>,
     pub start: usize,

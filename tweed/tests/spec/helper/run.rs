@@ -1,13 +1,45 @@
+use std::collections::HashMap;
 use std::{self, fs};
 use tweed::execution::linker::Linker;
 use tweed::execution::store::Store;
 use tweed::{initialize, invoke, Value};
 use wast::core::{HeapType, WastArgCore, WastRetCore};
 use wast::token::Index;
-use wast::{WastArg, WastDirective, WastRet};
+use wast::{WastArg, WastRet};
 
 use super::wast_report::{WastReport, WastResult};
 
+#[derive(Default)]
+struct Environment {
+    modules: HashMap<String, String>,
+    last_module: Option<String>,
+}
+
+impl Environment {
+    fn register(&mut self, name: &str, addr: &str) {
+        self.modules.insert(name.to_string(), addr.to_string());
+        self.last_module = Some(addr.to_string());
+    }
+    fn last(&self) -> Option<String> {
+        self.last_module.clone()
+    }
+    fn get<'a>(&self, module_id: Option<wast::token::Id<'_>>) -> Option<String> {
+        match module_id {
+            Some(n) => self.modules.get(n.name()).cloned(),
+            None => self.last_module.clone(),
+        }
+    }
+    fn update_last(&mut self, name: &str) {
+        self.last_module = Some(name.to_string());
+    }
+}
+
+pub fn convert_name<'a>(name: Option<wast::token::Id<'_>>) -> Option<String> {
+    match name {
+        Some(n) => Some(n.name().to_string()),
+        None => None,
+    }
+}
 pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::Error>> {
     let input = fs::read_to_string(path).unwrap();
     let buf = wast::parser::ParseBuffer::new(&input)?;
@@ -16,23 +48,72 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         file: path.to_string(),
         ..Default::default()
     };
-    let mut instance: String = Default::default();
+    let mut module_registry = Environment::default();
     let mut store: Store = Default::default();
+    let mut linker: Linker = Linker::default();
+    linker
+        .add_global_import(
+            "spectest".to_string(),
+            "global_i32".to_string(),
+            Value::I32(42),
+            true,
+        )
+        .unwrap();
+    linker
+        .add_global_import(
+            "spectest".to_string(),
+            "global_i64".to_string(),
+            Value::I64(42),
+            true,
+        )
+        .unwrap();
+
     for directive in wast.directives {
+        use wast::WastDirective::{
+            AssertInvalid, AssertMalformed, AssertReturn, AssertTrap, Invoke, Module, Register,
+        };
+
         match directive {
-            WastDirective::Module(mut module) => {
+            Register { name, module, .. } => match module {
+                None => {
+                    let Some(last) = module_registry.last() else {
+                        unreachable!("No Module registered");
+                    };
+                    module_registry.register(name, &last);
+                    let instance = store.get_instance(name).unwrap();
+                    linker.instance(instance).unwrap()
+                }
+                Some(id) => {
+                    let instance = store.get_instance(id.name()).unwrap();
+                    linker.instance(instance).unwrap()
+                }
+            },
+            Module(mut module) => {
                 let module_binary = module.encode()?;
                 let mut test_module = initialize(&module_binary).unwrap();
-                let mut linker = Linker::new(&mut test_module);
-                linker.auto_link_spectest_globals().unwrap();
-                let name = match module.name() {
-                    Some(n) => Some(n.name()),
-                    None => None,
-                };
+                let name = convert_name(module.name());
+                let instance = linker
+                    .instantiate(&mut test_module, &mut store, name.as_deref())
+                    .unwrap();
 
-                instance = linker.instantiate(&mut store, name).unwrap();
+                if let Some(name) = module.name() {
+                    module_registry.register(name.name(), &instance);
+                } else {
+                    module_registry.update_last(&instance);
+                }
             }
-            WastDirective::AssertInvalid {
+            Invoke(invoke_confs) => {
+                let args: Vec<Value> = invoke_confs
+                    .args
+                    .iter()
+                    .map(args_to_runtime_value)
+                    .collect();
+                let module = module_registry.get(invoke_confs.module).unwrap();
+                let function = invoke_confs.name.to_string();
+                invoke(module, function, args, &mut store).unwrap();
+            }
+
+            AssertInvalid {
                 span,
                 mut module,
                 message,
@@ -54,33 +135,38 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 }
                 _ => panic!("Testsuit: Error encoding the test wat."),
             },
-            WastDirective::AssertReturn {
+            AssertReturn {
                 exec,
                 results,
                 span,
             } => {
-                let (name, args) = match exec {
-                    wast::WastExecute::Invoke(invoke) => (invoke.name, invoke.args),
-                    _ => unreachable!(),
+                let invoke_confs = match exec {
+                    wast::WastExecute::Invoke(invoke) => invoke,
+                    _ => todo!(),
                 };
 
-                let args: Vec<Value> = args.iter().map(args_to_runtime_value).collect();
+                let args: Vec<Value> = invoke_confs
+                    .args
+                    .iter()
+                    .map(args_to_runtime_value)
+                    .collect();
                 let expected_results: Vec<Value> =
                     results.iter().map(result_to_runtime_value).collect();
+                let module = module_registry.get(invoke_confs.module).unwrap();
                 let actual_results =
-                    invoke(instance.clone(), name.to_string(), args, &mut store).unwrap();
+                    invoke(module, invoke_confs.name.to_string(), args, &mut store).unwrap();
                 let result = WastResult::AssertResult {
-                    name: name.to_string(),
+                    name: invoke_confs.name.to_string(),
                     line: span.linecol_in(&input).0 + 1,
                 };
                 if expected_results == actual_results {
                     report.success.push(result);
                 } else {
-                    println!("expectd {expected_results:?} actual {actual_results:?}");
+                    println!("expected {expected_results:?} actual {actual_results:?}");
                     report.failure.push(result);
                 };
             }
-            WastDirective::AssertMalformed {
+            AssertMalformed {
                 span,
                 mut module,
                 message,
@@ -108,26 +194,8 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     _ => panic!("Testsuit: Error encoding the test wat."),
                 },
             },
-            WastDirective::Invoke(invoke_confs) => {
-                let args: Vec<Value> = invoke_confs
-                    .args
-                    .iter()
-                    .map(args_to_runtime_value)
-                    .collect();
-                let name = match invoke_confs.module {
-                    Some(n) => n.name(),
-                    None => &instance,
-                };
-                invoke(
-                    name.to_string(),
-                    invoke_confs.name.to_string(),
-                    args,
-                    &mut store,
-                )
-                .unwrap();
-            }
 
-            WastDirective::AssertTrap {
+            AssertTrap {
                 span,
                 exec,
                 message,
@@ -138,10 +206,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         .iter()
                         .map(args_to_runtime_value)
                         .collect();
-                    let name = match invoke_confs.module {
-                        Some(n) => n.name(),
-                        None => &instance,
-                    };
+                    let name = module_registry.get(invoke_confs.module).unwrap();
                     let result = invoke(
                         name.to_string(),
                         invoke_confs.name.to_string(),

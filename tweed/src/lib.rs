@@ -37,8 +37,8 @@ pub fn initialize(input: &[u8]) -> Result<Module> {
 
 pub fn instantiate(module: &mut Module, store: &mut Store, name: Option<&str>) -> Result<String> {
     info!("Instantiate module");
-    let mut linker = Linker::new(module);
-    linker.instantiate(store, name)
+    let mut linker = Linker::default();
+    linker.instantiate(module, store, name)
 }
 
 pub fn invoke(
@@ -54,7 +54,6 @@ pub fn invoke(
 
 fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Result<Module> {
     info!("Validate module");
-    debug!("Module Environment{:?}", module_environment);
     let mut validator = Validator::new(&mut reader, &module_environment);
     let sidetables = validator.validate()?;
     Ok(Module {

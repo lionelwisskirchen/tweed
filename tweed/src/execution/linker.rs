@@ -1,6 +1,8 @@
 use crate::binary::data_section::SegmentMode;
 use crate::binary::element_section::{ElementItems, Mode};
 use crate::binary::export_section::ExportContext;
+use crate::binary::global_section::GlobalType;
+use crate::binary::type_section::FuncType;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::values::Value;
 use crate::core::{
@@ -8,24 +10,28 @@ use crate::core::{
     value_types::ValType,
 };
 use crate::validation::module::Module;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+
 use alloc::vec::Vec;
 use core::iter::zip;
 
 use super::constant_expression_executor::execute_const_expr;
 use super::instance::Instance;
 use super::store::{
-    DataInstance, ElementInstance, FunctionInstance, GlobalInstance, MemoryInstance, Store,
-    TableInstance,
+    DataInstance, ElementInstance, FuncInstance, GlobalInstance, HostEnv, HostFunc, Internal,
+    MemoryInstance, Store, TableInstance,
 };
 pub const PAGE_SIZE: u32 = 65536;
 pub const DEFAULT_MODULE: &str = "__module_instance_default__";
 
-pub struct Linker<'module> {
-    module: &'module mut Module,
-    imported_globals: BTreeMap<ImportName, GlobalInstance>,
+#[derive(Default)]
+pub struct Linker {
+    imported_globals: BTreeMap<ImportName, ImportSource<GlobalInstance>>,
+    imported_funcs: BTreeMap<ImportName, ImportSource<HostFunc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -34,81 +40,105 @@ pub struct ImportName {
     pub name: String,
 }
 
-impl<'module> Linker<'module> {
-    pub fn new(module: &'module mut Module) -> Self {
-        Linker {
-            module,
-            imported_globals: BTreeMap::new(),
-        }
-    }
+#[derive(Debug, Clone)]
+pub enum ImportSource<T> {
+    Extern(usize),
+    Host(T),
+}
 
-    pub fn auto_link_spectest_globals(&mut self) -> Result<()> {
-        for import in &self.module.importsec.globals.clone() {
-            if import.module == "spectest" {
-                self.add_global_import(
-                    import.module.clone(),
-                    import.name.clone(),
-                    match import.context.value_type {
-                        ValType::I32 => Value::I32(42),
-                        ValType::I64 => Value::I64(42),
-                        _ => panic!("Unknown value type cant be converted to value."),
-                    },
-                )?;
+impl Linker {
+    pub fn instance(&mut self, instance: &Instance) -> Result<()> {
+        for (name, context) in &instance.exports {
+            let key = ImportName {
+                module: instance.name.clone(),
+                name: name.to_string(),
+            };
+            match context {
+                ExportContext::GlobalExport(idx) => {
+                    self.imported_globals.insert(
+                        key,
+                        ImportSource::Extern(*instance.globaladdr.get(*idx as usize).unwrap()),
+                    );
+                }
+                ExportContext::FunctionExport(idx) => {
+                    self.imported_funcs.insert(
+                        key,
+                        ImportSource::Extern(*instance.funcaddr.get(*idx as usize).unwrap()),
+                    );
+                }
+                _ => todo!(),
             }
         }
         Ok(())
     }
-    pub fn add_global_import(&mut self, module: String, name: String, value: Value) -> Result<()> {
+    pub fn add_function(
+        &mut self,
+        module: String,
+        name: String,
+        ty: FuncType,
+        func: impl FnMut(&mut HostEnv, Vec<Value>) -> Result<Vec<Value>> + 'static,
+    ) -> Result<()> {
+        let key = ImportName { module, name };
+        let func = HostFunc {
+            ty,
+            func: Rc::new(RefCell::new(func)),
+        };
+        self.imported_funcs.insert(key, ImportSource::Host(func));
+        Ok(())
+    }
+    pub fn add_global_import(
+        &mut self,
+        module: String,
+        name: String,
+        value: Value,
+        is_mutable: bool,
+    ) -> Result<()> {
         let key = ImportName {
             module: module.clone(),
             name: name.clone(),
         };
-        if let Some(import) = self
-            .module
-            .importsec
-            .globals
-            .iter()
-            .find(|g| g.module == module && g.name == name)
-        {
-            let global_type = import.context.clone();
-            if !global_type.value_type.is_type(value) {
-                return Err(Error::TypeMismatch);
-            }
-            let instance = GlobalInstance { global_type, value };
-            self.imported_globals.insert(key, instance);
-            Ok(())
-        } else {
-            Err(Error::UnknownGlobal)
-        }
+        let global_type = GlobalType {
+            value_type: ValType::from(value),
+            is_mutable,
+        };
+        let instance = GlobalInstance { global_type, value };
+        self.imported_globals
+            .insert(key, ImportSource::Host(instance));
+        Ok(())
     }
-    pub fn instantiate(&mut self, store: &mut Store, name: Option<&str>) -> Result<String> {
-        // let name = match name {
-        //     Some(n) => n,
-        //     None => DEFAULT_MODULE,
-        // };
+    pub fn instantiate(
+        &mut self,
+        module: &mut Module,
+        store: &mut Store,
+        name: Option<&str>,
+    ) -> Result<String> {
         let name = match name {
             Some(n) if !store.instance_exists(n) => n.to_string(),
             Some(_) => return Err(Error::InstanceNameTaken),
             None => format!("{}#{}", DEFAULT_MODULE, store.get_instance_count()),
         };
 
-        let mut globals = self.instantiate_global_imports()?;
-        let exports = self.instantiate_export()?;
-        let functions = self.instantiate_functions(&name)?;
-        let mut memories = self.instantiate_memories()?;
-        let data = self.instantiate_datas(&mut memories, &globals, &functions)?;
-        let mut tables = self.instantiate_tables()?;
-        let elements = self.instantiate_elements(&globals, &mut tables, &functions)?;
+        let mut globals = self.instantiate_global_imports(module, store)?;
+        let mut functions = self.instantiate_function_imports(module, store)?;
+        let mut memories = self.instantiate_memory_imports(module, store)?;
+        let mut tables = self.instantiate_table_imports(module, store)?;
 
-        globals.extend(self.instantiate_globals(&globals, &functions)?);
-        let globaladdr = store.add_globals(globals);
+        functions.extend(self.instantiate_functions(module, &name)?);
+        globals.extend(self.instantiate_globals(module, &globals, &functions)?);
+        memories.extend(self.instantiate_memories(module)?);
+        tables.extend(self.instantiate_tables(module)?);
+
+        let data = self.instantiate_datas(module, &mut memories, &globals, &functions)?;
+        let elements = self.instantiate_elements(module, &globals, &mut tables, &functions)?;
+
         let funcaddr = store.add_functions(functions);
+        let globaladdr = store.add_globals(globals);
         let memaddr = store.add_memories(memories);
         let dataddr = store.add_datas(data);
         let tableaddr = store.add_tables(tables);
-
         let elemaddr = store.add_elements(elements);
 
+        let exports = self.instantiate_export(module)?;
         let instance = Instance {
             name: name.clone(),
             funcaddr,
@@ -119,36 +149,90 @@ impl<'module> Linker<'module> {
             dataddr,
             exports,
         };
-        store.add_instance(instance, &name, &self.module.reader)?;
+        store.add_instance(instance, &name, &module.reader)?;
         Ok(name.to_string())
     }
-    fn instantiate_global_imports(&mut self) -> Result<Vec<GlobalInstance>> {
-        let mut globals = Vec::new();
-        for import in self.module.importsec.globals.iter() {
+    fn instantiate_table_imports(
+        &mut self,
+        _module: &mut Module,
+        _store: &mut Store,
+    ) -> Result<Vec<TableInstance>> {
+        Ok(Vec::new())
+    }
+    fn instantiate_memory_imports(
+        &mut self,
+        _module: &mut Module,
+        _store: &mut Store,
+    ) -> Result<Vec<MemoryInstance>> {
+        Ok(Vec::new())
+    }
+    fn instantiate_function_imports(
+        &mut self,
+        module: &mut Module,
+        store: &mut Store,
+    ) -> Result<Vec<FuncInstance>> {
+        let mut funcs = Vec::new();
+        for import in module.importsec.functions.iter() {
             let key = ImportName {
                 module: import.module.clone(),
                 name: import.name.clone(),
             };
-            let global = self
+            let import_entity = self
+                .imported_funcs
+                .get(&key)
+                .ok_or(Error::MissingGlobalImport)?;
+
+            let func = match import_entity {
+                ImportSource::Extern(addr) => store
+                    .data
+                    .functions
+                    .get(*addr)
+                    .ok_or(Error::UnknownGlobal)?,
+                ImportSource::Host(inst) => &FuncInstance::External(inst.clone()),
+            };
+            funcs.push(func.clone())
+        }
+        Ok(funcs)
+    }
+
+    fn instantiate_global_imports(
+        &mut self,
+        module: &mut Module,
+        store: &mut Store,
+    ) -> Result<Vec<GlobalInstance>> {
+        let mut globals = Vec::new();
+        for import in module.importsec.globals.iter() {
+            let key = ImportName {
+                module: import.module.clone(),
+                name: import.name.clone(),
+            };
+            let import_entity = self
                 .imported_globals
                 .get(&key)
                 .ok_or(Error::MissingGlobalImport)?;
+            let global = match import_entity {
+                ImportSource::Extern(addr) => {
+                    store.data.globals.get(*addr).ok_or(Error::UnknownGlobal)?
+                }
+                ImportSource::Host(inst) => inst,
+            };
             globals.push(global.clone())
         }
         Ok(globals)
     }
     fn instantiate_globals(
         &mut self,
+        module: &mut Module,
         imported_globals: &[GlobalInstance],
-        functions: &[FunctionInstance],
+        functions: &[FuncInstance],
     ) -> Result<Vec<GlobalInstance>> {
         let mut globals = Vec::new();
 
-        for global in self.module.globalsec.iter() {
+        for global in module.globalsec.iter() {
             let expr = {
-                self.module.reader.seek(global.start + 1);
+                module.reader.seek(global.start + 1);
                 let return_value = execute_const_expr(
-                    &mut self.module.reader,
+                    &mut module.reader,
                     imported_globals,
                     &[global.global_type.value_type],
                     functions,
@@ -162,15 +246,22 @@ impl<'module> Linker<'module> {
         }
         Ok(globals)
     }
-    fn instantiate_export(&mut self) -> Result<BTreeMap<String, ExportContext>> {
+    fn instantiate_export(
+        &mut self,
+        module: &mut Module,
+    ) -> Result<BTreeMap<String, ExportContext>> {
         let mut exports = BTreeMap::new();
-        for export in &self.module.exportsec {
+        for export in &module.exportsec {
             exports.insert(export.name.clone(), export.context.clone());
         }
         Ok(exports)
     }
-    fn instantiate_functions(&mut self, name: &str) -> Result<Vec<FunctionInstance>> {
-        let function_to_sidetable = zip(self.module.codesec.iter(), self.module.sidetables.iter());
+    fn instantiate_functions(
+        &mut self,
+        module: &mut Module,
+        name: &str,
+    ) -> Result<Vec<FuncInstance>> {
+        let function_to_sidetable = zip(module.codesec.iter(), module.sidetables.iter());
         let mut functions = Vec::new();
         for (index, (function, side_table)) in function_to_sidetable.enumerate() {
             let locals: Vec<Value> = function
@@ -179,29 +270,28 @@ impl<'module> Linker<'module> {
                 .map(|val_type| (*val_type).into())
                 .collect::<Vec<Value>>();
 
-            let signature_index = self
-                .module
+            let signature_index = module
                 .funcsec
                 .get(index)
                 .ok_or(Error::InvalidFunctionIndex)?
                 .sig_index;
-            let signature = lookup_signature(signature_index, &self.module.typesec);
+            let signature = lookup_signature(signature_index, &module.typesec);
 
-            functions.push(FunctionInstance {
+            functions.push(FuncInstance::Internal(Internal {
                 instance: name.to_string(),
                 signature: signature.clone(),
                 locals,
                 start: function.start,
                 end: function.end,
                 side_table: side_table.clone(),
-            });
+            }));
         }
         Ok(functions)
     }
 
-    fn instantiate_memories(&mut self) -> Result<Vec<MemoryInstance>> {
+    fn instantiate_memories(&mut self, module: &mut Module) -> Result<Vec<MemoryInstance>> {
         let mut memories = Vec::new();
-        for memory in self.module.memorysec.iter() {
+        for memory in module.memorysec.iter() {
             let data = vec![0; (memory.min * PAGE_SIZE) as usize];
             memories.push(MemoryInstance::new(data, memory.max));
         }
@@ -209,13 +299,14 @@ impl<'module> Linker<'module> {
     }
     fn instantiate_elements(
         &mut self,
+        module: &mut Module,
         imported_globals: &[GlobalInstance],
         tables: &mut [TableInstance],
-        functions: &[FunctionInstance],
+        functions: &[FuncInstance],
     ) -> Result<Vec<ElementInstance>> {
         let mut elements = Vec::new();
 
-        for element in self.module.elementsec.iter() {
+        for element in module.elementsec.iter() {
             let instance = match &element.items {
                 ElementItems::RefFuncs(refs) => {
                     let resolved_refs: Vec<Value> = refs
@@ -227,10 +318,10 @@ impl<'module> Linker<'module> {
                 ElementItems::Exprs(ty, spans) => {
                     let mut resolved_refs = vec![];
                     for span in spans {
-                        self.module.reader.seek(span.start + 1);
+                        module.reader.seek(span.start + 1);
                         resolved_refs.push(
                             *execute_const_expr(
-                                &mut self.module.reader,
+                                &mut module.reader,
                                 imported_globals,
                                 &[*ty],
                                 functions,
@@ -248,9 +339,9 @@ impl<'module> Linker<'module> {
                     offset_start,
                     offset_end: _,
                 } => {
-                    self.module.reader.seek(offset_start + 1);
+                    module.reader.seek(offset_start + 1);
                     let result = *execute_const_expr(
-                        &mut self.module.reader,
+                        &mut module.reader,
                         imported_globals,
                         &[ValType::I32],
                         functions,
@@ -272,21 +363,22 @@ impl<'module> Linker<'module> {
         }
         Ok(elements)
     }
-    fn instantiate_tables(&mut self) -> Result<Vec<TableInstance>> {
+    fn instantiate_tables(&mut self, module: &mut Module) -> Result<Vec<TableInstance>> {
         let mut tables = Vec::new();
-        for table in self.module.tablesec.iter() {
+        for table in module.tablesec.iter() {
             tables.push(TableInstance::new(table));
         }
         Ok(tables)
     }
     fn instantiate_datas(
         &mut self,
+        module: &mut Module,
         memories: &mut [MemoryInstance],
         imported_globals: &[GlobalInstance],
-        functions: &[FunctionInstance],
+        functions: &[FuncInstance],
     ) -> Result<Vec<DataInstance>> {
         let mut data = Vec::new();
-        for data_segment in self.module.datasec.iter() {
+        for data_segment in module.datasec.iter() {
             if let SegmentMode::Active {
                 memory,
                 offset_start,
@@ -294,9 +386,9 @@ impl<'module> Linker<'module> {
             } = data_segment.mode
             {
                 let address = {
-                    self.module.reader.seek(offset_start + 1);
+                    module.reader.seek(offset_start + 1);
                     let return_values = execute_const_expr(
-                        &mut self.module.reader,
+                        &mut module.reader,
                         imported_globals,
                         &[ValType::I32],
                         functions,
@@ -319,530 +411,4 @@ impl<'module> Linker<'module> {
         }
         Ok(data)
     }
-}
-
-#[cfg(test)]
-mod tests {
-
-    // use crate::{
-    //     binary::{code_section::FuncCode, function_section::FuncDecl, type_section::FuncType},
-    //     validation::side_table::SideTable,
-    //     WasmReader,
-    // };
-
-    // use super::*;
-
-    // #[test]
-    // fn test_simple_add() {
-    //     let bytes = wat::parse_str(
-    //         "(module
-    //            (func (result i32)
-    // 	    	   i32.const 10
-    // 	    	   i32.const 12
-    //            	   i32.add
-    //            )
-    //          )",
-    //     )
-    //     .unwrap();
-    //     let mut module = Module {
-    //         reader: WasmReader::new(bytes.to_vec()),
-    //         typesec: vec![FuncType {
-    //             parameter: vec![],
-    //             result: vec![ValType::I32],
-    //         }],
-    //         funcsec: vec![FuncDecl { sig_index: 0 }],
-    //         codesec: vec![FuncCode {
-    //             locals: vec![],
-    //             start: 24,
-    //             end: 29,
-    //         }],
-    //         exportsec: vec![],
-    //         sidetables: vec![SideTable { entries: vec![] }],
-    //         ..Default::default()
-    //     };
-    //     let mut store = Store::default();
-    //     let instance = Linker::new(&mut module)
-    //         .instantiate(&mut store, None)
-    //         .unwrap();
-    //     let expected_result = vec![Value::I32(22)];
-
-    //     assert_eq!(
-    //         instance
-    //             .call(0, vec![], &mut store)
-    //             .unwrap(),
-    //         expected_result
-    //     );
-    // }
-
-    //     #[should_panic]
-    //     #[test]
-    //     fn test_invalid_instruction() {
-    //         let bytes = wat::parse_str(
-    //             "(module
-    //                (func (result i32)
-    // 	    	   i32.const 10
-    // 	    	   i32.const 12
-    //                	   i32.add
-    //                )
-    //              )",
-    //         )
-    //         .unwrap();
-    //         let mut module = Module {
-    //             reader: WasmReader::new(bytes.to_vec()),
-    //             typesec: vec![FuncType {
-    //                 parameter: vec![],
-    //                 result: vec![ValType::I32],
-    //             }],
-    //             funcsec: vec![FuncDecl { sig_index: 0 }],
-    //             codesec: vec![FuncCode {
-    //                 locals: vec![],
-    //                 start: 1,
-    //                 end: 29,
-    //             }],
-    //             exportsec: vec![],
-    //             sidetables: vec![SideTable { entries: vec![] }],
-    //             ..Default::default()
-    //         };
-    //         let mut store = Store::default();
-
-    //         let instance = Linker::new(&mut module).instantiate(&mut store).unwrap();
-    //         let expected_result = vec![Value::I32(22)];
-    //         assert_eq!(
-    //             instance.call(0, vec![], &mut store, &mut module.reader).unwrap(),
-    //             expected_result
-    //         );
-    //     }
-
-    //     #[test]
-    //     fn test_no_end_instruction() {
-    //         let bytes = wat::parse_str(
-    //             "(module
-    //                (func (result i32)
-    // 	    	   i32.const 10
-    // 	    	   i32.const 12
-    //                	   i32.add
-    //                )
-    //              )",
-    //         )
-    //         .unwrap();
-    //         let mut module = Module {
-    //             reader: WasmReader::new(bytes.to_vec()),
-    //             typesec: vec![FuncType {
-    //                 parameter: vec![],
-    //                 result: vec![ValType::I32],
-    //             }],
-    //             funcsec: vec![FuncDecl { sig_index: 0 }],
-    //             codesec: vec![FuncCode {
-    //                 locals: vec![],
-    //                 start: 24,
-    //                 end: 28,
-    //             }],
-    //             exportsec: vec![],
-    //             sidetables: vec![SideTable { entries: vec![] }],
-    //             ..Default::default()
-    //         };
-    //         let mut store = Store::default();
-
-    //         let instance = Linker::new(&mut module).instantiate(&mut store).unwrap();
-    //         let expected_result = vec![Value::I32(22)];
-    //         assert_eq!(
-    //             instance.call(0, vec![], &mut store, &mut module.reader).unwrap(),
-    //             expected_result
-    //         );
-    //     }
-
-    //     #[test]
-    //     fn test_return() {
-    //         let bytes = wat::parse_str(
-    //             "(module
-    //                (func (result i32)
-    // 	    	   i32.const 10
-    // 	    	   i32.const 12
-    //                	   return
-    //                    i32.const 12
-    //                )
-    //              )",
-    //         )
-    //         .unwrap();
-    //         let mut module = Module {
-    //             reader: WasmReader::new(bytes.to_vec()),
-    //             typesec: vec![FuncType {
-    //                 parameter: vec![],
-    //                 result: vec![ValType::I32],
-    //             }],
-    //             funcsec: vec![FuncDecl { sig_index: 0 }],
-    //             codesec: vec![FuncCode {
-    //                 locals: vec![],
-    //                 start: 24,
-    //                 end: 31,
-    //             }],
-    //             exportsec: vec![],
-    //             sidetables: vec![SideTable { entries: vec![] }],
-    //             ..Default::default()
-    //         };
-    //         let mut store = Store::default();
-
-    //         let  instance = Linker::new(&mut module).instantiate(&mut store).unwrap();
-    //         let expected_result = vec![Value::I32(12)];
-    //         assert_eq!(
-    //             instance.call(0, vec![], &mut store, &mut module.reader).unwrap(),
-    //             expected_result
-    //         );
-    //     }
-
-    //     #[test]
-    //     fn test_blocks() {
-    //         let bytes = wat::parse_str(
-    //             "(module
-    //                (func (result i32)
-    //                  (block $label1 (result i32)
-    // 	    	   i32.const 10
-    // 		   (block $label2 (param i32) (result i32)
-    // 		   	  i32.const 2
-    // 			  i32.add
-    // 		   )
-    // 	         )
-    //                )
-    //              )",
-    //         )
-    //         .unwrap();
-    //         let mut module = Module {
-    //             reader: WasmReader::new(bytes.to_vec()),
-    //             typesec: vec![
-    //                 FuncType {
-    //                     parameter: vec![],
-    //                     result: vec![ValType::I32],
-    //                 },
-    //                 FuncType {
-    //                     parameter: vec![ValType::I32],
-    //                     result: vec![ValType::I32],
-    //                 },
-    //             ],
-    //             funcsec: vec![FuncDecl { sig_index: 0 }],
-    //             codesec: vec![FuncCode {
-    //                 locals: vec![],
-    //                 start: 29,
-    //                 end: 40,
-    //             }],
-    //             exportsec: vec![],
-    //             sidetables: vec![SideTable { entries: vec![] }],
-    //             ..Default::default()
-    //         };
-    //         let mut store = Store::default();
-
-    //         let instance = Linker::new(&mut module).instantiate(&mut store).unwrap();
-    //         let expected_result = vec![Value::I32(12)];
-    //         assert_eq!(
-    //             instance.call(0, vec![], &mut store, &mut module.reader).unwrap(),
-    //             expected_result
-    //         );
-    //     }
-
-    //     #[test]
-    //     fn test_blocks_with_branches() {
-    //         let bytes = wat::parse_str(
-    //             "(module
-    //                 (func (result i32)
-    //                   (block $label1 (result i32)
-    //                      i32.const 4
-    //                      i32.const 5
-    //                      i32.add
-    //                      br $label1
-    // 	          )
-    //                   (block $label3 (param i32)
-    //                         i32.const 7
-    //                      (block $label2 (param i32 i32)
-    //                         i32.add
-    //                         br_if $label3
-    //                      )
-    //                   )
-    // 		  i32.const 3
-    //                 )
-    //              )",
-    //         )
-    //         .unwrap();
-    //         let mut module = Module {
-    //             reader: WasmReader::new(bytes.to_vec()),
-    //             typesec: vec![
-    //                 FuncType {
-    //                     parameter: vec![],
-    //                     result: vec![ValType::I32],
-    //                 },
-    //                 FuncType {
-    //                     parameter: vec![ValType::I32],
-    //                     result: vec![],
-    //                 },
-    //                 FuncType {
-    //                     parameter: vec![ValType::I32, ValType::I32],
-    //                     result: vec![],
-    //                 },
-    //             ],
-    //             funcsec: vec![FuncDecl { sig_index: 0 }],
-    //             codesec: vec![FuncCode {
-    //                 locals: vec![],
-    //                 start: 33,
-    //                 end: 56,
-    //             }],
-    //             exportsec: vec![],
-    //             sidetables: vec![SideTable {
-    //                 entries: vec![
-    //                     SideTableEntry {
-    //                         ip: 2,
-    //                         stp: 1,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                     SideTableEntry {
-    //                         ip: 3,
-    //                         stp: 1,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                 ],
-    //             }],
-    //             ..Default::default()
-    //         };
-    //         let mut store = Store::default();
-
-    //         let  instance = Linker::new(&mut module).instantiate(&mut store).unwrap();
-    //         let expected_result = vec![Value::I32(3)];
-    //         assert_eq!(
-    //             instance.call(0, vec![], &mut store, &mut module.reader).unwrap(),
-    //             expected_result
-    //         );
-    //     }
-
-    //     #[test]
-    //     fn test_for_loop() {
-    //         let bytes = wat::parse_str(
-    //             "(module
-    //                  (func (result i32)
-    //                    (local $i i32)
-    //                    (loop $my_loop
-    //                        local.get $i
-    //                        i32.const 1
-    //                        i32.add
-    //                        local.set $i
-    //                        local.get $i
-    //                        i32.const 10
-    //                        i32.lt_s
-    //                        br_if $my_loop
-    //                    )
-    //                     local.get $i
-    //                 )
-    //              )
-    // ",
-    //         )
-    //         .unwrap();
-
-    //         let mut module = Module {
-    //             reader: WasmReader::new(bytes.to_vec()),
-    //             typesec: vec![FuncType {
-    //                 parameter: vec![],
-    //                 result: vec![ValType::I32],
-    //             }],
-    //             funcsec: vec![FuncDecl { sig_index: 0 }],
-    //             codesec: vec![FuncCode {
-    //                 locals: vec![ValType::I32],
-    //                 start: 26,
-    //                 end: 45,
-    //             }],
-    //             exportsec: vec![],
-    //             sidetables: vec![SideTable {
-    //                 entries: vec![SideTableEntry {
-    //                     ip: -14,
-    //                     stp: 0,
-    //                     vals: 0,
-    //                     pop: 0,
-    //                 }],
-    //             }],
-    //             ..Default::default()
-    //         };
-    //         let mut store = Store::default();
-
-    //         let  instance = Linker::new(&mut module).instantiate(&mut store).unwrap();
-    //         let expected_result = vec![Value::I32(10)];
-    //         assert_eq!(
-    //             instance.call(0, vec![], &mut store, &mut module.reader).unwrap(),
-    //             expected_result
-    //         );
-    //     }
-
-    //     #[test]
-    //     fn test_if_else() {
-    //         let bytes = wat::parse_str(
-    //             "
-    // (module
-    //   (func (param i32) (result i32)
-    //     (block $label1 (result i32)
-    //       local.get 0
-    //       (if $if (result i32)
-    //         (then
-    //           i32.const 1
-    //           br $label1
-    //         )
-    //         (else
-    // 	i32.const 3
-    // 	br $if
-    //         )
-    //       )
-    //       br $label1
-    //     )
-    //   )
-    // )",
-    //         )
-    //         .unwrap();
-    //         let mut module = Module {
-    //             reader: WasmReader::new(bytes.to_vec()),
-    //             typesec: vec![FuncType {
-    //                 parameter: vec![ValType::I32],
-    //                 result: vec![ValType::I32],
-    //             }],
-    //             funcsec: vec![FuncDecl { sig_index: 0 }],
-    //             codesec: vec![FuncCode {
-    //                 locals: vec![],
-    //                 start: 25,
-    //                 end: 44,
-    //             }],
-    //             exportsec: vec![],
-    //             sidetables: vec![SideTable {
-    //                 entries: vec![
-    //                     SideTableEntry {
-    //                         ip: 7,
-    //                         stp: 3,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                     SideTableEntry {
-    //                         ip: 10,
-    //                         stp: 4,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                     SideTableEntry {
-    //                         ip: 5,
-    //                         stp: 2,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                     SideTableEntry {
-    //                         ip: 2,
-    //                         stp: 1,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                     SideTableEntry {
-    //                         ip: 2,
-    //                         stp: 1,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                 ],
-    //             }],
-    //             ..Default::default()
-    //         };
-    //         let mut store = Store::default();
-
-    //         let instance = Linker::new(&mut module).instantiate(&mut store).unwrap();
-    //         assert_eq!(
-    //             instance.call(0, vec![Value::I32(1)], &mut store, &mut module.reader).unwrap(),
-    //             vec![Value::I32(1)]
-    //         );
-    //         assert_eq!(
-    //             instance.call(0, vec![Value::I32(0)], &mut store, &mut module.reader).unwrap(),
-    //             vec![Value::I32(3)]
-    //         );
-    //     }
-
-    //     #[test]
-    //     fn test_br_table() {
-    //         let bytes = wat::parse_str(
-    //             "
-    // (func (param $p i32) (result i32)
-    //   (block
-    //     (block
-    //       (block
-    //         (block (local.get $p)
-    //                (br_table
-    //                          2   ;; p == 0 => (br 2)
-    //                          1   ;; p == 1 => (br 1)
-    //                          0   ;; p == 2 => (br 0)
-    //                          3)) ;; else => (br 3)
-    //         ;; Target for (br 0)
-    //         (i32.const 100)
-    //         (return))
-    //       ;; Target for (br 1)
-    //       (i32.const 101)
-    //       (return))
-    //     ;; Target for (br 2)
-    //     (i32.const 102)
-    //     (return))
-    //   ;; Target for (br 3)
-    //   (i32.const 103)
-    //   (return))",
-    //         )
-    //         .unwrap();
-    //         let mut module = Module {
-    //             reader: WasmReader::new(bytes.to_vec()),
-    //             typesec: vec![FuncType {
-    //                 parameter: vec![ValType::I32],
-    //                 result: vec![ValType::I32],
-    //             }],
-    //             funcsec: vec![FuncDecl { sig_index: 0 }],
-    //             codesec: vec![FuncCode {
-    //                 locals: vec![],
-    //                 start: 25,
-    //                 end: 61,
-    //             }],
-    //             exportsec: vec![],
-    //             sidetables: vec![SideTable {
-    //                 entries: vec![
-    //                     SideTableEntry {
-    //                         ip: 15,
-    //                         stp: 4,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                     SideTableEntry {
-    //                         ip: 10,
-    //                         stp: 3,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                     SideTableEntry {
-    //                         ip: 5,
-    //                         stp: 2,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                     SideTableEntry {
-    //                         ip: 20,
-    //                         stp: 1,
-    //                         vals: 0,
-    //                         pop: 0,
-    //                     },
-    //                 ],
-    //             }],
-    //             ..Default::default()
-    //         };
-    //         let mut store = Store::default();
-
-    //         let instance = Linker::new(&mut module).instantiate(&mut store).unwrap();
-    //         assert_eq!(
-    //             instance.call(0, vec![Value::I32(0)], &mut store, &mut module.reader).unwrap(),
-    //             vec![Value::I32(102)]
-    //         );
-    //         assert_eq!(
-    //             instance.call(0, vec![Value::I32(1)], &mut store, &mut module.reader).unwrap(),
-    //             vec![Value::I32(101)]
-    //         );
-    //         assert_eq!(
-    //             instance.call(0, vec![Value::I32(2)], &mut store, &mut module.reader).unwrap(),
-    //             vec![Value::I32(100)]
-    //         );
-    //         assert_eq!(
-    //             instance.call(0, vec![Value::I32(10)],&mut store, &mut module.reader).unwrap(),
-    //             vec![Value::I32(103)]
-    //         );
-    //     }
 }
