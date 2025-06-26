@@ -80,7 +80,7 @@ impl Linker {
     ) -> Result<()> {
         let key = ImportName { module, name };
         let func = HostFunc {
-            ty,
+            signature: ty,
             func: Rc::new(RefCell::new(func)),
         };
         self.imported_funcs.insert(key, ImportSource::Host(func));
@@ -118,21 +118,50 @@ impl Linker {
             None => format!("{}#{}", DEFAULT_MODULE, store.get_instance_count()),
         };
 
-        let mut globals = self.instantiate_global_imports(module, store)?;
-        let mut functions = self.instantiate_function_imports(module, store)?;
+        let mut globaladdr = self.instantiate_global_imports(module, store)?;
+        let mut imported_globals = vec![];
+        // TODO extract to helper func
+        for addr in &globaladdr {
+            imported_globals.push(
+                store
+                    .data
+                    .globals
+                    .get(*addr)
+                    .ok_or(Error::UnknownGlobal)?
+                    .clone(),
+            );
+        }
+
+        let mut funcaddr = self.instantiate_function_imports(module, store)?;
         let mut memories = self.instantiate_memory_imports(module, store)?;
         let mut tables = self.instantiate_table_imports(module, store)?;
 
-        functions.extend(self.instantiate_functions(module, &name)?);
-        globals.extend(self.instantiate_globals(module, &globals, &functions)?);
+        let local_functions = self.instantiate_functions(module, &name)?;
+        funcaddr.extend(store.add_functions(local_functions));
+
+        let mut functions = vec![];
+        // TODO extract to helper func
+        for addr in &funcaddr {
+            functions.push(
+                store
+                    .data
+                    .functions
+                    .get(*addr)
+                    .ok_or(Error::UnknownInstance)?
+                    .clone(),
+            );
+        }
+
+        let globals = self.instantiate_globals(module, &imported_globals, &functions)?;
+        globaladdr.extend(store.add_globals(globals));
+
         memories.extend(self.instantiate_memories(module)?);
         tables.extend(self.instantiate_tables(module)?);
 
-        let data = self.instantiate_datas(module, &mut memories, &globals, &functions)?;
-        let elements = self.instantiate_elements(module, &globals, &mut tables, &functions)?;
+        let data = self.instantiate_datas(module, &mut memories, &imported_globals, &functions)?;
+        let elements =
+            self.instantiate_elements(module, &imported_globals, &mut tables, &functions)?;
 
-        let funcaddr = store.add_functions(functions);
-        let globaladdr = store.add_globals(globals);
         let memaddr = store.add_memories(memories);
         let dataddr = store.add_datas(data);
         let tableaddr = store.add_tables(tables);
@@ -157,6 +186,7 @@ impl Linker {
         _module: &mut Module,
         _store: &mut Store,
     ) -> Result<Vec<TableInstance>> {
+        // TODO implement
         Ok(Vec::new())
     }
     fn instantiate_memory_imports(
@@ -164,14 +194,15 @@ impl Linker {
         _module: &mut Module,
         _store: &mut Store,
     ) -> Result<Vec<MemoryInstance>> {
+        // TODO implement
         Ok(Vec::new())
     }
     fn instantiate_function_imports(
         &mut self,
         module: &mut Module,
         store: &mut Store,
-    ) -> Result<Vec<FuncInstance>> {
-        let mut funcs = Vec::new();
+    ) -> Result<Vec<usize>> {
+        let mut funcaddr = Vec::new();
         for import in module.importsec.functions.iter() {
             let key = ImportName {
                 module: import.module.clone(),
@@ -180,27 +211,40 @@ impl Linker {
             let import_entity = self
                 .imported_funcs
                 .get(&key)
-                .ok_or(Error::MissingGlobalImport)?;
+                .ok_or(Error::MissingFunctionImport)?;
 
-            let func = match import_entity {
-                ImportSource::Extern(addr) => store
-                    .data
-                    .functions
-                    .get(*addr)
-                    .ok_or(Error::UnknownGlobal)?,
-                ImportSource::Host(inst) => &FuncInstance::External(inst.clone()),
+            let sig = module
+                .typesec
+                .get(import.context.sig_index as usize)
+                .ok_or(Error::InvalidSignatureIndex)?;
+
+            match import_entity {
+                ImportSource::Extern(addr) => {
+                    let target_function = store
+                        .data
+                        .functions
+                        .get(*addr)
+                        .ok_or(Error::MissingFunctionImport)?;
+
+                    if target_function.get_signature() != sig {
+                        return Err(Error::IncompatibleImportType);
+                    };
+                    funcaddr.push(*addr);
+                }
+                ImportSource::Host(inst) => {
+                    funcaddr.push(store.add_function(FuncInstance::External(inst.clone())));
+                }
             };
-            funcs.push(func.clone())
         }
-        Ok(funcs)
+        Ok(funcaddr)
     }
 
     fn instantiate_global_imports(
         &mut self,
         module: &mut Module,
         store: &mut Store,
-    ) -> Result<Vec<GlobalInstance>> {
-        let mut globals = Vec::new();
+    ) -> Result<Vec<usize>> {
+        let mut globaladdr = vec![];
         for import in module.importsec.globals.iter() {
             let key = ImportName {
                 module: import.module.clone(),
@@ -210,15 +254,27 @@ impl Linker {
                 .imported_globals
                 .get(&key)
                 .ok_or(Error::MissingGlobalImport)?;
-            let global = match import_entity {
+
+            match import_entity {
                 ImportSource::Extern(addr) => {
-                    store.data.globals.get(*addr).ok_or(Error::UnknownGlobal)?
+                    let target_global = store
+                        .data
+                        .globals
+                        .get(*addr)
+                        .ok_or(Error::MissingGlobalImport)?;
+                    if target_global.global_type != import.context {
+                        return Err(Error::IncompatibleImportType);
+                    }
+                    globaladdr.push(*addr);
                 }
-                ImportSource::Host(inst) => inst,
+                ImportSource::Host(inst) => {
+                    globaladdr.push(store.add_global(inst.clone()));
+                }
             };
-            globals.push(global.clone())
         }
-        Ok(globals)
+        info!("Global imports {:?}", globaladdr);
+
+        Ok(globaladdr)
     }
     fn instantiate_globals(
         &mut self,

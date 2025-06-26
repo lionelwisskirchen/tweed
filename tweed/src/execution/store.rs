@@ -75,11 +75,16 @@ impl Store {
             .get_mut(func_addr)
             .ok_or(Error::UnknownExportCall)
     }
+    pub fn rename_instance(&mut self, name: &str, new_name: &str) -> Result<()> {
+        let mut instance = self.instances.remove(name).ok_or(Error::UnknownInstance)?;
+        let reader = self.reader.remove(name).ok_or(Error::UnknownInstance)?;
+        instance.name = new_name.to_string();
+        self.add_instance(instance, new_name, &reader)?;
+        Ok(())
+        // TODO refactor and move to linker?
+    }
     pub fn get_instance(&self, name: &str) -> Result<&Instance> {
-        let instance = self
-            .instances
-            .get(name)
-            .ok_or(Error::InvalidFunctionIndex)?;
+        let instance = self.instances.get(name).ok_or(Error::UnknownInstance)?;
         Ok(instance)
     }
     pub fn get_instance_count(&self) -> usize {
@@ -90,6 +95,18 @@ impl Store {
     }
     pub fn add_globals(&mut self, instances: Vec<GlobalInstance>) -> Vec<usize> {
         add_instances(&mut self.data.globals, instances)
+    }
+    pub fn add_global(&mut self, instances: GlobalInstance) -> usize {
+        *add_instances(&mut self.data.globals, vec![instances])
+            .first()
+            .unwrap()
+        // TODO Refactor
+    }
+    pub fn add_function(&mut self, instances: FuncInstance) -> usize {
+        *add_instances(&mut self.data.functions, vec![instances])
+            .first()
+            .unwrap()
+        // TODO Refactor
     }
     pub fn add_functions(&mut self, instances: Vec<FuncInstance>) -> Vec<usize> {
         add_instances(&mut self.data.functions, instances)
@@ -168,18 +185,26 @@ pub enum FuncInstance {
     Internal(Internal),
     External(HostFunc),
 }
+impl FuncInstance {
+    pub fn get_signature(&self) -> &FuncType {
+        match self {
+            FuncInstance::Internal(internal) => &internal.signature,
+            FuncInstance::External(host_func) => &host_func.signature,
+        }
+    }
+}
 
 pub type Func = Rc<RefCell<dyn FnMut(&mut HostEnv, Vec<Value>) -> Result<Vec<Value>>>>;
 
 #[derive(Clone)]
 pub struct HostFunc {
-    pub ty: FuncType,
+    pub signature: FuncType,
     pub func: Func,
 }
 impl core::fmt::Debug for HostFunc {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("HostFunc")
-            .field("ty", &self.ty)
+            .field("signature", &self.signature)
             .field("func", &"<host func>")
             .finish()
     }

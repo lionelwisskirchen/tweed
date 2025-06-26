@@ -1,5 +1,8 @@
+use log::info;
 use std::collections::HashMap;
 use std::{self, fs};
+use tweed::binary::type_section::FuncType;
+use tweed::core::value_types::ValType;
 use tweed::execution::linker::Linker;
 use tweed::execution::store::Store;
 use tweed::{initialize, invoke, Value};
@@ -68,9 +71,25 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         )
         .unwrap();
 
+    linker
+        .add_function(
+            "spectest".to_string(),
+            "print_i32".to_string(),
+            FuncType {
+                parameter: vec![ValType::I32],
+                result: vec![],
+            },
+            |_, args| {
+                println!("{:?}", args);
+                Ok(vec![])
+            },
+        )
+        .unwrap();
+
     for directive in wast.directives {
         use wast::WastDirective::{
-            AssertInvalid, AssertMalformed, AssertReturn, AssertTrap, Invoke, Module, Register,
+            AssertInvalid, AssertMalformed, AssertReturn, AssertTrap, AssertUnlinkable, Invoke,
+            Module, Register,
         };
 
         match directive {
@@ -80,11 +99,13 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         unreachable!("No Module registered");
                     };
                     module_registry.register(name, &last);
-                    let instance = store.get_instance(name).unwrap();
-                    linker.instance(instance).unwrap()
+                    store.rename_instance(&last, name).unwrap();
+                    let instance = store.get_instance(&name).unwrap();
+                    linker.instance(instance).unwrap();
                 }
                 Some(id) => {
-                    let instance = store.get_instance(id.name()).unwrap();
+                    let name = module_registry.get(Some(id)).unwrap();
+                    let instance = store.get_instance(&name).unwrap();
                     linker.instance(instance).unwrap()
                 }
             },
@@ -112,7 +133,28 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 let function = invoke_confs.name.to_string();
                 invoke(module, function, args, &mut store).unwrap();
             }
-
+            AssertUnlinkable {
+                span,
+                module: mut module @ wast::Wat::Module(_),
+                message,
+            } => {
+                let module_binary = module.encode()?;
+                let mut test_module = initialize(&module_binary).unwrap();
+                let result = WastResult::AssertResult {
+                    name: "Invalid test".to_string(),
+                    line: span.linecol_in(&input).0 + 1,
+                };
+                if let Err(e) = linker.instantiate(&mut test_module, &mut store, None) {
+                    if format!("{e}") == message {
+                        report.success.push(result);
+                    } else {
+                        report.failure.push(result);
+                    }
+                } else {
+                    info!("No error");
+                    report.failure.push(result);
+                }
+            }
             AssertInvalid {
                 span,
                 mut module,
@@ -140,30 +182,53 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 results,
                 span,
             } => {
-                let invoke_confs = match exec {
-                    wast::WastExecute::Invoke(invoke) => invoke,
-                    _ => todo!(),
-                };
-
-                let args: Vec<Value> = invoke_confs
-                    .args
-                    .iter()
-                    .map(args_to_runtime_value)
-                    .collect();
                 let expected_results: Vec<Value> =
                     results.iter().map(result_to_runtime_value).collect();
-                let module = module_registry.get(invoke_confs.module).unwrap();
-                let actual_results =
-                    invoke(module, invoke_confs.name.to_string(), args, &mut store).unwrap();
-                let result = WastResult::AssertResult {
-                    name: invoke_confs.name.to_string(),
-                    line: span.linecol_in(&input).0 + 1,
-                };
-                if expected_results == actual_results {
-                    report.success.push(result);
-                } else {
-                    println!("expected {expected_results:?} actual {actual_results:?}");
-                    report.failure.push(result);
+                match exec {
+                    wast::WastExecute::Invoke(invoke_confs) => {
+                        let args: Vec<Value> = invoke_confs
+                            .args
+                            .iter()
+                            .map(args_to_runtime_value)
+                            .collect();
+
+                        let module = module_registry.get(invoke_confs.module).unwrap();
+                        let actual_results =
+                            invoke(module, invoke_confs.name.to_string(), args, &mut store)
+                                .unwrap();
+                        let result = WastResult::AssertResult {
+                            name: invoke_confs.name.to_string(),
+                            line: span.linecol_in(&input).0 + 1,
+                        };
+                        if expected_results == actual_results {
+                            report.success.push(result);
+                        } else {
+                            println!("expected {expected_results:?} actual {actual_results:?}");
+                            report.failure.push(result);
+                        };
+                    }
+                    wast::WastExecute::Get {
+                        span,
+                        module,
+                        global,
+                    } => {
+                        let name = module_registry.get(module).unwrap();
+                        let instance = store.get_instance(&name).unwrap();
+                        let actual_results =
+                            vec![instance.get_global_by_name(global, &store).unwrap().value];
+
+                        let result = WastResult::AssertResult {
+                            name: global.to_string(),
+                            line: span.linecol_in(&input).0 + 1,
+                        };
+                        if expected_results == actual_results {
+                            report.success.push(result);
+                        } else {
+                            info!("expected {expected_results:?} actual {actual_results:?}");
+                            report.failure.push(result);
+                        };
+                    }
+                    _ => todo!(),
                 };
             }
             AssertMalformed {

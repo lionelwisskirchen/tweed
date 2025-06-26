@@ -12,17 +12,20 @@ pub enum Error {
     InvalidVersion,
     InvalidSectionBytecode,
     TypeMismatch,
+    IncompatibleImportType,
     InvalidSignatureIndex,
     InvalidControlFlow,
     MissingValue,
     InvalidLocalIndex,
     InvalidFunctionIndex,
     InvalidMemoryIndex,
+    UnknownInstance,
     UndefinedOpCode(u8),
     UndefinedContantExpression,
     UnknownLabel,
     UnknownGlobal,
     MissingGlobalImport,
+    MissingFunctionImport,
     UnknownSectionCode(u8),
     UnsupportedExportKind,
     UnsupportedValueType,
@@ -90,11 +93,14 @@ impl Display for Error {
                 f.write_fmt(format_args!("Illegal select type: {valtype:?}"))
             }
             Error::MissingGlobalImport => f.write_str("missing global import"),
+            Error::MissingFunctionImport => f.write_str("missing function import"),
             Error::UndefinedMemory => f.write_str("undefined memory"),
             Error::UndefinedTable => f.write_str("undefined table"),
             Error::InvalidAlignment => f.write_str("invalid alignment"),
             Error::MemoryAccessOutOfBounds => f.write_str("memory out of bounds"),
             Error::TableAccessOutOfBounds => f.write_str("out of bounds table access"),
+            Error::UnknownInstance => f.write_str("unknown instance"),
+            Error::IncompatibleImportType => f.write_str("incompatible import type"),
         }
     }
 }

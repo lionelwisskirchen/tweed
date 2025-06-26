@@ -14,7 +14,7 @@ pub struct Global {
     pub end: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct GlobalType {
     pub value_type: ValType,
     pub is_mutable: bool,

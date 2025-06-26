@@ -85,7 +85,7 @@ impl<'store> Executor<'store> {
                 self.execute()
             }
             FuncInstance::External(ref mut host_function) => {
-                let args = self.stack.pop_n(host_function.ty.parameter.len())?;
+                let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                 let mut func_ref = host_function.func.borrow_mut();
                 let results = func_ref(&mut env, args)?;
                 self.stack.push_vec(&results);
@@ -191,7 +191,7 @@ impl<'store> Executor<'store> {
                         .get_mut(*global_addr)
                         .ok_or(Error::UnknownGlobal)?;
                     let new_value = self.stack.pop()?;
-                    trace!("LOCAL_SET({}) TO {:?}", idx, new_value);
+                    trace!("GLOBAL_SET({}) TO {:?}", idx, new_value);
                     global.value = new_value;
                 }
                 LOCAL_TEE => {
@@ -647,7 +647,7 @@ impl<'store> Executor<'store> {
                         }
                         FuncInstance::External(host_function) => {
                             let mut env: HostEnv = (&self.store.data).into();
-                            let args = self.stack.pop_n(host_function.ty.parameter.len())?;
+                            let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                             let mut func_ref = host_function.func.borrow_mut();
                             let results = func_ref(&mut env, args)?;
                             self.stack.push_vec(&results);

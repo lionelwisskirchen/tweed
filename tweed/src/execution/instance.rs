@@ -1,11 +1,10 @@
 use crate::binary::export_section::ExportContext;
 
 use crate::core::error::{Error, Result};
-use crate::core::values::Value;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use super::store::{MemoryInstance, Store};
+use super::store::{GlobalInstance, MemoryInstance, Store};
 
 // An instantiated Module
 #[derive(Debug, Clone, Default)]
@@ -35,24 +34,6 @@ impl Instance {
         };
         Ok(*res?)
     }
-    pub fn get_mut_memory_by_name<'a>(
-        &mut self,
-        name: &str,
-        store: &'a mut Store,
-    ) -> Result<&'a mut MemoryInstance> {
-        let Some(export_instance) = self.exports.get(name) else {
-            return Err(Error::UnknownExportCall);
-        };
-
-        match export_instance {
-            ExportContext::MemoryExport(index) => store
-                .data
-                .memories
-                .get_mut(*index as usize)
-                .ok_or(Error::UnknownExportCall),
-            _ => Err(Error::UnknownExportCall),
-        }
-    }
     pub fn get_memory_by_name<'a>(
         &mut self,
         name: &str,
@@ -63,60 +44,42 @@ impl Instance {
         };
 
         match export_instance {
-            ExportContext::MemoryExport(index) => store
-                .data
-                .memories
-                .get(*index as usize)
-                .ok_or(Error::UnknownExportCall),
-            _ => Err(Error::UnknownExportCall),
-        }
-    }
-    pub fn get_global_by_name<'a>(
-        &mut self,
-        name: &str,
-        store: &'a mut Store,
-    ) -> Result<&'a Value> {
-        let Some(export_instance) = self.exports.get(name) else {
-            return Err(Error::UnknownExportCall);
-        };
-
-        match export_instance {
-            ExportContext::GlobalExport(index) => {
-                let gl = store
-                    .data
-                    .globals
+            ExportContext::MemoryExport(index) => {
+                let store_index = self
+                    .memaddr
                     .get(*index as usize)
                     .ok_or(Error::UnknownExportCall)?;
-                Ok(&gl.value)
+                let st = store
+                    .data
+                    .memories
+                    .get(*store_index)
+                    .ok_or(Error::UnknownExportCall)?;
+                Ok(st)
             }
             _ => Err(Error::UnknownExportCall),
         }
     }
-    pub fn set_global_by_name(
-        &mut self,
+    pub fn get_global_by_name<'a>(
+        &self,
         name: &str,
-        value: Value,
-        store: &mut Store,
-    ) -> Result<()> {
+        store: &'a Store,
+    ) -> Result<&'a GlobalInstance> {
         let Some(export_instance) = self.exports.get(name) else {
             return Err(Error::UnknownExportCall);
         };
 
         match export_instance {
             ExportContext::GlobalExport(index) => {
+                let store_index = self
+                    .globaladdr
+                    .get(*index as usize)
+                    .ok_or(Error::UnknownExportCall)?;
                 let gl = store
                     .data
                     .globals
-                    .get_mut(*index as usize)
+                    .get(*store_index)
                     .ok_or(Error::UnknownExportCall)?;
-                if !gl.global_type.is_mutable {
-                    return Err(Error::GlobalIsImmutable);
-                }
-                if !gl.global_type.value_type.is_type(value) {
-                    return Err(Error::TypeMismatch);
-                }
-                gl.value = value;
-                Ok(())
+                Ok(gl)
             }
             _ => Err(Error::UnknownExportCall),
         }
