@@ -1,5 +1,6 @@
 use crate::binary::export_section::ExportContext;
 
+use crate::binary::type_section::FuncType;
 use crate::core::error::{Error, Result};
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
@@ -11,6 +12,7 @@ use super::store::{GlobalInstance, MemoryInstance, Store};
 #[allow(dead_code)]
 pub struct Instance {
     pub name: String,
+    pub types: Vec<FuncType>,
     pub funcaddr: Vec<usize>,
     pub tableaddr: Vec<usize>,
     pub memaddr: Vec<usize>,

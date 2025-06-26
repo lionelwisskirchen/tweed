@@ -618,6 +618,74 @@ impl<'store> Executor<'store> {
                         break;
                     }
                 }
+                CALL_INDIRECT => {
+                    let type_index = reader
+                        .next_leb128_u32()
+                        .ok_or(Error::InvalidFunctionIndex)?;
+
+                    let table_index = reader
+                        .next_leb128_u32()
+                        .ok_or(Error::InvalidFunctionIndex)?;
+
+                    let table_addr = instance
+                        .tableaddr
+                        .get(table_index as usize)
+                        .ok_or(Error::UnknownTable)?;
+
+                    let table = self
+                        .store
+                        .data
+                        .tables
+                        .get(*table_addr)
+                        .ok_or(Error::UnknownTable)?;
+
+                    let func_type = instance
+                        .types
+                        .get(type_index as usize)
+                        .ok_or(Error::InvalidFunctionIndex)?;
+
+                    let entry_index = self.stack.pop_i32()? as usize;
+                    let entry = table.get(entry_index)?;
+                    let func_addr = match entry {
+                        Value::RefNull(_) => return Err(Error::UninitializedReference),
+                        Value::FuncRef(idx) => idx,
+                        _ => unreachable!(),
+                    };
+
+                    if !instance.funcaddr.contains(&func_addr) {
+                        return Err(Error::FunctionNotFound);
+                    }
+
+                    let function = self
+                        .store
+                        .data
+                        .functions
+                        .get_mut(func_addr)
+                        .ok_or(Error::InvalidFunctionIndex)?
+                        .clone();
+
+                    if function.get_signature() != func_type {
+                        return Err(Error::TypeMismatch);
+                    };
+
+                    match function {
+                        FuncInstance::Internal(instance) => {
+                            let frame = build_frame(&instance, &mut self.stack)?;
+                            current_frame.program_counter =
+                                reader.current_index() - current_frame.start + 1;
+                            self.call_stack.push(current_frame.clone());
+                            self.call_stack.push(frame);
+                            break;
+                        }
+                        FuncInstance::External(host_function) => {
+                            let mut env: HostEnv = (&self.store.data).into();
+                            let args = self.stack.pop_n(host_function.signature.parameter.len())?;
+                            let mut func_ref = host_function.func.borrow_mut();
+                            let results = func_ref(&mut env, args)?;
+                            self.stack.push_vec(&results);
+                        }
+                    }
+                }
                 CALL => {
                     let index = reader
                         .next_leb128_u32()

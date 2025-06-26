@@ -6,8 +6,12 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
+    UninitializedReference,
+    WrongRefType,
+    UnknownTable,
     MultipleMemoriesNotImplemented,
     MalformedMutability,
+    FunctionNotFound,
     InvalidMagic,
     InvalidVersion,
     InvalidSectionBytecode,
@@ -55,6 +59,7 @@ impl Display for Error {
                 f.write_str("The magic number of the given Wasm file is invalid.")
             }
             Error::InstanceNameTaken => f.write_str("instance name is taken"),
+            Error::FunctionNotFound => f.write_str("function not found"),
             Error::GlobalIsImmutable => f.write_str("global is immutable"),
             Error::DivisionByZero => f.write_str("integer divide by zero"),
             Error::IntegerOverflow => f.write_str("integer overflow"),
@@ -81,7 +86,10 @@ impl Display for Error {
                 f.write_fmt(format_args!("Invalid sectioncode {seccode:#04X}"))
             }
 
-            Error::UnknownGlobal => f.write_fmt(format_args!("unknown global")),
+            Error::UnknownGlobal => f.write_str("unknown global"),
+            Error::WrongRefType => f.write_str("wrong ref type"),
+            Error::UnknownTable => f.write_str("unknown table"),
+            Error::UninitializedReference => f.write_str("uninitialized ref"),
             Error::UnsupportedExportKind => f.write_str("unsupported export kind"),
             Error::UnknownLabel => f.write_str("unknown label"),
             Error::UnsupportedValueType => f.write_str("unknown value type"),

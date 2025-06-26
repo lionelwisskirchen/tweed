@@ -1,7 +1,7 @@
 use crate::binary::global_section::GlobalType;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::{Error, Result};
-use crate::core::value_types::ValType;
+use crate::core::value_types::{RefType, ValType};
 
 use crate::core::signature_lookup::lookup_signature;
 
@@ -452,6 +452,36 @@ impl<'a, 'b> Validator<'a, 'b> {
                         self.abstract_control_stack.height_of_top(),
                         self.abstract_control_stack.top_is_reachable(),
                     )
+                }
+                CALL_INDIRECT => {
+                    let type_index = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::InvalidFunctionIndex)?;
+
+                    let table_index = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::InvalidFunctionIndex)?;
+
+                    let table = self
+                        .module_environment
+                        .tablesec
+                        .get(table_index as usize)
+                        .ok_or(Error::UnknownTable)?;
+                    if table.ref_type != RefType::FuncRef {
+                        return Err(Error::WrongRefType);
+                    }
+                    let func_type = self
+                        .module_environment
+                        .typesec
+                        .get(type_index as usize)
+                        .ok_or(Error::InvalidFunctionIndex)?;
+
+                    self.abstract_value_stack.pop_expected(ValType::I32)?; // Table Entry Index
+                    self.abstract_value_stack
+                        .pop_expected_vec(&func_type.parameter)?;
+                    self.abstract_value_stack.push_vec(&func_type.result);
                 }
                 CALL => {
                     let func_index = self

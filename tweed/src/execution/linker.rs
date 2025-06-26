@@ -170,6 +170,7 @@ impl Linker {
         let exports = self.instantiate_export(module)?;
         let instance = Instance {
             name: name.clone(),
+            types: module.typesec.clone(),
             funcaddr,
             tableaddr,
             memaddr,
