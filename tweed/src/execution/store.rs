@@ -225,7 +225,7 @@ pub struct GlobalInstance {
     pub value: Value,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TableInstance {
     table_type: Table,
     reference_values: Vec<Value>,
@@ -260,7 +260,7 @@ impl TableInstance {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ElementInstance {
     reference_type: ValType,
     pub references: Vec<Value>,

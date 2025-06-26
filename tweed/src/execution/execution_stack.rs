@@ -58,6 +58,18 @@ impl ExecutionStack {
         };
         Ok(value)
     }
+    pub fn pop_f64(&mut self) -> Result<f64> {
+        let Value::F64(value) = self.pop()? else {
+            return Err(Error::UnexpectedValueType);
+        };
+        Ok(value)
+    }
+    pub fn pop_f32(&mut self) -> Result<f32> {
+        let Value::F32(value) = self.pop()? else {
+            return Err(Error::UnexpectedValueType);
+        };
+        Ok(value)
+    }
     pub fn pop_func_ref(&mut self) -> Result<usize> {
         let Value::FuncRef(value) = self.pop()? else {
             return Err(Error::UnexpectedValueType);

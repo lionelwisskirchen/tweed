@@ -12,6 +12,8 @@ pub enum RefType {
 pub enum ValType {
     I32,
     I64,
+    F32,
+    F64,
     FuncRef,
     ExternRef,
     Unknown,
@@ -21,6 +23,8 @@ impl From<Value> for ValType {
         match value {
             Value::I32(_) => ValType::I32,
             Value::I64(_) => ValType::I64,
+            Value::F32(_) => ValType::F32,
+            Value::F64(_) => ValType::F64,
             Value::ExternRef(_) => ValType::ExternRef,
             Value::FuncRef(_) => ValType::FuncRef,
             _ => panic!("Value not implemented yet"),
@@ -48,6 +52,8 @@ impl ValType {
         match val {
             0x7F => Ok(ValType::I32),
             0x7E => Ok(ValType::I64),
+            0x7D => Ok(ValType::F32),
+            0x7C => Ok(ValType::F64),
             0x70 => Ok(ValType::FuncRef),
             0x6F => Ok(ValType::ExternRef),
             _ => {
@@ -57,7 +63,10 @@ impl ValType {
         }
     }
     pub fn is_numeric(&self) -> bool {
-        matches!(self, ValType::I32 | ValType::I64 | ValType::Unknown)
+        matches!(
+            self,
+            ValType::I32 | ValType::I64 | ValType::F64 | ValType::F32 | ValType::Unknown
+        )
     }
     pub fn is_ref(&self) -> bool {
         matches!(self, ValType::FuncRef | ValType::ExternRef)
@@ -67,6 +76,8 @@ impl ValType {
             (self, val),
             (ValType::I32, Value::I32(_))
                 | (ValType::I64, Value::I64(_))
+                | (ValType::F64, Value::F64(_))
+                | (ValType::F32, Value::F32(_))
                 | (ValType::FuncRef, Value::FuncRef(_))
                 | (ValType::ExternRef, Value::ExternRef(_))
                 | (ValType::FuncRef, Value::RefNull(RefType::FuncRef))
@@ -83,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_lookup_unknown() {
-        assert!(ValType::lookup(&0x7D).is_err());
+        assert!(ValType::lookup(&0x3F).is_err());
     }
     #[should_panic]
     #[test]

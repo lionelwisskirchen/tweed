@@ -309,6 +309,20 @@ fn result_to_runtime_value(expr: &WastRet) -> Value {
     match &expr {
         WastRet::Core(WastRetCore::I32(x)) => Value::I32(*x),
         WastRet::Core(WastRetCore::I64(x)) => Value::I64(*x),
+        WastRet::Core(WastRetCore::F64(x)) => match x {
+            wast::core::NanPattern::CanonicalNan => {
+                Value::F64(f64::from_bits(0x7ff8_0000_0000_0000))
+            }
+            wast::core::NanPattern::ArithmeticNan => {
+                Value::F64(f64::from_bits(0x7ff0_0000_0000_0001))
+            }
+            wast::core::NanPattern::Value(val) => Value::F64(f64::from_bits(val.bits)),
+        },
+        WastRet::Core(WastRetCore::F32(x)) => match x {
+            wast::core::NanPattern::CanonicalNan => Value::F32(f32::from_bits(0x7fc0_0000)),
+            wast::core::NanPattern::ArithmeticNan => Value::F32(f32::from_bits(0x7f80_0001)),
+            wast::core::NanPattern::Value(val) => Value::F32(f32::from_bits(val.bits)),
+        },
         WastRet::Core(WastRetCore::RefFunc(Some(x))) => {
             let Index::Num(i, _) = *x else {
                 unreachable!("Access to human readable id");
@@ -341,9 +355,7 @@ fn result_to_runtime_value(expr: &WastRet) -> Value {
                 None => unreachable!("Expected a non-null extern reference"),
             }
         }
-        //      wast::Instruction::F32Const(x) => RuntimeValue::F32(f32::from_bits(x.bits)),
-        //        wast::Instruction::F64Const(x) => RuntimeValue::F64(f64::from_bits(x.bits)),
-        _ => unreachable!("{:?}", expr),
+        _ => todo!(),
     }
 }
 
@@ -351,6 +363,8 @@ fn args_to_runtime_value(expr: &WastArg) -> Value {
     match &expr {
         WastArg::Core(WastArgCore::I32(x)) => Value::I32(*x),
         WastArg::Core(WastArgCore::I64(x)) => Value::I64(*x),
+        WastArg::Core(WastArgCore::F64(x)) => Value::F64(f64::from_bits(x.bits)),
+        WastArg::Core(WastArgCore::F32(x)) => Value::F32(f32::from_bits(x.bits)),
         WastArg::Core(WastArgCore::RefExtern(x)) => Value::ExternRef(*x as usize),
 
         WastArg::Core(WastArgCore::RefHost(_)) => {
@@ -370,9 +384,6 @@ fn args_to_runtime_value(expr: &WastArg) -> Value {
                 _ => todo!("`GC` proposal not yet implemented"),
             },
         },
-
-        //      wast::Instruction::F32Const(x) => RuntimeValue::F32(f32::from_bits(x.bits)),
-        //        wast::Instruction::F64Const(x) => RuntimeValue::F64(f64::from_bits(x.bits)),
         _ => unreachable!("{:?}", expr),
     }
 }

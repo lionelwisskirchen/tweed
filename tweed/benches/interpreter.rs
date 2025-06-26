@@ -34,6 +34,20 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         ),
         ("NSICHNEU", wat::parse_file("benches/nsichneu.wat").unwrap()),
         ("QRDUINO", wat::parse_file("benches/qrduino.wat").unwrap()),
+        ("PICOJPEG", wat::parse_file("benches/picojpeg.wat").unwrap()),
+        (
+            "SGLIB_COMBINED",
+            wat::parse_file("benches/sglib-combined.wat").unwrap(),
+        ),
+        ("SLRE", wat::parse_file("benches/slre.wat").unwrap()),
+        (
+            "STATEMATE",
+            wat::parse_file("benches/statemate.wat").unwrap(),
+        ),
+        ("TARFIND", wat::parse_file("benches/tarfind.wat").unwrap()),
+        ("WIKISORT", wat::parse_file("benches/wikisort.wat").unwrap()),
+        ("UD", wat::parse_file("benches/ud.wat").unwrap()),
+        ("XGBOOST", wat::parse_file("benches/xgboost.wat").unwrap()),
     ];
 
     let mut group = c.benchmark_group("Interpreter Benchmark");

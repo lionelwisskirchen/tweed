@@ -128,6 +128,16 @@ impl<'store> Executor<'store> {
                     trace!("I64_CONST({})", value);
                     self.stack.push(Value::I64(value));
                 }
+                F32_CONST => {
+                    let value = reader.next_f32().unwrap();
+                    trace!("F32_CONST({})", value);
+                    self.stack.push(Value::F32(value));
+                }
+                F64_CONST => {
+                    let value = reader.next_f64().unwrap();
+                    trace!("F64_CONST({})", value);
+                    self.stack.push(Value::F64(value));
+                }
                 BLOCK => {
                     trace!("BLOCK");
                     reader.skip_block_type()?;
@@ -158,6 +168,12 @@ impl<'store> Executor<'store> {
                         .get(idx)
                         .ok_or(Error::InvalidLocalIndex)?;
                     self.stack.push(*local);
+                }
+                I32_POPCNT => {
+                    let value = self.stack.pop_i32()?;
+                    let res = value.count_ones() as i32;
+                    trace!("I32_POPCNT({}) TO {:?}", value, res);
+                    self.stack.push(Value::I32(res));
                 }
                 LOCAL_SET => {
                     let idx = reader.next_leb128_u32().unwrap() as usize;
@@ -865,6 +881,219 @@ impl<'store> Executor<'store> {
                     let index = self.stack.pop_i32()? as usize;
                     table.insert(index, &[val])?;
                     trace!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val)
+                }
+                I32_TRUNC_F32_S => {
+                    let value = self.stack.pop_f32()?;
+                    if value.is_nan() || value.is_infinite() {
+                        return Err(Error::InvalidConversionToInt);
+                    }
+                    if value >= 2147483648.0 || value <= -2147483904.0 {
+                        return Err(Error::InvalidConversionToInt);
+                    }
+                    let res = Value::I32(value as i32);
+                    trace!("Instruction: i32.trunc_f32_s [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                I32_TRUNC_F32_U => {
+                    let value = self.stack.pop_f32()?;
+                    if value.is_nan() || value.is_infinite() {
+                        return Err(Error::InvalidConversionToInt);
+                    }
+                    if !(0.0..4294967296.0).contains(&value) {
+                        // Is this correct?
+                        return Err(Error::InvalidConversionToInt);
+                    }
+                    let res = Value::I32(value as u32 as i32);
+                    trace!("Instruction: i32.trunc_f32_u [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                I32_TRUNC_F64_S => {
+                    let value = self.stack.pop_f64()?;
+                    if value.is_nan() || value.is_infinite() {
+                        return Err(Error::InvalidConversionToInt);
+                    }
+                    if value > i32::MAX as f64 || value < i32::MIN as f64 {
+                        return Err(Error::InvalidConversionToInt);
+                    }
+                    let res = Value::I32(value as i32);
+                    trace!("Instruction: i32.trunc_f64_s [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                I32_TRUNC_F64_U => {
+                    let value = self.stack.pop_f64()?;
+                    if value.is_nan() || value.is_infinite() {
+                        return Err(Error::InvalidConversionToInt);
+                    }
+                    if !(0.0..4294967296.0).contains(&value) {
+                        // Is this correct?
+                        return Err(Error::InvalidConversionToInt);
+                    }
+                    let res = Value::I32(value as u32 as i32);
+                    trace!("Instruction: i32.trunc_f64_u [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+
+                F32_CONVERT_I32_S => {
+                    let value = self.stack.pop_i32()?;
+                    let res = Value::F32(value as f32);
+                    trace!("Instruction: f32.convert_i32_s [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F32_CONVERT_I32_U => {
+                    let value = self.stack.pop_i32()?;
+                    let res = Value::F32(value as u32 as f32);
+                    trace!("Instruction: f32.convert_i32_u [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F32_CONVERT_I64_S => {
+                    let value = self.stack.pop_i64()?;
+                    let res = Value::F32(value as f32);
+                    trace!("Instruction: f32.convert_i64_s [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F32_CONVERT_I64_U => {
+                    let value = self.stack.pop_i64()?;
+                    let res = Value::F32(value as u64 as f32);
+                    trace!("Instruction: f32.convert_i64_u [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_CONVERT_I32_S => {
+                    let value = self.stack.pop_i32()?;
+                    let res = Value::F64(value as f64);
+                    trace!("Instruction: f64.convert_i32_s [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_CONVERT_I32_U => {
+                    let value = self.stack.pop_i32()?;
+                    let res = Value::F64(value as u32 as f64);
+                    trace!("Instruction: f64.convert_i32_u [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_CONVERT_I64_S => {
+                    let value = self.stack.pop_i64()?;
+                    let res = Value::F64(value as f64);
+                    trace!("Instruction: f64.convert_i64_s [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_CONVERT_I64_U => {
+                    let value = self.stack.pop_i64()?;
+                    let res = Value::F64(value as u64 as f64);
+                    trace!("Instruction: f64.convert_i64_u [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_ABS => {
+                    let value = self.stack.pop_f64()?;
+                    let res = Value::F64(libm::fabs(value));
+                    trace!("Instruction: f64_abs [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_NEG => {
+                    let value = self.stack.pop_f64()?;
+                    let res = Value::F64(-value);
+                    trace!("Instruction: f64_neg [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_CEIL => {
+                    let value = self.stack.pop_f64()?;
+                    let res = Value::F64(libm::ceil(value));
+                    trace!("Instruction: f64_ceil [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_FLOOR => {
+                    let value = self.stack.pop_f64()?;
+                    let res = Value::F64(libm::floor(value));
+                    trace!("Instruction: f64_floor [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_TRUNC => {
+                    let value = self.stack.pop_f64()?;
+                    let res = Value::F64(libm::trunc(value));
+                    trace!("Instruction: f64_trunc [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_NEAREST => {
+                    let value = self.stack.pop_f64()?;
+                    let res = Value::F64(libm::rint(value));
+                    trace!("Instruction: f64_nearest [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_SQRT => {
+                    let value = self.stack.pop_f64()?;
+                    let res = Value::F64(libm::sqrt(value));
+                    trace!("Instruction: f64.sqrt [{value:?}] -> [{res:?}]");
+                    self.stack.push(res);
+                }
+                F64_ADD => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_ADD({left}, {right})");
+                    let res = Value::F64(left + right);
+                    self.stack.push(res);
+                }
+                F64_SUB => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_SUB({left}, {right})");
+                    let res = Value::F64(left - right);
+                    self.stack.push(res);
+                }
+                F64_MUL => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_MUL({left}, {right})");
+                    let res = Value::F64(left * right);
+                    self.stack.push(res);
+                }
+                F64_DIV => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_DIV({left}, {right})");
+                    let res = Value::F64(left / right);
+                    self.stack.push(res);
+                }
+                F64_MIN => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_MIN({left}, {right})");
+                    let res = Value::F64(left.min(right));
+                    self.stack.push(res);
+                }
+                F64_MAX => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_MAX({left}, {right})");
+                    let res = Value::F64(left.max(right));
+                    self.stack.push(res);
+                }
+                F64_EQ => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_EQ({left}, {right})");
+                    let res = Value::I32(if left == right { 1 } else { 0 });
+                    self.stack.push(res);
+                }
+                F64_NE => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_NE({left}, {right})");
+                    let res = Value::I32(if left != right { 1 } else { 0 });
+                    self.stack.push(res);
+                }
+                F64_LT => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_LT({left}, {right})");
+                    let res = Value::I32(if left < right { 1 } else { 0 });
+                    self.stack.push(res);
+                }
+                F64_GT => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_GT({left}, {right})");
+                    let res = Value::I32(if left > right { 1 } else { 0 });
+                    self.stack.push(res);
+                }
+                F64_LE => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_LE({left}, {right})");
+                    let res = Value::I32(if left <= right { 1 } else { 0 });
+                    self.stack.push(res);
+                }
+                F64_GE => {
+                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    trace!("F64_GE({left}, {right})");
+                    let res = Value::I32(if left >= right { 1 } else { 0 });
+                    self.stack.push(res);
                 }
 
                 REF_NULL => {

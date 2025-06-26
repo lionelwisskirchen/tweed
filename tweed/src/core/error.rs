@@ -6,6 +6,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
+    InvalidConversionToInt,
     UninitializedReference,
     WrongRefType,
     UnknownTable,
@@ -54,6 +55,7 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Error::InvalidConversionToInt => f.write_str("Invalid conversion to int"),
             Error::MalformedMutability => f.write_str("malformed mutability"),
             Error::InvalidMagic => {
                 f.write_str("The magic number of the given Wasm file is invalid.")

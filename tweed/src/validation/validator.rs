@@ -140,6 +140,14 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.reader.next_leb128_i64().ok_or(Error::MissingValue)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
+                F32_CONST => {
+                    self.reader.next_f32().ok_or(Error::MissingValue)?;
+                    self.abstract_value_stack.push(ValType::F32);
+                }
+                F64_CONST => {
+                    self.reader.next_f64().ok_or(Error::MissingValue)?;
+                    self.abstract_value_stack.push(ValType::F64);
+                }
                 LOCAL_GET => {
                     let idx = self
                         .reader
@@ -269,7 +277,47 @@ impl<'a, 'b> Validator<'a, 'b> {
 
                     self.abstract_value_stack.push(ValType::I64);
                 }
-                I32_CTZ | I32_EQZ => {
+                F64_ABS | F64_NEG | F64_CEIL | F64_FLOOR | F64_TRUNC | F64_NEAREST | F64_SQRT => {
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.push(ValType::F64);
+                }
+                F64_ADD | F64_SUB | F64_MUL | F64_DIV | F64_MIN | F64_MAX => {
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+
+                    self.abstract_value_stack.push(ValType::F64);
+                }
+                I32_TRUNC_F32_S | I32_TRUNC_F32_U => {
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                I32_TRUNC_F64_S | I32_TRUNC_F64_U => {
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                F64_EQ | F64_NE | F64_LT | F64_GT | F64_LE | F64_GE => {
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                F64_CONVERT_I64_U | F64_CONVERT_I64_S => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.push(ValType::F64);
+                }
+                F32_CONVERT_I32_U | F32_CONVERT_I32_S => {
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::F32);
+                }
+                F64_CONVERT_I32_S | F64_CONVERT_I32_U => {
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::F64);
+                }
+                F32_CONVERT_I64_S | F32_CONVERT_I64_U => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.push(ValType::F32);
+                }
+                I32_CTZ | I32_POPCNT | I32_EQZ => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }

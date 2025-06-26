@@ -129,6 +129,16 @@ impl WasmReader {
         }
         Some(result)
     }
+    pub fn next_f32(&mut self) -> Option<f32> {
+        let bytes = self.next_chunk(4)?;
+        let word = u32::from_le_bytes(bytes.try_into().unwrap());
+        Some(f32::from_bits(word))
+    }
+    pub fn next_f64(&mut self) -> Option<f64> {
+        let bytes = self.next_chunk(8)?;
+        let word = u64::from_le_bytes(bytes.try_into().unwrap());
+        Some(f64::from_bits(word))
+    }
     pub fn calculate_offset(&self, offset: usize) -> usize {
         offset + self.current_index()
     }

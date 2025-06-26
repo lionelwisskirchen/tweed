@@ -1,9 +1,11 @@
 use super::value_types::{RefType, ValType};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
     I32(i32),
     I64(i64),
+    F32(f32),
+    F64(f64),
     FuncRef(usize),
     ExternRef(usize),
     RefNull(RefType),
@@ -25,8 +27,11 @@ impl From<ValType> for Value {
         match value {
             ValType::I32 => Value::I32(0),
             ValType::I64 => Value::I64(0),
+            ValType::F32 => Value::F32(0.0),
+            ValType::F64 => Value::F64(0.0),
+            ValType::ExternRef => Value::RefNull(RefType::ExternRef),
+            ValType::FuncRef => Value::RefNull(RefType::FuncRef),
             ValType::Unknown => panic!("Unknown value type cant be converted to value."),
-            _ => panic!("Value not implemented yet"),
         }
     }
 }
