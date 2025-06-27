@@ -50,9 +50,8 @@ pub fn execute_const_expr(
             GLOBAL_GET => {
                 let idx = reader.next_leb128_u32().ok_or(Error::InvalidLocalIndex)?;
                 let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
-
                 if global.global_type.is_mutable {
-                    return Err(Error::UndefinedContantExpression);
+                    return Err(Error::ConstIsMutable);
                 }
                 value_stack.push(global.value)?;
             }

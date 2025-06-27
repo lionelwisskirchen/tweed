@@ -55,6 +55,7 @@ pub enum Error {
     GlobalIsImmutable,
     IntegerOverflow,
     InstanceNameTaken,
+    ConstIsMutable,
 }
 
 impl Display for Error {
@@ -71,6 +72,8 @@ impl Display for Error {
             Error::IndirectCallTypeMismatch => f.write_str("indirect call type mismatch"),
             Error::FunctionNotFound => f.write_str("function not found"),
             Error::GlobalIsImmutable => f.write_str("global is immutable"),
+            Error::ConstIsMutable => f.write_str("global const is mutable"),
+
             Error::DivisionByZero => f.write_str("integer divide by zero"),
             Error::IntegerOverflow => f.write_str("integer overflow"),
             Error::UnrepresentableResult => f.write_str("Result is not representable."),

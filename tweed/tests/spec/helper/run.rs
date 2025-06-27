@@ -58,16 +58,16 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         .add_global_import(
             "spectest".to_string(),
             "global_i32".to_string(),
-            Value::I32(42),
-            true,
+            Value::I32(666),
+            false,
         )
         .unwrap();
     linker
         .add_global_import(
             "spectest".to_string(),
             "global_i64".to_string(),
-            Value::I64(42),
-            true,
+            Value::I64(666),
+            false,
         )
         .unwrap();
 
