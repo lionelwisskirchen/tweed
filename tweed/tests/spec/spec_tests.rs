@@ -24,10 +24,11 @@ fn spec_tests() {
     run_spec_test(Path::new("./tests/spec/testsuite/f64_cmp.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/i32.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/br.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/table_get.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/local_tee.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/i64.wast"));
 
     run_spec_test(Path::new("./tests/spec/testsuite/linking.wast"));
-    run_spec_test(Path::new("./tests/spec/testsuite/local_tee.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/global.wast"));
-    run_spec_test(Path::new("./tests/spec/testsuite/table_get.wast"));
 }

@@ -266,13 +266,14 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I64_EQ | I64_NE | I64_LT_U | I64_LT_S | I64_LE_S | I64_LE_U | I64_GE_S
-                | I64_GT_U | I64_GE_U => {
+                | I64_GT_U | I64_GT_S | I64_GE_U => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I64_ADD | I64_SUB | I64_MUL | I64_AND | I64_OR | I64_XOR | I64_SHR_U
-                | I64_SHR_S | I64_SHL => {
+                | I64_SHR_S | I64_SHL | I64_ROTL | I64_ROTR | I64_DIV_S | I64_DIV_U | I64_REM_S
+                | I64_REM_U => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
 
@@ -282,7 +283,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
                     self.abstract_value_stack.push(ValType::F64);
                 }
-
+                F64_PROMOTE_F32 => {
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.push(ValType::F64);
+                }
                 F32_EQ | F32_NE | F32_LT | F32_GT | F32_LE | F32_GE => {
                     self.abstract_value_stack.pop_expected(ValType::F32)?;
                     self.abstract_value_stack.pop_expected(ValType::F32)?;
@@ -312,6 +316,15 @@ impl<'a, 'b> Validator<'a, 'b> {
                 I32_TRUNC_F64_S | I32_TRUNC_F64_U => {
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
                     self.abstract_value_stack.push(ValType::I32);
+                }
+
+                I64_TRUNC_F32_S | I64_TRUNC_F32_U => {
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
+                I64_TRUNC_F64_S | I64_TRUNC_F64_U => {
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.push(ValType::I64);
                 }
 
                 F64_EQ | F64_NE | F64_LT | F64_GT | F64_LE | F64_GE => {
@@ -356,7 +369,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I64_CTZ => {
+                I64_CTZ | I64_CLZ | I64_POPCNT | I64_EXTEND8_S | I64_EXTEND16_S
+                | I64_EXTEND32_S => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }

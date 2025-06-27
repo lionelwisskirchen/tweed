@@ -200,10 +200,9 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                             name: invoke_confs.name.to_string(),
                             line: span.linecol_in(&input).0 + 1,
                         };
-                        if expected_results == actual_results {
+                        if compare_results(actual_results, expected_results) {
                             report.success.push(result);
                         } else {
-                            println!("expected {expected_results:?} actual {actual_results:?}");
                             report.failure.push(result);
                         };
                     }
@@ -385,6 +384,34 @@ fn result_to_runtime_value(expr: &WastRet) -> Value {
         }
         _ => todo!(),
     }
+}
+
+fn compare_results(actual: Vec<Value>, expected: Vec<Value>) -> bool {
+    // TODO maybe extract to types
+    for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
+        match (a, e) {
+            (Value::F32(x), Value::F32(y)) => {
+                let xb = x.to_bits();
+                let yb = y.to_bits();
+                assert_eq!(
+                    xb, yb,
+                    "Mismatch at index {}: F32 bits differ (actual: {:#x}, expected: {:#x})",
+                    i, xb, yb
+                );
+            }
+            (Value::F64(x), Value::F64(y)) => {
+                let xb = x.to_bits();
+                let yb = y.to_bits();
+                assert_eq!(
+                    xb, yb,
+                    "Mismatch at index {}: F64 bits differ (actual: {:#x}, expected: {:#x})",
+                    i, xb, yb
+                );
+            }
+            _ => assert_eq!(a, e, "Mismatch at index {}", i),
+        }
+    }
+    true
 }
 
 fn args_to_runtime_value(expr: &WastArg) -> Value {
