@@ -88,8 +88,8 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
 
     for directive in wast.directives {
         use wast::WastDirective::{
-            AssertInvalid, AssertMalformed, AssertReturn, AssertTrap, AssertUnlinkable, Invoke,
-            Module, Register,
+            AssertExhaustion, AssertInvalid, AssertMalformed, AssertReturn, AssertTrap,
+            AssertUnlinkable, Invoke, Module, Register,
         };
 
         match directive {
@@ -175,7 +175,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         report.failure.push(result);
                     }
                 }
-                _ => panic!("Testsuit: Error encoding the test wat."),
+                _ => panic!("Testsuite: Error encoding the test wat."),
             },
             AssertReturn {
                 exec,
@@ -284,6 +284,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     };
                     match result {
                         Err(e) => {
+                            info!("{e} == {message}");
                             if format!("{e}") == message {
                                 report.success.push(report_result);
                             } else {
@@ -297,6 +298,33 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 }
                 _ => todo!(),
             },
+            AssertExhaustion {
+                span,
+                call,
+                message,
+            } => {
+                let args: Vec<Value> = call.args.iter().map(args_to_runtime_value).collect();
+                let module = module_registry.get(call.module).unwrap();
+                let function = call.name.to_string();
+                let result = invoke(module, function, args, &mut store);
+                let report_result = WastResult::AssertResult {
+                    name: call.name.to_string(),
+                    line: span.linecol_in(&input).0 + 1,
+                };
+                match result {
+                    Err(e) => {
+                        info!("{e} == {message}");
+                        if format!("{e}") == message {
+                            report.success.push(report_result);
+                        } else {
+                            report.failure.push(report_result);
+                        }
+                    }
+                    Ok(_) => {
+                        report.failure.push(report_result);
+                    }
+                };
+            }
             _ => {
                 unreachable!()
             }

@@ -265,7 +265,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
-                I64_EQ | I64_NE | I64_LT_U | I64_GT_U | I64_GE_U => {
+                I64_EQ | I64_NE | I64_LT_U | I64_LT_S | I64_LE_S | I64_LE_U | I64_GE_S
+                | I64_GT_U | I64_GE_U => {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I32);
@@ -281,11 +282,28 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
                     self.abstract_value_stack.push(ValType::F64);
                 }
+
+                F32_EQ | F32_NE | F32_LT | F32_GT | F32_LE | F32_GE => {
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                F32_ABS | F32_NEG | F32_CEIL | F32_FLOOR | F32_TRUNC | F32_NEAREST | F32_SQRT => {
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.push(ValType::F32);
+                }
                 F64_ADD | F64_SUB | F64_MUL | F64_DIV | F64_MIN | F64_MAX => {
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
 
                     self.abstract_value_stack.push(ValType::F64);
+                }
+                F32_ADD | F32_SUB | F32_MUL | F32_DIV | F32_MIN | F32_MAX => {
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+
+                    self.abstract_value_stack.push(ValType::F32);
                 }
                 I32_TRUNC_F32_S | I32_TRUNC_F32_U => {
                     self.abstract_value_stack.pop_expected(ValType::F32)?;
@@ -295,6 +313,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
+
                 F64_EQ | F64_NE | F64_LT | F64_GT | F64_LE | F64_GE => {
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
@@ -331,6 +350,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                 }
                 I32_EXTEND8_S | I32_EXTEND16_S => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                I64_EQZ => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I64_CTZ => {
@@ -518,13 +541,13 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .get(table_index as usize)
                         .ok_or(Error::UnknownTable)?;
                     if table.ref_type != RefType::FuncRef {
-                        return Err(Error::WrongRefType);
+                        return Err(Error::TypeMismatch);
                     }
                     let func_type = self
                         .module_environment
                         .typesec
                         .get(type_index as usize)
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                        .ok_or(Error::UnknownType)?;
 
                     self.abstract_value_stack.pop_expected(ValType::I32)?; // Table Entry Index
                     self.abstract_value_stack
@@ -607,6 +630,23 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
+                F32_STORE => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
+                F64_STORE => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(8)?;
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                }
+
                 I32_LOAD => {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
@@ -615,6 +655,22 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
+                F32_LOAD => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::F32);
+                }
+                F64_LOAD => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(8)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::F64);
+                }
                 I32_LOAD8_U => {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
@@ -622,6 +678,30 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
+                }
+                I64_LOAD8_S | I64_LOAD8_U => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(1)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
+                I64_LOAD16_U | I64_LOAD16_S => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(2)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
+                I64_LOAD32_U | I64_LOAD32_S => {
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.check_align(4)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I64);
                 }
                 I32_LOAD8_S => {
                     if self.module_environment.memorysec.is_empty() {
@@ -651,14 +731,6 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
-                I64_LOAD32_S => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
-                    }
-                    self.check_align(4)?;
-                    self.abstract_value_stack.pop_expected(ValType::I32)?;
-                    self.abstract_value_stack.push(ValType::I64);
-                }
                 REF_IS_NULL => {
                     let value = self.abstract_value_stack.pop_val()?;
                     if !value.is_ref() {
@@ -669,6 +741,29 @@ impl<'a, 'b> Validator<'a, 'b> {
                 REF_NULL => {
                     let ref_type = self.reader.next_byte().ok_or(Error::MissingValue)?;
                     self.abstract_value_stack.push(ValType::lookup(ref_type)?);
+                }
+                MEMORY_GROW => {
+                    let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
+                    if idx != 0 {
+                        return Err(Error::MultipleMemoriesNotImplemented);
+                    }
+
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+                MEMORY_SIZE => {
+                    let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
+                    if idx != 0 {
+                        return Err(Error::MultipleMemoriesNotImplemented);
+                    }
+
+                    if self.module_environment.memorysec.is_empty() {
+                        return Err(Error::UndefinedMemory)?;
+                    }
+                    self.abstract_value_stack.push(ValType::I32);
                 }
                 REF_FUNC => {
                     let func_idx =

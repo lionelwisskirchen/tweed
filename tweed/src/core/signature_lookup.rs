@@ -20,6 +20,20 @@ fn shorthand_lookup(val: u32) -> Option<FuncType> {
                 result: vec![ValType::I64],
             },
         ),
+        (
+            0x7d,
+            FuncType {
+                parameter: Vec::new(),
+                result: vec![ValType::F32],
+            },
+        ),
+        (
+            0x7c,
+            FuncType {
+                parameter: Vec::new(),
+                result: vec![ValType::F64],
+            },
+        ),
     ]);
     lookup_map.get(&val).cloned()
 }
@@ -35,6 +49,6 @@ pub fn lookup_signature(func_idx: u32, type_section: &[FuncType]) -> FuncType {
     };
     type_section
         .get(func_idx as usize)
-        .expect("No func idx for sig")
+        .expect("No func idx for sig in shorthand lookup")
         .clone()
 }

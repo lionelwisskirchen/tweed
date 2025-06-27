@@ -17,6 +17,7 @@ pub fn validate_const_expr(
     let mut abstract_value_stack: ValidationStack = ValidationStack::default();
     loop {
         let byte = reader.next_byte().ok_or(Error::InvalidControlFlow)?;
+        trace!("Validate Const Expression Byte: {byte:#04X}");
         match *byte {
             I32_CONST => {
                 reader.next_leb128_i32().ok_or(Error::MissingValue)?;
@@ -26,12 +27,20 @@ pub fn validate_const_expr(
                 reader.next_leb128_i64().ok_or(Error::MissingValue)?;
                 abstract_value_stack.push(ValType::I64);
             }
+            F32_CONST => {
+                reader.next_f32().ok_or(Error::MissingValue)?;
+                abstract_value_stack.push(ValType::F32);
+            }
+            F64_CONST => {
+                reader.next_f64().ok_or(Error::MissingValue)?;
+                abstract_value_stack.push(ValType::F64);
+            }
             I32_ADD | I32_SUB => {
                 abstract_value_stack.pop_expected(ValType::I32)?;
                 abstract_value_stack.pop_expected(ValType::I32)?;
                 abstract_value_stack.push(ValType::I32);
             }
-            I64_ADD => {
+            I64_ADD | I64_SUB => {
                 abstract_value_stack.pop_expected(ValType::I64)?;
                 abstract_value_stack.pop_expected(ValType::I64)?;
                 abstract_value_stack.push(ValType::I64);

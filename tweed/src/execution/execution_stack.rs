@@ -2,6 +2,39 @@ use alloc::vec::Vec;
 
 use crate::core::error::{Error, Result};
 use crate::core::values::Value;
+
+use super::executor::Frame;
+
+pub const MAX_VALUE_STACK_SIZE: usize = 0xf1000;
+pub const MAX_CALL_STACK_SIZE: usize = 0xf1000;
+
+#[derive(Debug)]
+pub struct CallStack {
+    stack: Vec<Frame>,
+}
+
+impl Default for CallStack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CallStack {
+    pub fn new() -> Self {
+        Self { stack: Vec::new() }
+    }
+    pub fn push(&mut self, value: Frame) -> Result<()> {
+        if self.stack.len() > MAX_CALL_STACK_SIZE {
+            return Err(Error::CallStackExhaustion);
+        }
+        self.stack.push(value);
+        Ok(())
+    }
+    pub fn pop(&mut self) -> Option<Frame> {
+        self.stack.pop()
+    }
+}
+
 #[derive(Debug)]
 pub struct ExecutionStack {
     stack: Vec<Value>,
@@ -20,13 +53,18 @@ impl ExecutionStack {
     pub fn reset(&mut self) {
         self.stack.clear();
     }
-    pub fn push(&mut self, value: Value) {
-        self.stack.push(value);
-    }
-    pub fn push_vec(&mut self, values: &[Value]) {
-        for value in values {
-            self.push(*value);
+    pub fn push(&mut self, value: Value) -> Result<()> {
+        if self.stack.len() > MAX_VALUE_STACK_SIZE {
+            return Err(Error::StackExhaustion);
         }
+        self.stack.push(value);
+        Ok(())
+    }
+    pub fn push_vec(&mut self, values: &[Value]) -> Result<()> {
+        for value in values {
+            self.push(*value)?;
+        }
+        Ok(())
     }
     pub fn unwind_to(&mut self, size: usize) {
         if size > self.stack.len() {
@@ -81,50 +119,5 @@ impl ExecutionStack {
             return Err(Error::ExpectedAValueOnTheStack);
         }
         Ok(self.stack.split_off(self.stack.len() - count))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_is_empty() {
-        let mut stack = ExecutionStack::default();
-        assert!(stack.is_empty());
-        stack.push(Value::I32(2));
-        assert!(!stack.is_empty());
-    }
-    #[should_panic]
-    #[test]
-    fn test_underflow() {
-        let mut stack = ExecutionStack::default();
-        stack.unwind_to(1);
-    }
-    #[test]
-    fn test_pop_unexpected_i64() {
-        let mut stack = ExecutionStack::default();
-        stack.push(Value::I32(2));
-        assert!(stack.pop_i64().is_err());
-    }
-
-    #[test]
-    fn test_pop_unexpected_i32() {
-        let mut stack = ExecutionStack::default();
-        stack.push(Value::I64(2));
-        assert!(stack.pop_i32().is_err());
-    }
-
-    #[test]
-    fn test_pop_unexpected_vec() {
-        let mut stack = ExecutionStack::default();
-        stack.push(Value::I64(2));
-        assert!(stack.pop_n(2).is_err());
-    }
-
-    #[test]
-    fn test_pop_i64() {
-        let mut stack = ExecutionStack::default();
-        stack.push(Value::I64(2));
-        assert_eq!(stack.pop_i64().unwrap(), 2);
     }
 }

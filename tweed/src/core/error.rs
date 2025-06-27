@@ -6,9 +6,14 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
+    StackExhaustion,
+    CallStackExhaustion,
+    UnknownFunction,
+    UnknownType,
+    UndefinedElement,
     InvalidConversionToInt,
     UninitializedReference,
-    WrongRefType,
+    IndirectCallTypeMismatch,
     UnknownTable,
     MultipleMemoriesNotImplemented,
     MalformedMutability,
@@ -56,11 +61,14 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::InvalidConversionToInt => f.write_str("Invalid conversion to int"),
+            Error::StackExhaustion => f.write_str("operand stack exhausted"),
+            Error::CallStackExhaustion => f.write_str("call stack exhausted"),
             Error::MalformedMutability => f.write_str("malformed mutability"),
             Error::InvalidMagic => {
                 f.write_str("The magic number of the given Wasm file is invalid.")
             }
             Error::InstanceNameTaken => f.write_str("instance name is taken"),
+            Error::IndirectCallTypeMismatch => f.write_str("indirect call type mismatch"),
             Error::FunctionNotFound => f.write_str("function not found"),
             Error::GlobalIsImmutable => f.write_str("global is immutable"),
             Error::DivisionByZero => f.write_str("integer divide by zero"),
@@ -72,6 +80,9 @@ impl Display for Error {
             Error::InvalidControlFlow => f.write_str("Control flow mismatch"),
             Error::MissingValue => f.write_str("Missing value on stack."),
             Error::InvalidLocalIndex => f.write_str("unknown local"),
+            Error::UnknownFunction => f.write_str("unknown function"),
+
+            Error::UndefinedElement => f.write_str("undefined element"),
             Error::InvalidFunctionIndex => f.write_str("Invalid function index"),
             Error::InvalidMemoryIndex => f.write_str("Invalid memory index"),
             Error::UndefinedContantExpression => f.write_str("constant expression required"),
@@ -87,11 +98,11 @@ impl Display for Error {
             Error::UnknownSectionCode(seccode) => {
                 f.write_fmt(format_args!("Invalid sectioncode {seccode:#04X}"))
             }
+            Error::UnknownType => f.write_str("unknown type"),
 
             Error::UnknownGlobal => f.write_str("unknown global"),
-            Error::WrongRefType => f.write_str("wrong ref type"),
             Error::UnknownTable => f.write_str("unknown table"),
-            Error::UninitializedReference => f.write_str("uninitialized ref"),
+            Error::UninitializedReference => f.write_str("uninitialized element"),
             Error::UnsupportedExportKind => f.write_str("unsupported export kind"),
             Error::UnknownLabel => f.write_str("unknown label"),
             Error::UnsupportedValueType => f.write_str("unknown value type"),

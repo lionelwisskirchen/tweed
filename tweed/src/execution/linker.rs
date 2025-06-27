@@ -26,6 +26,7 @@ use super::store::{
     MemoryInstance, Store, TableInstance,
 };
 pub const PAGE_SIZE: u32 = 65536;
+pub const MAX_MEM_PAGES: u32 = 65536;
 pub const DEFAULT_MODULE: &str = "__module_instance_default__";
 
 #[derive(Default)]
@@ -157,7 +158,6 @@ impl Linker {
 
         memories.extend(self.instantiate_memories(module)?);
         tables.extend(self.instantiate_tables(module)?);
-
         let data = self.instantiate_datas(module, &mut memories, &imported_globals, &functions)?;
         let elements =
             self.instantiate_elements(module, &imported_globals, &mut tables, &functions)?;
@@ -362,7 +362,6 @@ impl Linker {
         functions: &[FuncInstance],
     ) -> Result<Vec<ElementInstance>> {
         let mut elements = Vec::new();
-
         for element in module.elementsec.iter() {
             let instance = match &element.items {
                 ElementItems::RefFuncs(refs) => {

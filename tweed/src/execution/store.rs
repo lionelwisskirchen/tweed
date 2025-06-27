@@ -18,6 +18,7 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use super::instance::Instance;
+use super::linker::{MAX_MEM_PAGES, PAGE_SIZE};
 
 #[derive(Debug, Default)]
 pub struct StoreData {
@@ -43,9 +44,13 @@ pub struct HostEnv<'store> {
 }
 
 pub fn add_instances<T>(target: &mut Vec<T>, mut new: Vec<T>) -> Vec<usize> {
+    if new.is_empty() {
+        return vec![];
+    }
     let start_index = target.len();
     target.append(&mut new);
     let end_index = target.len().saturating_sub(1);
+
     (start_index..=end_index).collect()
 }
 impl<'a> From<&'a StoreData> for HostEnv<'a> {
@@ -143,7 +148,7 @@ pub fn map_memory<'a>(
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MemoryInstance {
     data: Vec<u8>,
-    max: Option<u32>,
+    max: Option<u32>, // TODO Store Limit to be closer to spec!
 }
 
 impl MemoryInstance {
@@ -154,6 +159,25 @@ impl MemoryInstance {
         self.data
             .get(address..address + bytes)
             .ok_or(Error::MemoryAccessOutOfBounds)
+    }
+    pub fn size(&self) -> i32 {
+        (self.data.len() as u32 / PAGE_SIZE) as i32
+    }
+    pub fn pages(&self) -> u32 {
+        (self.data.len() / PAGE_SIZE as usize) as u32
+    }
+    pub fn grow(&mut self, amount: u32) -> Result<()> {
+        let new_len = amount + self.pages();
+        if new_len > MAX_MEM_PAGES {
+            return Err(Error::MemoryAccessOutOfBounds);
+        }
+        if let Some(max) = self.max {
+            if new_len > max {
+                return Err(Error::MemoryAccessOutOfBounds);
+            }
+        }
+        self.data.resize((new_len * PAGE_SIZE) as usize, 0);
+        Ok(())
     }
     pub fn load<T>(&mut self, address: usize, bytes: usize) -> Result<T>
     where

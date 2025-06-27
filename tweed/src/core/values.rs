@@ -22,6 +22,19 @@ impl From<i64> for Value {
         Value::I64(value)
     }
 }
+
+impl From<f32> for Value {
+    fn from(value: f32) -> Self {
+        Value::F32(value)
+    }
+}
+
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        Value::F64(value)
+    }
+}
+
 impl From<ValType> for Value {
     fn from(value: ValType) -> Self {
         match value {
@@ -56,13 +69,31 @@ impl FromLeBytes for i32 {
         i32::from_le_bytes(bytes.try_into().expect("Invalid length for i32"))
     }
 }
-
+impl FromLeBytes for u32 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        u32::from_le_bytes(bytes.try_into().expect("Invalid length for u32"))
+    }
+}
+impl FromLeBytes for f32 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        f32::from_le_bytes(bytes.try_into().expect("Invalid length for f32"))
+    }
+}
+impl FromLeBytes for f64 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        f64::from_le_bytes(bytes.try_into().expect("Invalid length for f64"))
+    }
+}
 impl FromLeBytes for i64 {
     fn from_le_bytes(bytes: &[u8]) -> Self {
         i64::from_le_bytes(bytes.try_into().expect("Invalid length for i64"))
     }
 }
-
+impl FromLeBytes for u64 {
+    fn from_le_bytes(bytes: &[u8]) -> Self {
+        u64::from_le_bytes(bytes.try_into().expect("Invalid length for u64"))
+    }
+}
 impl FromLeBytes for u8 {
     fn from_le_bytes(bytes: &[u8]) -> Self {
         u8::from_le_bytes(bytes.try_into().expect("Invalid length for u8"))

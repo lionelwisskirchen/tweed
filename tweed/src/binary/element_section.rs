@@ -51,6 +51,7 @@ pub fn process_element_section(
         let flag = reader
             .next_leb128_u32()
             .ok_or(Error::InvalidSectionBytecode)?;
+
         match flag {
             0 => {
                 let start = reader.current_index();
@@ -66,10 +67,14 @@ pub fn process_element_section(
                     .ok_or(Error::InvalidSectionBytecode)?;
 
                 let mut function_references = vec![];
+
                 for _ in 0..number_of_elements {
                     let function_idx = reader
                         .next_leb128_u32()
                         .ok_or(Error::InvalidSectionBytecode)?;
+                    if functions.get(function_idx as usize).is_none() {
+                        return Err(Error::UnknownFunction);
+                    }
                     function_references.push(function_idx);
                 }
 
@@ -88,6 +93,7 @@ pub fn process_element_section(
                         let number_of_elements = reader
                             .next_leb128_u32()
                             .ok_or(Error::InvalidSectionBytecode)?;
+
                         let mut function_references = vec![];
                         for _ in 0..number_of_elements {
                             let function_idx = reader
@@ -127,6 +133,11 @@ pub fn process_element_section(
                             let function_idx = reader
                                 .next_leb128_u32()
                                 .ok_or(Error::InvalidSectionBytecode)?;
+
+                            if functions.get(function_idx as usize).is_none() {
+                                return Err(Error::UnknownFunction);
+                            }
+
                             function_references.push(function_idx);
                         }
                         elements.push(ElementSegment {
@@ -151,6 +162,9 @@ pub fn process_element_section(
                             let function_idx = reader
                                 .next_leb128_u32()
                                 .ok_or(Error::InvalidSectionBytecode)?;
+                            if functions.get(function_idx as usize).is_none() {
+                                return Err(Error::UnknownFunction);
+                            }
                             function_references.push(function_idx);
                         }
                         elements.push(ElementSegment {
