@@ -1,7 +1,5 @@
 use core::fmt::{Display, Formatter};
 
-use super::value_types::ValType;
-
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -44,7 +42,7 @@ pub enum Error {
     UnknownExportCall,
     InvalidSidetableIndex,
     UndefinedInstruction(u8),
-    IllegalSelectType(ValType),
+    IllegalSelectType,
     UndefinedMemory,
     UndefinedTable,
     TableAccessOutOfBounds,
@@ -52,6 +50,7 @@ pub enum Error {
     MemoryAccessOutOfBounds,
     DivisionByZero,
     UnrepresentableResult,
+    InvalidResultArity,
     GlobalIsImmutable,
     IntegerOverflow,
     InstanceNameTaken,
@@ -61,7 +60,8 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            Error::InvalidConversionToInt => f.write_str("Invalid conversion to int"),
+            Error::InvalidResultArity => f.write_str("invalid result arity"),
+            Error::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
             Error::StackExhaustion => f.write_str("operand stack exhausted"),
             Error::CallStackExhaustion => f.write_str("call stack exhausted"),
             Error::MalformedMutability => f.write_str("malformed mutability"),
@@ -113,9 +113,7 @@ impl Display for Error {
             Error::UnexpectedValueType => f.write_str("Unexpected value type"),
             Error::UnknownExportCall => f.write_str("Unexpected export call"),
             Error::InvalidSidetableIndex => f.write_str("Invalid sidetable entry index"),
-            Error::IllegalSelectType(valtype) => {
-                f.write_fmt(format_args!("Illegal select type: {valtype:?}"))
-            }
+            Error::IllegalSelectType => f.write_str("type mismatch"),
             Error::MissingGlobalImport => f.write_str("missing global import"),
             Error::MissingFunctionImport => f.write_str("missing function import"),
             Error::UndefinedMemory => f.write_str("undefined memory"),

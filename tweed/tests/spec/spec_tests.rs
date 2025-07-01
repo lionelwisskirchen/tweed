@@ -20,6 +20,8 @@ fn run_spec_test(path: &Path) {
 
 #[test_log::test]
 fn spec_tests() {
+    run_spec_test(Path::new("./tests/spec/testsuite/conversions.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/float_misc.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/call_indirect.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/f64_cmp.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/i32.wast"));
@@ -28,7 +30,8 @@ fn spec_tests() {
     run_spec_test(Path::new("./tests/spec/testsuite/local_tee.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/i64.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/global.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/select.wast"));
 
-    // run_spec_test(Path::new("./tests/spec/testsuite/linking.wast"));
-    // run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/linking.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
 }

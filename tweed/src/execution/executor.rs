@@ -745,6 +745,22 @@ impl<'store> Executor<'store> {
                         Self::do_goto(&mut self.stack, current_frame, reader)?;
                     }
                 }
+                SELECT_T => {
+                    reader
+                        .next_leb128_u32()
+                        .ok_or(Error::InvalidSectionBytecode)?;
+
+                    reader.next_byte().ok_or(Error::UnsupportedValueType)?;
+                    let c = self.stack.pop_i32()?;
+                    let val_2 = self.stack.pop()?; // TODO Type check?
+                    let val_1 = self.stack.pop()?;
+                    trace!("SELECT_T({c})");
+                    if c == 0 {
+                        self.stack.push(val_2)?;
+                    } else {
+                        self.stack.push(val_1)?;
+                    }
+                }
                 BR_TABLE => {
                     let branch_index = self.stack.pop_i32()?;
                     trace!("BR_TABLE({branch_index})");
@@ -1095,13 +1111,18 @@ impl<'store> Executor<'store> {
                     table.insert(index, &[val])?;
                     trace!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val)
                 }
+
                 I32_TRUNC_F32_S => {
                     let value = self.stack.pop_f32()?;
-                    if value.is_nan() || value.is_infinite() {
+                    if value.is_nan() {
                         return Err(Error::InvalidConversionToInt);
                     }
-                    if value > i32::MAX as f32 || value < i32::MIN as f32 {
-                        return Err(Error::InvalidConversionToInt);
+                    if value.is_infinite() {
+                        return Err(Error::IntegerOverflow);
+                    }
+                    // -2147483904.0 Because -2147483647.0 is not representable as f32
+                    if value >= 2147483648.0 || value <= -2147483904.0 {
+                        return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I32(value as i32);
                     trace!("Instruction: i32.trunc_f32_s [{value:?}] -> [{res:?}]");
@@ -1109,24 +1130,35 @@ impl<'store> Executor<'store> {
                 }
                 I32_TRUNC_F32_U => {
                     let value = self.stack.pop_f32()?;
-                    if value.is_nan() || value.is_infinite() {
+                    if value.is_nan() {
                         return Err(Error::InvalidConversionToInt);
                     }
-                    if !(0.0..(u32::MAX as f32)).contains(&value) {
-                        // Is this correct?
-                        return Err(Error::InvalidConversionToInt);
+                    if value.is_infinite() {
+                        return Err(Error::IntegerOverflow);
+                    }
+                    info!(
+                        "Instruction: i32.trunc_f32_u [{value:?}] {}",
+                        u32::MAX as f32
+                    );
+
+                    if value >= 4294967296.0 || value <= -1.0 {
+                        return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I32(value as u32 as i32);
-                    trace!("Instruction: i32.trunc_f32_u [{value:?}] -> [{res:?}]");
+                    info!("Instruction: i32.trunc_f32_u [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 I32_TRUNC_F64_S => {
                     let value = self.stack.pop_f64()?;
-                    if value.is_nan() || value.is_infinite() {
+                    if value.is_nan() {
                         return Err(Error::InvalidConversionToInt);
                     }
-                    if value > i32::MAX as f64 || value < i32::MIN as f64 {
-                        return Err(Error::InvalidConversionToInt);
+                    if value.is_infinite() {
+                        return Err(Error::IntegerOverflow);
+                    }
+
+                    if value >= 2147483648.0 || value <= -2147483649.0 {
+                        return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I32(value as i32);
                     trace!("Instruction: i32.trunc_f64_s [{value:?}] -> [{res:?}]");
@@ -1134,12 +1166,14 @@ impl<'store> Executor<'store> {
                 }
                 I32_TRUNC_F64_U => {
                     let value = self.stack.pop_f64()?;
-                    if value.is_nan() || value.is_infinite() {
+                    if value.is_nan() {
                         return Err(Error::InvalidConversionToInt);
                     }
-                    if !(0.0..(u32::MAX as f64)).contains(&value) {
-                        // Is this correct?
-                        return Err(Error::InvalidConversionToInt);
+                    if value.is_infinite() {
+                        return Err(Error::IntegerOverflow);
+                    }
+                    if value >= 4294967296.0 || value <= -1.0 {
+                        return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I32(value as u32 as i32);
                     trace!("Instruction: i32.trunc_f64_u [{value:?}] -> [{res:?}]");
@@ -1147,12 +1181,14 @@ impl<'store> Executor<'store> {
                 }
                 I64_TRUNC_F32_S => {
                     let value = self.stack.pop_f32()?;
-                    if value.is_nan() || value.is_infinite() {
+                    if value.is_nan() {
                         return Err(Error::InvalidConversionToInt);
                     }
-                    if value > i64::MAX as f32 || value < (i64::MIN as f32) {
-                        // Is this correct?
-                        return Err(Error::InvalidConversionToInt);
+                    if value.is_infinite() {
+                        return Err(Error::IntegerOverflow);
+                    }
+                    if value >= 9223372036854775808.0 || value <= -9223373136366403584.0 {
+                        return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I64(value as i64);
                     trace!("Instruction: i64.trunc_f32_s  [{value:?}] -> [{res:?}]");
@@ -1160,12 +1196,15 @@ impl<'store> Executor<'store> {
                 }
                 I64_TRUNC_F32_U => {
                     let value = self.stack.pop_f32()?;
-                    if value.is_nan() || value.is_infinite() {
+                    if value.is_nan() {
                         return Err(Error::InvalidConversionToInt);
                     }
-                    if !(0.0..(u64::MAX as f32)).contains(&value) {
-                        // Is this correct?
-                        return Err(Error::InvalidConversionToInt);
+                    if value.is_infinite() {
+                        return Err(Error::IntegerOverflow);
+                    }
+                    // 2^64
+                    if value >= 18446744073709551616.0 || value <= -1.0 {
+                        return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I64(value as u64 as i64);
                     trace!("Instruction: i64.trunc_f32_u  [{value:?}] -> [{res:?}]");
@@ -1174,12 +1213,14 @@ impl<'store> Executor<'store> {
 
                 I64_TRUNC_F64_S => {
                     let value = self.stack.pop_f64()?;
-                    if value.is_nan() || value.is_infinite() {
+                    if value.is_nan() {
                         return Err(Error::InvalidConversionToInt);
                     }
-                    if value > i64::MAX as f64 || value < (i64::MIN as f64) {
-                        // Is this correct?
-                        return Err(Error::InvalidConversionToInt);
+                    if value.is_infinite() {
+                        return Err(Error::IntegerOverflow);
+                    }
+                    if value >= 9223372036854775808.0 || value <= -9223372036854777856.0 {
+                        return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I64(value as i64);
                     trace!("Instruction: i64.trunc_f64_s  [{value:?}] -> [{res:?}]");
@@ -1187,18 +1228,70 @@ impl<'store> Executor<'store> {
                 }
                 I64_TRUNC_F64_U => {
                     let value = self.stack.pop_f64()?;
-                    if value.is_nan() || value.is_infinite() {
+                    if value.is_nan() {
                         return Err(Error::InvalidConversionToInt);
                     }
-                    if !(0.0..(u64::MAX as f64)).contains(&value) {
-                        // Is this correct?
-                        return Err(Error::InvalidConversionToInt);
+                    if value.is_infinite() {
+                        return Err(Error::IntegerOverflow);
+                    }
+                    if value >= 18446744073709551616.0 || value <= -1.0 {
+                        return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I64(value as u64 as i64);
                     trace!("Instruction: i64.trunc_f64_u  [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
-
+                I32_REINTERPRET_F32 => {
+                    let value = self.stack.pop_f32()?;
+                    let bits = value.to_bits();
+                    let res = Value::I32(bits as i32);
+                    trace!("Instruction: i32.reinterpret_f32 [{value:?}] -> [{res:?}]");
+                    self.stack.push(res)?;
+                }
+                I64_REINTERPRET_F64 => {
+                    let value = self.stack.pop_f64()?;
+                    let bits = value.to_bits();
+                    let res = Value::I64(bits as i64);
+                    trace!("Instruction: i64.reinterpret_f64 [{value:?}] -> [{res:?}]");
+                    self.stack.push(res)?;
+                }
+                F64_REINTERPRET_I64 => {
+                    let value = self.stack.pop_i64()?;
+                    let bits = value as u64;
+                    let res = Value::F64(f64::from_bits(bits));
+                    trace!("Instruction: f64.reinterpret_i64 [{value:?}] -> [{res:?}]");
+                    self.stack.push(res)?;
+                }
+                F32_REINTERPRET_I32 => {
+                    let value = self.stack.pop_i32()?;
+                    let bits = value as u32;
+                    let res = Value::F32(f32::from_bits(bits));
+                    trace!("Instruction: f32.reinterpret_i32 [{value:?}] -> [{res:?}]");
+                    self.stack.push(res)?;
+                }
+                F32_DEMOTE_F64 => {
+                    let value = self.stack.pop_f64()?;
+                    let mut result = value as f32;
+                    if value.is_nan() {
+                        result = f32::from_bits(0x7fc00000);
+                    }
+                    trace!("Instruction: f32.demote_f64 [{value:?}] -> [{result:?}]");
+                    self.stack.push(Value::F32(result))?;
+                }
+                F64_COPYSIGN => {
+                    let z_2 = self.stack.pop_f64()?;
+                    let z_1 = self.stack.pop_f64()?;
+                    let res = Value::F64(z_1.copysign(z_2));
+                    trace!("Instruction: f64.copysign [{z_1} {z_2}] -> [{res:?}]");
+                    self.stack.push(res)?;
+                }
+                F32_COPYSIGN => {
+                    let z_2 = self.stack.pop_f32()?;
+                    let z_1 = self.stack.pop_f32()?;
+                    let res = Value::F32(z_1.copysign(z_2));
+                    trace!("Instruction: f32.copysign [{z_1} {z_2}] -> [{res:?}]");
+                    self.stack.push(res)?;
+                }
                 F32_CONVERT_I32_S => {
                     let value = self.stack.pop_i32()?;
                     let res = Value::F32(value as f32);
@@ -1249,9 +1342,11 @@ impl<'store> Executor<'store> {
                 }
                 F64_PROMOTE_F32 => {
                     let value = self.stack.pop_f32()?;
-                    let res = Value::F64(value as f64);
+                    let res = value as f64;
                     trace!("Instruction: f64.promote_f32 [{value:?}] -> [{res:?}]");
-                    self.stack.push(res)?;
+                    let quiet_bit = (res.to_bits() >> 51) & 0x1;
+                    info!("is arith? {}", res.is_nan() && quiet_bit == 1);
+                    self.stack.push(Value::F64(res))?;
                 }
 
                 F64_ABS => {
@@ -1292,8 +1387,15 @@ impl<'store> Executor<'store> {
                 }
                 F64_SQRT => {
                     let value = self.stack.pop_f64()?;
-                    let res = Value::F64(libm::sqrt(value));
+                    let libm_res = libm::sqrt(value);
+
+                    let res = if libm_res.is_nan() {
+                        Value::F64(f64::from_bits(0x7ff8000000000000))
+                    } else {
+                        Value::F64(libm_res)
+                    };
                     trace!("Instruction: f64.sqrt [{value:?}] -> [{res:?}]");
+
                     self.stack.push(res)?;
                 }
                 F64_ADD => {
@@ -1530,6 +1632,119 @@ impl<'store> Executor<'store> {
                 EXTENSION_PREFIX => {
                     let byte = *reader.next_byte().ok_or(Error::InvalidControlFlow)?;
                     match byte {
+                        I32_TRUNC_SAT_F32_S => {
+                            let val = self.stack.pop_f32()?;
+                            let res = if val.is_nan() {
+                                0
+                            } else if val <= (i32::MIN as f32) {
+                                i32::MIN
+                            } else if val >= (i32::MAX as f32) {
+                                i32::MAX
+                            } else {
+                                val as i32
+                            };
+                            trace!("I32_TRUNC_SAT_F32_S: {val} -> {res}");
+                            self.stack.push(Value::I32(res))?;
+                        }
+                        I32_TRUNC_SAT_F32_U => {
+                            let val = self.stack.pop_f32()?;
+                            let res = if val.is_nan() {
+                                0
+                            } else if val <= (u32::MIN as f32) {
+                                u32::MIN
+                            } else if val >= (u32::MAX as f32) {
+                                u32::MAX
+                            } else {
+                                val as u32
+                            };
+                            trace!("I32_TRUNC_SAT_F32_U: {val} -> {res}");
+                            self.stack.push(Value::I32(res as i32))?;
+                        }
+                        I32_TRUNC_SAT_F64_S => {
+                            let val = self.stack.pop_f64()?;
+                            let res = if val.is_nan() {
+                                0
+                            } else if val <= (i32::MIN as f64) {
+                                i32::MIN
+                            } else if val >= (i32::MAX as f64) {
+                                i32::MAX
+                            } else {
+                                val as i32
+                            };
+                            trace!("I32_TRUNC_SAT_F64_S: {val} -> {res}");
+                            self.stack.push(Value::I32(res))?;
+                        }
+                        I32_TRUNC_SAT_F64_U => {
+                            let val = self.stack.pop_f64()?;
+                            let res = if val.is_nan() {
+                                0
+                            } else if val <= (u32::MIN as f64) {
+                                u32::MIN
+                            } else if val >= (u32::MAX as f64) {
+                                u32::MAX
+                            } else {
+                                val as u32
+                            };
+                            trace!("I32_TRUNC_SAT_F64_U: {val} -> {res}");
+                            self.stack.push(Value::I32(res as i32))?;
+                        }
+                        I64_TRUNC_SAT_F64_S => {
+                            let val = self.stack.pop_f64()?;
+                            let res = if val.is_nan() {
+                                0
+                            } else if val <= (i64::MIN as f64) {
+                                i64::MIN
+                            } else if val >= (i64::MAX as f64) {
+                                i64::MAX
+                            } else {
+                                val as i64
+                            };
+                            trace!("I64_TRUNC_SAT_F64_S: {val} -> {res}");
+                            self.stack.push(Value::I64(res))?;
+                        }
+                        I64_TRUNC_SAT_F32_S => {
+                            let val = self.stack.pop_f32()?;
+                            let res = if val.is_nan() {
+                                0
+                            } else if val <= (i64::MIN as f32) {
+                                i64::MIN
+                            } else if val >= (i64::MAX as f32) {
+                                i64::MAX
+                            } else {
+                                val as i64
+                            };
+                            trace!("I64_TRUNC_SAT_F32_S: {val} -> {res}");
+                            self.stack.push(Value::I64(res))?;
+                        }
+                        I64_TRUNC_SAT_F64_U => {
+                            let val = self.stack.pop_f64()?;
+                            let res = if val.is_nan() {
+                                0
+                            } else if val <= (u64::MIN as f64) {
+                                u64::MIN
+                            } else if val >= (u64::MAX as f64) {
+                                u64::MAX
+                            } else {
+                                val as u64
+                            };
+                            trace!("I64_TRUNC_SAT_F64_U: {val} -> {res}");
+                            self.stack.push(Value::I64(res as i64))?;
+                        }
+                        I64_TRUNC_SAT_F32_U => {
+                            let val = self.stack.pop_f32()?;
+                            let res = if val.is_nan() {
+                                0
+                            } else if val <= (u64::MIN as f32) {
+                                u64::MIN
+                            } else if val >= (u64::MAX as f32) {
+                                u64::MAX
+                            } else {
+                                val as u64
+                            };
+                            trace!("I64_TRUNC_SAT_F32_U: {val} -> {res}");
+                            self.stack.push(Value::I64(res as i64))?;
+                        }
+
                         MEMORY_COPY => {
                             let (dest, src) = (
                                 *reader.next_byte().unwrap(), // validated and 0

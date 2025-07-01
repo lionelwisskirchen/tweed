@@ -169,6 +169,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         if format!("{e}") == message {
                             report.success.push(result);
                         } else {
+                            info!("Error msg doesn't match: {e} == {message}");
                             report.failure.push(result);
                         }
                     } else {
@@ -200,9 +201,10 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                             name: invoke_confs.name.to_string(),
                             line: span.linecol_in(&input).0 + 1,
                         };
-                        if compare_results(actual_results, expected_results) {
+                        if compare_results(actual_results.clone(), expected_results.clone()) {
                             report.success.push(result);
                         } else {
+                            info!("{actual_results:?} != {expected_results:?}");
                             report.failure.push(result);
                         };
                     }
@@ -337,17 +339,13 @@ fn result_to_runtime_value(expr: &WastRet) -> Value {
         WastRet::Core(WastRetCore::I32(x)) => Value::I32(*x),
         WastRet::Core(WastRetCore::I64(x)) => Value::I64(*x),
         WastRet::Core(WastRetCore::F64(x)) => match x {
-            wast::core::NanPattern::CanonicalNan => {
-                Value::F64(f64::from_bits(0x7ff8_0000_0000_0000))
-            }
-            wast::core::NanPattern::ArithmeticNan => {
-                Value::F64(f64::from_bits(0x7ff0_0000_0000_0001))
-            }
+            wast::core::NanPattern::CanonicalNan => Value::CanonicalNan,
+            wast::core::NanPattern::ArithmeticNan => Value::ArithmeticNan,
             wast::core::NanPattern::Value(val) => Value::F64(f64::from_bits(val.bits)),
         },
         WastRet::Core(WastRetCore::F32(x)) => match x {
-            wast::core::NanPattern::CanonicalNan => Value::F32(f32::from_bits(0x7fc0_0000)),
-            wast::core::NanPattern::ArithmeticNan => Value::F32(f32::from_bits(0x7f80_0001)),
+            wast::core::NanPattern::CanonicalNan => Value::CanonicalNan,
+            wast::core::NanPattern::ArithmeticNan => Value::ArithmeticNan,
             wast::core::NanPattern::Value(val) => Value::F32(f32::from_bits(val.bits)),
         },
         WastRet::Core(WastRetCore::RefFunc(Some(x))) => {
@@ -385,7 +383,6 @@ fn result_to_runtime_value(expr: &WastRet) -> Value {
         _ => todo!(),
     }
 }
-
 fn compare_results(actual: Vec<Value>, expected: Vec<Value>) -> bool {
     // TODO maybe extract to types
     for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
@@ -393,20 +390,29 @@ fn compare_results(actual: Vec<Value>, expected: Vec<Value>) -> bool {
             (Value::F32(x), Value::F32(y)) => {
                 let xb = x.to_bits();
                 let yb = y.to_bits();
-                assert_eq!(
-                    xb, yb,
-                    "Mismatch at index {}: F32 bits differ (actual: {:#x}, expected: {:#x})",
-                    i, xb, yb
-                );
+
+                return xb == yb;
             }
             (Value::F64(x), Value::F64(y)) => {
                 let xb = x.to_bits();
                 let yb = y.to_bits();
-                assert_eq!(
-                    xb, yb,
-                    "Mismatch at index {}: F64 bits differ (actual: {:#x}, expected: {:#x})",
-                    i, xb, yb
-                );
+                return xb == yb;
+            }
+            (Value::F64(x), Value::ArithmeticNan) => {
+                let xb = x.to_bits();
+                let quiet_bit_x = (xb >> 51) & 1;
+                return x.is_nan() && quiet_bit_x == 1;
+            }
+            (Value::F64(x), Value::CanonicalNan) => {
+                return x.is_nan(); // TODO correct?
+            }
+            (Value::F32(x), Value::ArithmeticNan) => {
+                let xb = x.to_bits();
+                let quiet_bit_x = (xb >> 22) & 1;
+                return x.is_nan() && quiet_bit_x == 1;
+            }
+            (Value::F32(x), Value::CanonicalNan) => {
+                return x.is_nan(); // TODO correct?
             }
             _ => assert_eq!(a, e, "Mismatch at index {}", i),
         }

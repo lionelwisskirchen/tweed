@@ -9,6 +9,8 @@ pub enum Value {
     FuncRef(usize),
     ExternRef(usize),
     RefNull(RefType),
+    CanonicalNan,
+    ArithmeticNan,
 }
 
 impl From<i32> for Value {

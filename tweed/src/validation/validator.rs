@@ -14,7 +14,7 @@ use crate::validation::control_stack::ControlStack;
 use crate::validation::control_types::ControlType;
 use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
-use extensions::{MEMORY_COPY, MEMORY_FILL};
+use extensions::*;
 
 use super::side_table::SideTable;
 
@@ -283,9 +283,42 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
                     self.abstract_value_stack.push(ValType::F64);
                 }
+                F32_COPYSIGN => {
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.push(ValType::F32);
+                }
+                F64_COPYSIGN => {
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.push(ValType::F64);
+                }
                 F64_PROMOTE_F32 => {
                     self.abstract_value_stack.pop_expected(ValType::F32)?;
                     self.abstract_value_stack.push(ValType::F64);
+                }
+                F32_DEMOTE_F64 => {
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.push(ValType::F32);
+                }
+
+                I32_REINTERPRET_F32 => {
+                    self.abstract_value_stack.pop_expected(ValType::F32)?;
+                    self.abstract_value_stack.push(ValType::I32);
+                }
+
+                I64_REINTERPRET_F64 => {
+                    self.abstract_value_stack.pop_expected(ValType::F64)?;
+                    self.abstract_value_stack.push(ValType::I64);
+                }
+
+                F64_REINTERPRET_I64 => {
+                    self.abstract_value_stack.pop_expected(ValType::I64)?;
+                    self.abstract_value_stack.push(ValType::F64);
+                }
+                F32_REINTERPRET_I32 => {
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.push(ValType::F32);
                 }
                 F32_EQ | F32_NE | F32_LT | F32_GT | F32_LE | F32_GE => {
                     self.abstract_value_stack.pop_expected(ValType::F32)?;
@@ -409,11 +442,26 @@ impl<'a, 'b> Validator<'a, 'b> {
                         .pop_expected(ref_type.to_val_type())?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
+                SELECT_T => {
+                    let num = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::InvalidSectionBytecode)?;
+                    if num != 1 {
+                        return Err(Error::InvalidResultArity);
+                    }
+                    let ty_byte = self.reader.next_byte().ok_or(Error::UnsupportedValueType)?;
+                    let ty = ValType::lookup(ty_byte)?;
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+                    self.abstract_value_stack.pop_expected(ty)?;
+                    self.abstract_value_stack.pop_expected(ty)?;
+                    self.abstract_value_stack.push(ty);
+                }
                 SELECT => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     let val1 = self.abstract_value_stack.pop_val()?;
                     if !val1.is_numeric() {
-                        return Err(Error::IllegalSelectType(val1));
+                        return Err(Error::IllegalSelectType);
                     };
                     self.abstract_value_stack.pop_expected(val1)?;
                     self.abstract_value_stack.push(val1);
@@ -792,6 +840,23 @@ impl<'a, 'b> Validator<'a, 'b> {
                 EXTENSION_PREFIX => {
                     let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
                     match byte {
+                        I32_TRUNC_SAT_F32_S | I32_TRUNC_SAT_F32_U => {
+                            self.abstract_value_stack.pop_expected(ValType::F32)?;
+                            self.abstract_value_stack.push(ValType::I32);
+                        }
+                        I32_TRUNC_SAT_F64_S | I32_TRUNC_SAT_F64_U => {
+                            self.abstract_value_stack.pop_expected(ValType::F64)?;
+                            self.abstract_value_stack.push(ValType::I32);
+                        }
+
+                        I64_TRUNC_SAT_F32_S | I64_TRUNC_SAT_F32_U => {
+                            self.abstract_value_stack.pop_expected(ValType::F32)?;
+                            self.abstract_value_stack.push(ValType::I64);
+                        }
+                        I64_TRUNC_SAT_F64_U | I64_TRUNC_SAT_F64_S => {
+                            self.abstract_value_stack.pop_expected(ValType::F64)?;
+                            self.abstract_value_stack.push(ValType::I64);
+                        }
                         MEMORY_COPY => {
                             let (dest, src) = (
                                 *self.reader.next_byte().ok_or(Error::MissingValue)?,
