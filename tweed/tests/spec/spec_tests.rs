@@ -31,7 +31,8 @@ fn spec_tests() {
     run_spec_test(Path::new("./tests/spec/testsuite/i64.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/global.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/select.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/if.wast"));
 
     run_spec_test(Path::new("./tests/spec/testsuite/linking.wast"));
-    run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
 }

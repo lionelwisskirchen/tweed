@@ -571,7 +571,12 @@ impl<'a, 'b> Validator<'a, 'b> {
                         } => {
                             if !has_else {
                                 self.resolve_sidetable_entries(&[side_table_entry]);
+                                // Parameter pass through when there is no else block
+                                if func_type.result.len() > func_type.parameter.len() {
+                                    return Err(Error::TypeMismatch);
+                                }
                             }
+
                             self.check_args(&func_type.result, height_of_value_stack)?;
                             self.resolve_sidetable_entries(&sidetable_idxs);
                         }

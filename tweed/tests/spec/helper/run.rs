@@ -148,6 +148,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     if format!("{e}") == message {
                         report.success.push(result);
                     } else {
+                        info!("Error msg doesn't match: {e} == {message}");
                         report.failure.push(result);
                     }
                 } else {
@@ -173,6 +174,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                             report.failure.push(result);
                         }
                     } else {
+                        info!("No error");
                         report.failure.push(result);
                     }
                 }
