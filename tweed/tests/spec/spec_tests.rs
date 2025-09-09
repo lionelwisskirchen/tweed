@@ -23,6 +23,7 @@ fn spec_tests() {
     run_spec_test(Path::new("./tests/spec/testsuite/address.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/align.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/block.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/memory_init.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/conversions.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/float_misc.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/call_indirect.wast"));

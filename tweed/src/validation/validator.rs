@@ -129,7 +129,7 @@ impl<'a, 'b> Validator<'a, 'b> {
 
         loop {
             let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
-            trace!("Validating Byte: {byte:#04X}");
+            info!("Validating Byte: {byte:#04X}");
             trace!("Stack: {:?}", self.abstract_value_stack);
             match byte {
                 I32_CONST => {
@@ -862,6 +862,34 @@ impl<'a, 'b> Validator<'a, 'b> {
                         I64_TRUNC_SAT_F64_U | I64_TRUNC_SAT_F64_S => {
                             self.abstract_value_stack.pop_expected(ValType::F64)?;
                             self.abstract_value_stack.push(ValType::I64);
+                        }
+                        DATA_DROP => {
+                            let data_index =
+                                self.reader.next_leb128_u32().ok_or(Error::MissingValue)?;
+                            if self.module_environment.datacountsec == 0
+                                || self.module_environment.datacountsec <= data_index
+                            {
+                                return Err(Error::NoDataSegmentFound(data_index as usize))?;
+                            }
+                        }
+                        MEMORY_INIT => {
+                            let data_index =
+                                self.reader.next_leb128_u32().ok_or(Error::MissingValue)?;
+                            let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
+                            if idx != 0 {
+                                return Err(Error::MultipleMemoriesNotImplemented);
+                            }
+                            if self.module_environment.memorysec.is_empty() {
+                                return Err(Error::UnknownMemory(idx as usize))?;
+                            }
+                            if self.module_environment.datacountsec == 0
+                                || self.module_environment.datacountsec <= data_index
+                            {
+                                return Err(Error::NoDataSegmentFound(data_index as usize))?;
+                            }
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
                         }
                         MEMORY_COPY => {
                             let (dest, src) = (

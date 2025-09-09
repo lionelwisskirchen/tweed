@@ -204,6 +204,19 @@ impl MemoryInstance {
 pub struct DataInstance {
     pub data: Vec<u8>,
 }
+impl DataInstance {
+    pub fn clear(&mut self) {
+        self.data = Vec::new();
+    }
+
+    pub fn load_slice(&self, address: usize, bytes: usize) -> Result<Vec<u8>> {
+        self.data
+            .get(address..address + bytes)
+            .ok_or(Error::MemoryAccessOutOfBounds)
+            .map(|s| s.to_vec())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum FuncInstance {
     Internal(Internal),

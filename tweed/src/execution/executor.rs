@@ -1744,6 +1744,35 @@ impl<'store> Executor<'store> {
                             trace!("I64_TRUNC_SAT_F32_U: {val} -> {res}");
                             self.stack.push(Value::I64(res as i64))?;
                         }
+                        DATA_DROP => {
+                            let data_index = reader.next_leb128_u32().unwrap(); // validated
+                            let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
+
+                            let data_inst = self.store.data.datas.get_mut(*data_addr).unwrap(); // validated
+                            data_inst.clear();
+                        }
+                        MEMORY_INIT => {
+                            let data_index = reader.next_leb128_u32().unwrap(); // validated
+                            let memory_index = *reader.next_byte().unwrap(); // validated
+
+                            let number_of_bytes = self.stack.pop_i32()? as usize;
+                            let start_in_data_segment = self.stack.pop_i32()? as usize;
+                            let dest_address = self.stack.pop_i32()? as usize;
+
+                            let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
+                            let data_inst = self.store.data.datas.get(*data_addr).unwrap(); // validated
+                            if start_in_data_segment + number_of_bytes > data_inst.data.len() {
+                                return Err(Error::MemoryAccessOutOfBounds);
+                            }
+                            let data =
+                                data_inst.load_slice(start_in_data_segment, number_of_bytes)?;
+
+                            let mem =
+                                map_memory(memory_index as usize, instance, &mut self.store.data)
+                                    .unwrap();
+                            // Destination bound check happens in store function
+                            mem.store(dest_address, 0, &data)?;
+                        }
 
                         MEMORY_COPY => {
                             let (dest, src) = (

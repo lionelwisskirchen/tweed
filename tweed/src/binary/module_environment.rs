@@ -1,5 +1,7 @@
 use crate::{
-    binary::element_section::process_element_section,
+    binary::{
+        data_count_section::process_data_count_section, element_section::process_element_section,
+    },
     core::{
         error::{Error, Result},
         wasm_reader::WasmReader,
@@ -32,6 +34,7 @@ pub struct ModuleEnvironment {
     pub tablesec: Vec<Table>,
     pub elementsec: Vec<ElementSegment>,
     pub importsec: Imports,
+    pub datacountsec: u32,
 }
 
 pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnvironment> {
@@ -101,6 +104,10 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 trace!("Process Data Section");
                 module.datasec =
                     process_data_section(reader, &module.importsec.globals, &module.funcsec)?;
+            }
+            0x0C => {
+                trace!("Process Data Count Section");
+                module.datacountsec = process_data_count_section(reader)?;
             }
             _ => {
                 return Err(Error::UnknownSectionCode(*section_code));

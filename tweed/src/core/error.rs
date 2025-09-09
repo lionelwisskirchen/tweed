@@ -4,6 +4,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
+    NoDataSegmentFound(usize),
+    UnknownMemory(usize),
     StackExhaustion,
     CallStackExhaustion,
     UnknownFunction,
@@ -61,6 +63,9 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::InvalidResultArity => f.write_str("invalid result arity"),
+            Error::NoDataSegmentFound(idx) => {
+                f.write_fmt(format_args!("unknown data segment {idx}"))
+            }
             Error::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
             Error::StackExhaustion => f.write_str("operand stack exhausted"),
             Error::CallStackExhaustion => f.write_str("call stack exhausted"),
@@ -118,6 +123,7 @@ impl Display for Error {
             Error::MissingFunctionImport => f.write_str("missing function import"),
             Error::UndefinedMemory => f.write_str("undefined memory"),
             Error::UndefinedTable => f.write_str("undefined table"),
+            Error::UnknownMemory(idx) => f.write_fmt(format_args!("unknown memory {idx}")),
             Error::InvalidAlignment => f.write_str("alignment must not be larger than natural"),
             Error::MemoryAccessOutOfBounds => f.write_str("out of bounds memory access"),
             Error::TableAccessOutOfBounds => f.write_str("out of bounds table access"),
