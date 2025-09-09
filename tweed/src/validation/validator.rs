@@ -645,7 +645,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(4)?;
+                    self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -653,7 +653,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(1)?;
+                    self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -661,7 +661,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(2)?;
+                    self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -669,7 +669,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(8)?;
+                    self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -677,7 +677,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(1)?;
+                    self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -685,7 +685,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(2)?;
+                    self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -693,7 +693,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(4)?;
+                    self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -701,7 +701,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(4)?;
+                    self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::F32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -709,7 +709,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(8)?;
+                    self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
@@ -718,7 +718,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(4)?;
+                    self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
@@ -726,7 +726,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(4)?;
+                    self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::F32);
                 }
@@ -734,7 +734,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(8)?;
+                    self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::F64);
                 }
@@ -742,7 +742,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(1)?;
+                    self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
@@ -750,7 +750,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(1)?;
+                    self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
@@ -758,7 +758,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(2)?;
+                    self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
@@ -766,7 +766,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(4)?;
+                    self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
@@ -774,7 +774,8 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(1)?;
+
+                    self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
@@ -782,7 +783,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(2)?;
+                    self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
@@ -794,7 +795,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
-                    self.check_align(8)?;
+                    self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }

@@ -20,6 +20,9 @@ fn run_spec_test(path: &Path) {
 
 #[test_log::test]
 fn spec_tests() {
+    run_spec_test(Path::new("./tests/spec/testsuite/address.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/align.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/block.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/conversions.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/float_misc.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/call_indirect.wast"));
@@ -33,6 +36,5 @@ fn spec_tests() {
     run_spec_test(Path::new("./tests/spec/testsuite/select.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/if.wast"));
-
     run_spec_test(Path::new("./tests/spec/testsuite/linking.wast"));
 }
