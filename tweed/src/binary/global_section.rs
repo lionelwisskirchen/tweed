@@ -25,19 +25,18 @@ pub fn process_global_section(
     global_imports: &[GlobalImport],
     functions: &[FuncDecl],
 ) -> Result<Vec<Global>> {
-    reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
-    let number_of_globals = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let number_of_globals = reader.next_leb128_u32()?;
 
     let mut globals = Vec::new();
     for _ in 0..number_of_globals {
         let value_type = ValType::lookup(reader.next_byte().ok_or(Error::InvalidSectionBytecode)?)?;
 
-        let is_mutable = match reader.next_leb128_u32().ok_or(Error::MalformedMutability)? {
+        let is_mutable = match reader
+            .next_leb128_u32()
+            .map_err(|_| Error::MalformedMutability)?
+        {
             0x00 => false,
             0x01 => true,
             _ => return Err(Error::MalformedMutability),

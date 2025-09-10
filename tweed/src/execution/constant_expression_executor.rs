@@ -48,7 +48,7 @@ pub fn execute_const_expr(
                 value_stack.push(result.into())?;
             }
             GLOBAL_GET => {
-                let idx = reader.next_leb128_u32().ok_or(Error::InvalidLocalIndex)?;
+                let idx = reader.next_leb128_u32()?;
                 let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
                 if global.global_type.is_mutable {
                     return Err(Error::ConstIsMutable);
@@ -71,7 +71,7 @@ pub fn execute_const_expr(
                 value_stack.push(Value::RefNull(ref_type))?;
             }
             REF_FUNC => {
-                let func_idx = reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                let func_idx = reader.next_leb128_u32()? as usize;
 
                 functions.get(func_idx).ok_or(Error::InvalidFunctionIndex)?;
                 value_stack.push(Value::FuncRef(func_idx))?;

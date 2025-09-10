@@ -11,30 +11,20 @@ pub struct FuncCode {
 }
 
 pub fn process_code_section(reader: &mut WasmReader) -> Result<Vec<FuncCode>> {
-    reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
-    let number_of_codes = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let number_of_codes = reader.next_leb128_u32()?;
 
     let mut aggregated_functions = Vec::new();
     for _ in 0..number_of_codes {
-        let func_body_size = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let func_body_size = reader.next_leb128_u32()?;
 
         let position_of_last_instruction = reader.calculate_offset(func_body_size as usize);
 
-        let number_of_locals = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let number_of_locals = reader.next_leb128_u32()?;
         let mut locals = Vec::new();
         for _ in 0..number_of_locals {
-            let count = reader
-                .next_leb128_u32()
-                .ok_or(Error::InvalidSectionBytecode)?;
+            let count = reader.next_leb128_u32()?;
             let local_type =
                 ValType::lookup(reader.next_byte().ok_or(Error::InvalidSectionBytecode)?)?;
             for _ in 0..count {

@@ -26,34 +26,24 @@ pub struct Imports {
 }
 
 pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
-    reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
-    let number_of_imports = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let number_of_imports = reader.next_leb128_u32()?;
 
     let mut imports = Imports::default();
     for _ in 0..number_of_imports {
-        let length_of_module_name = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let length_of_module_name = reader.next_leb128_u32()?;
         let module_name = reader
             .next_chunk_as_string(length_of_module_name as usize)
             .ok_or(Error::InvalidSectionBytecode)?;
-        let length_of_import_name = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let length_of_import_name = reader.next_leb128_u32()?;
         let import_name = reader
             .next_chunk_as_string(length_of_import_name as usize)
             .ok_or(Error::InvalidSectionBytecode)?;
         let import_kind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
         match import_kind {
             0x00 => {
-                let index = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let index = reader.next_leb128_u32()?;
                 imports.functions.push(FunctionImport {
                     module: module_name,
                     name: import_name,
@@ -63,10 +53,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
             0x03 => {
                 let value_type =
                     ValType::lookup(reader.next_byte().ok_or(Error::InvalidSectionBytecode)?)?;
-                let is_mutable = match reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?
-                {
+                let is_mutable = match reader.next_leb128_u32()? {
                     0x00 => false,
                     0x01 => true,
                     _ => return Err(Error::MalformedMutability),

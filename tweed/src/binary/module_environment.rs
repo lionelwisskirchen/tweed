@@ -52,14 +52,22 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
 
     while let Some(section_code) = reader.next_byte() {
         match section_code {
-            0x00 => break,
+            0x00 => {
+                let size = reader.next_leb128_u32()?;
+                let end = reader.current_index() + size as usize + 1;
+                let length_name = reader.next_leb128_u32()?;
+                reader
+                    .next_chunk_as_string(length_name as usize)
+                    .ok_or(Error::InvalidSectionBytecode)?;
+                reader.seek(end);
+            }
             0x01 => {
-                trace!("Process Type Section");
+                info!("Process Type Section");
                 module.typesec = process_type_section(reader)?;
             }
 
             0x02 => {
-                trace!("Process Import Section");
+                info!("Process Import Section");
                 let imports = process_import_section(reader)?;
                 let signatures = imports
                     .functions
@@ -71,48 +79,48 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 module.importsec = imports;
             }
             0x03 => {
-                trace!("Process Function Section");
+                info!("Process Function Section");
                 module.funcsec.extend(process_function_section(reader)?);
             }
             0x04 => {
-                trace!("Process Table Section");
+                info!("Process Table Section");
                 module.tablesec = process_table_section(reader)?;
             }
             0x05 => {
-                trace!("Process Memory Section");
+                info!("Process Memory Section");
                 module.memorysec = process_memory_section(reader)?;
             }
 
             0x06 => {
-                trace!("Process Global Section");
+                info!("Process Global Section");
                 module.globalsec =
                     process_global_section(reader, &module.importsec.globals, &module.funcsec)?;
             }
             0x07 => {
-                trace!("Process Export Section");
+                info!("Process Export Section");
                 module.exportsec = process_export_section(reader)?;
             }
             0x08 => {
-                trace!("Process Start Section");
+                info!("Process Start Section");
                 module.startsec = Some(process_start_section(reader)?);
             }
             0x09 => {
-                trace!("Process Element Section");
+                info!("Process Element Section");
 
                 module.elementsec =
                     process_element_section(reader, &module.importsec.globals, &module.funcsec)?;
             }
             0x0A => {
-                trace!("Process Code Section");
+                info!("Process Code Section");
                 module.codesec = process_code_section(reader)?;
             }
             0x0B => {
-                trace!("Process Data Section");
+                info!("Process Data Section");
                 module.datasec =
                     process_data_section(reader, &module.importsec.globals, &module.funcsec)?;
             }
             0x0C => {
-                trace!("Process Data Count Section");
+                info!("Process Data Count Section");
                 module.datacountsec = process_data_count_section(reader)?;
             }
             _ => {

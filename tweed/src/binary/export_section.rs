@@ -18,26 +18,18 @@ pub struct Export {
 }
 
 pub fn process_export_section(reader: &mut WasmReader) -> Result<Vec<Export>> {
-    reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
-    let number_of_exports = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let number_of_exports = reader.next_leb128_u32()?;
     let mut aggregated_exports = Vec::new();
     for _ in 0..number_of_exports {
-        let length_of_export_name = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let length_of_export_name = reader.next_leb128_u32()?;
         let export_name = reader
             .next_chunk_as_string(length_of_export_name as usize)
             .ok_or(Error::InvalidSectionBytecode)?;
 
         let export_kind = *reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
-        let index = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let index = reader.next_leb128_u32()?;
         match export_kind {
             0x00 => {
                 let context = ExportContext::FunctionExport(index);

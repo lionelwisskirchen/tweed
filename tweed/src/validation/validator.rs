@@ -148,42 +148,33 @@ impl<'a, 'b> Validator<'a, 'b> {
             trace!("Stack: {:?}", self.abstract_value_stack);
             match byte {
                 I32_CONST => {
-                    self.reader.next_leb128_i32().ok_or(Error::MissingValue)?;
+                    self.reader.next_leb128_i32()?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I64_CONST => {
-                    self.reader.next_leb128_i64().ok_or(Error::MissingValue)?;
+                    self.reader.next_leb128_i64()?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
                 F32_CONST => {
-                    self.reader.next_f32().ok_or(Error::MissingValue)?;
+                    self.reader.next_f32()?;
                     self.abstract_value_stack.push(ValType::F32);
                 }
                 F64_CONST => {
-                    self.reader.next_f64().ok_or(Error::MissingValue)?;
+                    self.reader.next_f64()?;
                     self.abstract_value_stack.push(ValType::F64);
                 }
                 LOCAL_GET => {
-                    let idx = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidLocalIndex)?;
+                    let idx = self.reader.next_leb128_u32()?;
                     let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
                     self.abstract_value_stack.push(*value);
                 }
                 LOCAL_SET => {
-                    let idx = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidLocalIndex)?;
+                    let idx = self.reader.next_leb128_u32()?;
                     let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
                     self.abstract_value_stack.pop_expected(*value)?;
                 }
                 LOCAL_TEE => {
-                    let idx = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidLocalIndex)?;
+                    let idx = self.reader.next_leb128_u32()?;
                     let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
                     self.abstract_value_stack.is_on_top(value)?;
                 }
@@ -254,7 +245,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     }
                 }
                 GLOBAL_GET => {
-                    let idx = self.reader.next_leb128_u32().ok_or(Error::UnknownGlobal)?;
+                    let idx = self.reader.next_leb128_u32()?;
                     let value = globals
                         .get(idx as usize)
                         .ok_or(Error::UnknownGlobal)?
@@ -262,7 +253,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push(value);
                 }
                 GLOBAL_SET => {
-                    let idx = self.reader.next_leb128_u32().ok_or(Error::UnknownGlobal)?;
+                    let idx = self.reader.next_leb128_u32()?;
                     let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
                     if !global.is_mutable {
                         return Err(Error::GlobalIsImmutable);
@@ -423,8 +414,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::I64);
                 }
                 TABLE_GET => {
-                    let table_idx =
-                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    let table_idx = self.reader.next_leb128_u32()? as usize;
 
                     if self.module_environment.tablesec.len() <= table_idx {
                         return Err(Error::UndefinedTable);
@@ -439,8 +429,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push(ref_type.to_val_type());
                 }
                 TABLE_SET => {
-                    let table_idx =
-                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    let table_idx = self.reader.next_leb128_u32()? as usize;
 
                     if self.module_environment.tablesec.len() <= table_idx {
                         return Err(Error::UndefinedTable);
@@ -458,10 +447,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 SELECT_T => {
-                    let num = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidSectionBytecode)?;
+                    let num = self.reader.next_leb128_u32()?;
                     if num != 1 {
                         return Err(Error::InvalidResultArity);
                     }
@@ -534,10 +520,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                 }
                 BR_TABLE => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?; // index of branch
-                    let number_of_branches = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidSectionBytecode)?;
+                    let number_of_branches = self.reader.next_leb128_u32()?;
 
                     let index_of_br_table_bytecode = self.reader.current_index() as i32; // We jump from here because we need to parse the number of branches during execution (because the default branch can be any i32 and could move the stp to a wrong entry).
 
@@ -607,15 +590,9 @@ impl<'a, 'b> Validator<'a, 'b> {
                     )
                 }
                 CALL_INDIRECT => {
-                    let type_index = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                    let type_index = self.reader.next_leb128_u32()?;
 
-                    let table_index = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                    let table_index = self.reader.next_leb128_u32()?;
 
                     let table = self
                         .module_environment
@@ -637,10 +614,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push_vec(&func_type.result);
                 }
                 CALL => {
-                    let func_index = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                    let func_index = self.reader.next_leb128_u32()?;
 
                     let type_idx = self
                         .module_environment
@@ -850,8 +824,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 REF_FUNC => {
-                    let func_idx =
-                        self.reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    let func_idx = self.reader.next_leb128_u32()? as usize;
 
                     self.module_environment
                         .funcsec
@@ -860,10 +833,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::FuncRef);
                 }
                 EXTENSION_PREFIX => {
-                    let byte = self
-                        .reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidIntegerRepresentation)?;
+                    let byte = self.reader.next_leb128_u32()?;
                     match byte {
                         I32_TRUNC_SAT_F32_S | I32_TRUNC_SAT_F32_U => {
                             self.abstract_value_stack.pop_expected(ValType::F32)?;
@@ -883,8 +853,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             self.abstract_value_stack.push(ValType::I64);
                         }
                         DATA_DROP => {
-                            let data_index =
-                                self.reader.next_leb128_u32().ok_or(Error::MissingValue)?;
+                            let data_index = self.reader.next_leb128_u32()?;
                             if self.module_environment.datacountsec == 0
                                 || self.module_environment.datacountsec <= data_index
                             {
@@ -892,8 +861,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             }
                         }
                         MEMORY_INIT => {
-                            let data_index =
-                                self.reader.next_leb128_u32().ok_or(Error::MissingValue)?;
+                            let data_index = self.reader.next_leb128_u32()?;
                             let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
                             if idx != 0 {
                                 return Err(Error::MultipleMemoriesNotImplemented);
@@ -953,14 +921,8 @@ impl<'a, 'b> Validator<'a, 'b> {
         Ok(result)
     }
     fn check_align(&mut self, max_align: u32) -> Result<()> {
-        let align = self
-            .reader
-            .next_leb128_u32()
-            .ok_or(Error::UndefinedMemory)?;
-        let _offset = self
-            .reader
-            .next_leb128_u32()
-            .ok_or(Error::UndefinedMemory)?;
+        let align = self.reader.next_leb128_u32()?;
+        let _offset = self.reader.next_leb128_u32()?;
 
         if align > 31 {
             return Err(Error::MalformedMemOpFlags)?;

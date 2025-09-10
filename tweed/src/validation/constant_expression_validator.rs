@@ -20,19 +20,19 @@ pub fn validate_const_expr(
         trace!("Validate Const Expression Byte: {byte:#04X}");
         match *byte {
             I32_CONST => {
-                reader.next_leb128_i32().ok_or(Error::MissingValue)?;
+                reader.next_leb128_i32()?;
                 abstract_value_stack.push(ValType::I32);
             }
             I64_CONST => {
-                reader.next_leb128_i64().ok_or(Error::MissingValue)?;
+                reader.next_leb128_i64()?;
                 abstract_value_stack.push(ValType::I64);
             }
             F32_CONST => {
-                reader.next_f32().ok_or(Error::MissingValue)?;
+                reader.next_f32()?;
                 abstract_value_stack.push(ValType::F32);
             }
             F64_CONST => {
-                reader.next_f64().ok_or(Error::MissingValue)?;
+                reader.next_f64()?;
                 abstract_value_stack.push(ValType::F64);
             }
             I32_ADD | I32_SUB => {
@@ -46,7 +46,7 @@ pub fn validate_const_expr(
                 abstract_value_stack.push(ValType::I64);
             }
             GLOBAL_GET => {
-                let idx = reader.next_leb128_u32().ok_or(Error::InvalidLocalIndex)?;
+                let idx = reader.next_leb128_u32()?;
                 let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
 
                 if global.context.is_mutable {
@@ -59,7 +59,7 @@ pub fn validate_const_expr(
                 abstract_value_stack.push(ValType::lookup(ref_type)?);
             }
             REF_FUNC => {
-                let func_idx = reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                let func_idx = reader.next_leb128_u32()? as usize;
 
                 functions.get(func_idx).ok_or(Error::InvalidFunctionIndex)?;
                 abstract_value_stack.push(ValType::FuncRef);

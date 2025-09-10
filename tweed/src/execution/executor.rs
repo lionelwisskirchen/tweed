@@ -783,9 +783,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 SELECT_T => {
-                    reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidSectionBytecode)?;
+                    reader.next_leb128_u32()?;
 
                     reader.next_byte().ok_or(Error::UnsupportedValueType)?;
                     let c = self.stack.pop_i32()?;
@@ -801,10 +799,7 @@ impl<'store> Executor<'store> {
                 BR_TABLE => {
                     let branch_index = self.stack.pop_i32()?;
                     trace!("BR_TABLE({branch_index})");
-                    let number_of_branches = reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidSectionBytecode)?
-                        as usize;
+                    let number_of_branches = reader.next_leb128_u32()? as usize;
                     if branch_index as usize >= number_of_branches {
                         current_frame.side_table_pointer += number_of_branches;
                     } else {
@@ -827,13 +822,9 @@ impl<'store> Executor<'store> {
                     }
                 }
                 CALL_INDIRECT => {
-                    let type_index = reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                    let type_index = reader.next_leb128_u32()?;
 
-                    let table_index = reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                    let table_index = reader.next_leb128_u32()?;
 
                     let table_addr = instance
                         .tableaddr
@@ -898,9 +889,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 CALL => {
-                    let index = reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                    let index = reader.next_leb128_u32()?;
                     trace!("CALL({index})");
 
                     let function_addr = instance
@@ -1123,7 +1112,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u32).into())?;
                 }
                 TABLE_GET => {
-                    let table_idx = reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    let table_idx = reader.next_leb128_u32()? as usize;
                     trace!("TABLE_GET '{table_idx:?}'");
 
                     let table_addr = instance
@@ -1137,7 +1126,7 @@ impl<'store> Executor<'store> {
                     trace!("TABLE_GET '{}' [{}] -> [{:?}]", table_idx, offset, value);
                 }
                 TABLE_SET => {
-                    let table_idx = reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    let table_idx = reader.next_leb128_u32()? as usize;
                     let table_addr = instance
                         .tableaddr
                         .get(table_idx)
@@ -1641,7 +1630,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 REF_FUNC => {
-                    let func_idx = reader.next_leb128_u32().ok_or(Error::MissingValue)? as usize;
+                    let func_idx = reader.next_leb128_u32()? as usize;
                     self.stack.push(Value::FuncRef(func_idx))?;
                 }
                 MEMORY_SIZE => {
@@ -1667,7 +1656,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 EXTENSION_PREFIX => {
-                    let byte = reader.next_leb128_u32().ok_or(Error::InvalidControlFlow)?;
+                    let byte = reader.next_leb128_u32()?;
                     match byte {
                         I32_TRUNC_SAT_F32_S => {
                             let val = self.stack.pop_f32()?;

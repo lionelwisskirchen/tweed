@@ -4,6 +4,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
+    ReadingOutOfBounds,
     InvalidIntegerRepresentation,
     TrapUnreachable,
     InvalidStartFunctionSignature,
@@ -66,6 +67,7 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Error::ReadingOutOfBounds => f.write_str("Reader out of bounds"),
             Error::MalformedMemOpFlags => f.write_str("malformed memop flags"),
             Error::TrapUnreachable => f.write_str("unreachable"),
             Error::InvalidStartFunctionSignature => f.write_str("start function"),

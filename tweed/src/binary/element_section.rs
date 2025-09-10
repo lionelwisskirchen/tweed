@@ -39,18 +39,12 @@ pub fn process_element_section(
     global_imports: &[GlobalImport],
     functions: &[FuncDecl],
 ) -> Result<Vec<ElementSegment>> {
-    reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
     let mut elements = Vec::new();
-    let number_of_element_segments = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let number_of_element_segments = reader.next_leb128_u32()?;
     for _ in 0..number_of_element_segments {
-        let flag = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let flag = reader.next_leb128_u32()?;
 
         match flag {
             0 => {
@@ -62,16 +56,12 @@ pub fn process_element_section(
                     offset_start: start,
                     offset_end: end,
                 };
-                let number_of_elements = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let number_of_elements = reader.next_leb128_u32()?;
 
                 let mut function_references = vec![];
 
                 for _ in 0..number_of_elements {
-                    let function_idx = reader
-                        .next_leb128_u32()
-                        .ok_or(Error::InvalidSectionBytecode)?;
+                    let function_idx = reader.next_leb128_u32()?;
                     if functions.get(function_idx as usize).is_none() {
                         return Err(Error::UnknownFunction);
                     }
@@ -90,15 +80,11 @@ pub fn process_element_section(
                 let elemkind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
                 match elemkind {
                     0x00 => {
-                        let number_of_elements = reader
-                            .next_leb128_u32()
-                            .ok_or(Error::InvalidSectionBytecode)?;
+                        let number_of_elements = reader.next_leb128_u32()?;
 
                         let mut function_references = vec![];
                         for _ in 0..number_of_elements {
-                            let function_idx = reader
-                                .next_leb128_u32()
-                                .ok_or(Error::InvalidSectionBytecode)?;
+                            let function_idx = reader.next_leb128_u32()?;
                             function_references.push(function_idx);
                         }
                         elements.push(ElementSegment {
@@ -111,9 +97,7 @@ pub fn process_element_section(
                 }
             }
             2 => {
-                let tableidx = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let tableidx = reader.next_leb128_u32()?;
                 let start = reader.current_index();
                 validate_const_expr(reader, global_imports, &[ValType::I32], functions)?; // offset expression
                 let end = reader.current_index();
@@ -125,14 +109,10 @@ pub fn process_element_section(
                 let elemkind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
                 match elemkind {
                     0x00 => {
-                        let number_of_elements = reader
-                            .next_leb128_u32()
-                            .ok_or(Error::InvalidSectionBytecode)?;
+                        let number_of_elements = reader.next_leb128_u32()?;
                         let mut function_references = vec![];
                         for _ in 0..number_of_elements {
-                            let function_idx = reader
-                                .next_leb128_u32()
-                                .ok_or(Error::InvalidSectionBytecode)?;
+                            let function_idx = reader.next_leb128_u32()?;
 
                             if functions.get(function_idx as usize).is_none() {
                                 return Err(Error::UnknownFunction);
@@ -154,14 +134,10 @@ pub fn process_element_section(
                 let elemkind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
                 match elemkind {
                     0x00 => {
-                        let number_of_elements = reader
-                            .next_leb128_u32()
-                            .ok_or(Error::InvalidSectionBytecode)?;
+                        let number_of_elements = reader.next_leb128_u32()?;
                         let mut function_references = vec![];
                         for _ in 0..number_of_elements {
-                            let function_idx = reader
-                                .next_leb128_u32()
-                                .ok_or(Error::InvalidSectionBytecode)?;
+                            let function_idx = reader.next_leb128_u32()?;
                             if functions.get(function_idx as usize).is_none() {
                                 return Err(Error::UnknownFunction);
                             }
@@ -185,9 +161,7 @@ pub fn process_element_section(
                     offset_start: start,
                     offset_end: end,
                 };
-                let number_of_elements = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let number_of_elements = reader.next_leb128_u32()?;
                 let mut function_references = vec![];
                 for _ in 0..number_of_elements {
                     let start = reader.current_index();
@@ -205,9 +179,7 @@ pub fn process_element_section(
                 let mode = Mode::Passive;
                 let reftype_byte = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
                 let reftype = ValType::lookup(reftype_byte)?;
-                let number_of_elements = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let number_of_elements = reader.next_leb128_u32()?;
                 let mut function_references = vec![];
                 for _ in 0..number_of_elements {
                     let start = reader.current_index();
@@ -222,9 +194,7 @@ pub fn process_element_section(
                 });
             }
             6 => {
-                let tableidx = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let tableidx = reader.next_leb128_u32()?;
                 let start = reader.current_index();
                 validate_const_expr(reader, global_imports, &[ValType::I32], functions)?; // offset expression
                 let end = reader.current_index();
@@ -235,9 +205,7 @@ pub fn process_element_section(
                 };
                 let reftype_byte = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
                 let reftype = ValType::lookup(reftype_byte)?;
-                let number_of_elements = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let number_of_elements = reader.next_leb128_u32()?;
                 let mut function_references = vec![];
                 for _ in 0..number_of_elements {
                     let start = reader.current_index();
@@ -255,9 +223,7 @@ pub fn process_element_section(
                 let mode = Mode::Declarative;
                 let reftype_byte = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
                 let reftype = ValType::lookup(reftype_byte)?;
-                let number_of_elements = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let number_of_elements = reader.next_leb128_u32()?;
                 let mut function_references = vec![];
                 for _ in 0..number_of_elements {
                     let start = reader.current_index();

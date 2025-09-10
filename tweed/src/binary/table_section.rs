@@ -12,29 +12,17 @@ pub struct Table {
 }
 
 pub fn process_table_section(reader: &mut WasmReader) -> Result<Vec<Table>> {
-    reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
-    let number_of_tables = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let number_of_tables = reader.next_leb128_u32()?;
     let mut tables = Vec::new();
     for _ in 0..number_of_tables {
         let ref_type = *reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
-        let flags = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
-        let min = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let flags = reader.next_leb128_u32()?;
+        let min = reader.next_leb128_u32()?;
         let mut max = None;
         if flags != 0 {
-            max = Some(
-                reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?,
-            );
+            max = Some(reader.next_leb128_u32()?);
         }
         match ref_type {
             0x70 => tables.push(Table {

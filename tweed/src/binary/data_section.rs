@@ -29,27 +29,19 @@ pub fn process_data_section(
     global_imports: &[GlobalImport],
     functions: &[FuncDecl],
 ) -> Result<Vec<DataSegment>> {
-    reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
-    let number_of_segments = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let number_of_segments = reader.next_leb128_u32()?;
     let mut data_segments = Vec::new();
     for _ in 0..number_of_segments {
-        let mode = reader
-            .next_leb128_u32()
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let mode = reader.next_leb128_u32()?;
         match mode {
             0 => {
                 data_segments.push(create_data_segment(reader, global_imports, functions, 0)?);
             }
             1 => {
                 // Mode passive
-                let data_size = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let data_size = reader.next_leb128_u32()?;
                 let data = reader
                     .next_chunk(data_size as usize)
                     .ok_or(Error::InvalidSectionBytecode)?;
@@ -60,9 +52,7 @@ pub fn process_data_section(
                 data_segments.push(seg);
             }
             2 => {
-                let memory_index = reader
-                    .next_leb128_u32()
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let memory_index = reader.next_leb128_u32()?;
                 data_segments.push(create_data_segment(
                     reader,
                     global_imports,
@@ -90,9 +80,7 @@ fn create_data_segment(
     For example, i32.const(900b). */
     validate_const_expr(reader, global_imports, &[ValType::I32], functions)?;
     let end = reader.current_index();
-    let data_size = reader
-        .next_leb128_u32()
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let data_size = reader.next_leb128_u32()?;
     let data = reader
         .next_chunk(data_size as usize)
         .ok_or(Error::InvalidSectionBytecode)?;
