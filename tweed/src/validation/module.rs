@@ -24,5 +24,6 @@ pub struct Module {
     pub importsec: Imports,
     pub tablesec: Vec<Table>,
     pub elementsec: Vec<ElementSegment>,
+    pub startsec: Option<u32>,
     pub sidetables: Vec<SideTable>,
 }

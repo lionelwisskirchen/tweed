@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use core::iter::zip;
 
 use super::constant_expression_executor::execute_const_expr;
+use super::executor::Executor;
 use super::instance::Instance;
 use super::store::{
     DataInstance, ElementInstance, FuncInstance, GlobalInstance, HostEnv, HostFunc, Internal,
@@ -137,7 +138,8 @@ impl Linker {
         let mut memories = self.instantiate_memory_imports(module, store)?;
         let mut tables = self.instantiate_table_imports(module, store)?;
 
-        let local_functions = self.instantiate_functions(module, &name)?;
+        let local_functions = self.instantiate_functions(module, &name, funcaddr.len())?;
+
         funcaddr.extend(store.add_functions(local_functions));
 
         let mut functions = vec![];
@@ -152,7 +154,7 @@ impl Linker {
                     .clone(),
             );
         }
-
+        info!("Module: {:?}", module);
         let globals = self.instantiate_globals(module, &imported_globals, &functions)?;
         globaladdr.extend(store.add_globals(globals));
 
@@ -180,6 +182,12 @@ impl Linker {
             exports,
         };
         store.add_instance(instance, &name, &module.reader)?;
+
+        if let Some(id) = module.startsec {
+            info!("Invoke start function with id {id}");
+            let mut exec = Executor::new(store);
+            exec.invoke_start(&name.to_string(), id)?;
+        }
         Ok(name.to_string())
     }
     fn instantiate_table_imports(
@@ -317,6 +325,7 @@ impl Linker {
         &mut self,
         module: &mut Module,
         name: &str,
+        offset: usize,
     ) -> Result<Vec<FuncInstance>> {
         let function_to_sidetable = zip(module.codesec.iter(), module.sidetables.iter());
         let mut functions = Vec::new();
@@ -329,7 +338,7 @@ impl Linker {
 
             let signature_index = module
                 .funcsec
-                .get(index)
+                .get(index + offset)
                 .ok_or(Error::InvalidFunctionIndex)?
                 .sig_index;
             let signature = lookup_signature(signature_index, &module.typesec);

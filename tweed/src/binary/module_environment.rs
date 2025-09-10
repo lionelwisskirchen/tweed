@@ -1,6 +1,7 @@
 use crate::{
     binary::{
         data_count_section::process_data_count_section, element_section::process_element_section,
+        start_section::process_start_section,
     },
     core::{
         error::{Error, Result},
@@ -35,6 +36,7 @@ pub struct ModuleEnvironment {
     pub elementsec: Vec<ElementSegment>,
     pub importsec: Imports,
     pub datacountsec: u32,
+    pub startsec: Option<u32>,
 }
 
 pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnvironment> {
@@ -89,6 +91,10 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             0x07 => {
                 trace!("Process Export Section");
                 module.exportsec = process_export_section(reader)?;
+            }
+            0x08 => {
+                trace!("Process Start Section");
+                module.startsec = Some(process_start_section(reader)?);
             }
             0x09 => {
                 trace!("Process Element Section");

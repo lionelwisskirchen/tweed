@@ -8,7 +8,7 @@ use tweed::execution::store::Store;
 use tweed::{initialize, invoke, Value};
 use wast::core::{HeapType, WastArgCore, WastRetCore};
 use wast::token::Index;
-use wast::{WastArg, WastRet};
+use wast::{WastArg, WastRet, Wat};
 
 use super::wast_report::{WastReport, WastResult};
 
@@ -83,6 +83,17 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 println!("{:?}", args);
                 Ok(vec![])
             },
+        )
+        .unwrap();
+    linker
+        .add_function(
+            "spectest".to_string(),
+            "print".to_string(),
+            FuncType {
+                parameter: vec![],
+                result: vec![],
+            },
+            |_, args| Ok(vec![]),
         )
         .unwrap();
 
@@ -285,6 +296,28 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         name: invoke_confs.name.to_string(),
                         line: span.linecol_in(&input).0 + 1,
                     };
+                    match result {
+                        Err(e) => {
+                            info!("{e} == {message}");
+                            if format!("{e}") == message {
+                                report.success.push(report_result);
+                            } else {
+                                report.failure.push(report_result);
+                            }
+                        }
+                        Ok(_) => {
+                            report.failure.push(report_result);
+                        }
+                    };
+                }
+                wast::WastExecute::Wat(Wat::Module(mut module)) => {
+                    let report_result = WastResult::AssertResult {
+                        name: "Trap Test".to_string(),
+                        line: span.linecol_in(&input).0 + 1,
+                    };
+                    let module_binary = module.encode()?;
+                    let mut test_module = initialize(&module_binary).unwrap();
+                    let result = linker.instantiate(&mut test_module, &mut store, None);
                     match result {
                         Err(e) => {
                             info!("{e} == {message}");

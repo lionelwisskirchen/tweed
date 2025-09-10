@@ -4,7 +4,10 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
-    NoDataSegmentFound(usize),
+    InvalidIntegerRepresentation,
+    TrapUnreachable,
+    InvalidStartFunctionSignature,
+    NoDataSegmentFound(Option<usize>),
     UnknownMemory(usize),
     StackExhaustion,
     CallStackExhaustion,
@@ -57,14 +60,22 @@ pub enum Error {
     IntegerOverflow,
     InstanceNameTaken,
     ConstIsMutable,
+    MalformedMemOpFlags,
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Error::MalformedMemOpFlags => f.write_str("malformed memop flags"),
+            Error::TrapUnreachable => f.write_str("unreachable"),
+            Error::InvalidStartFunctionSignature => f.write_str("start function"),
             Error::InvalidResultArity => f.write_str("invalid result arity"),
             Error::NoDataSegmentFound(idx) => {
-                f.write_fmt(format_args!("unknown data segment {idx}"))
+                if let Some(i) = idx {
+                    f.write_fmt(format_args!("unknown data segment {i}"))
+                } else {
+                    f.write_str("unknown data segment")
+                }
             }
             Error::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
             Error::StackExhaustion => f.write_str("operand stack exhausted"),
@@ -80,6 +91,7 @@ impl Display for Error {
             Error::ConstIsMutable => f.write_str("global const is mutable"),
 
             Error::DivisionByZero => f.write_str("integer divide by zero"),
+            Error::InvalidIntegerRepresentation => f.write_str("integer representation too long"),
             Error::IntegerOverflow => f.write_str("integer overflow"),
             Error::UnrepresentableResult => f.write_str("Result is not representable."),
             Error::InvalidVersion => f.write_str("The version in the Wasm file is invalid"),

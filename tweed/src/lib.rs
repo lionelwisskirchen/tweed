@@ -68,6 +68,7 @@ fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Re
         importsec: module_environment.importsec,
         tablesec: module_environment.tablesec,
         elementsec: module_environment.elementsec,
+        startsec: module_environment.startsec,
         sidetables,
     })
 }

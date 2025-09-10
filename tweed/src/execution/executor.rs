@@ -55,6 +55,40 @@ impl<'store> Executor<'store> {
             stack: ExecutionStack::default(),
         }
     }
+
+    pub fn invoke_start(&mut self, instance_name: &str, func_inst_id: u32) -> Result<Vec<Value>> {
+        let funcaddr = self
+            .store
+            .instances
+            .get(instance_name)
+            .unwrap()
+            .funcaddr
+            .get(func_inst_id as usize)
+            .unwrap(); // validated
+
+        let mut func_inst = self
+            .store
+            .data
+            .functions
+            .get_mut(*funcaddr)
+            .unwrap()
+            .clone();
+        let mut env: HostEnv = (&self.store.data).into();
+        match func_inst {
+            FuncInstance::Internal(instance) => {
+                let frame = build_frame(&instance, &mut self.stack)?;
+                self.call_stack.push(frame)?;
+                self.execute()
+            }
+            FuncInstance::External(ref mut host_function) => {
+                let args = self.stack.pop_n(host_function.signature.parameter.len())?;
+                let mut func_ref = host_function.func.borrow_mut();
+                let results = func_ref(&mut env, args)?;
+                self.stack.push_vec(&results)?;
+                Ok(results)
+            }
+        }
+    }
     pub fn invoke(
         &mut self,
         instance_name: &str,
@@ -118,6 +152,9 @@ impl<'store> Executor<'store> {
         while reader.current_index() < current_frame.end {
             let instruction = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
             match *instruction {
+                UNREACHABLE => {
+                    return Err(Error::TrapUnreachable);
+                }
                 I32_CONST => {
                     let value = reader.next_leb128_i32().unwrap();
                     trace!("I32_CONST({})", value);
@@ -914,7 +951,7 @@ impl<'store> Executor<'store> {
                 }
                 F64_STORE => {
                     let (_, offset) = reader.read_mem_args()?;
-                    let store_data = (self.stack.pop_f64()? as u64).to_le_bytes();
+                    let store_data = (self.stack.pop_f64()?).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("F64_STORE({store_data:?} to {rel_address:?})");
                     let mem = map_memory(0, instance, &mut self.store.data)?;
@@ -1630,7 +1667,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 EXTENSION_PREFIX => {
-                    let byte = *reader.next_byte().ok_or(Error::InvalidControlFlow)?;
+                    let byte = reader.next_leb128_u32().ok_or(Error::InvalidControlFlow)?;
                     match byte {
                         I32_TRUNC_SAT_F32_S => {
                             let val = self.stack.pop_f32()?;
@@ -1806,7 +1843,7 @@ impl<'store> Executor<'store> {
                             mem.store(address, 0, &data)?;
                             trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");
                         }
-                        _ => return Err(Error::UndefinedOpCode(byte)),
+                        _ => return Err(Error::UndefinedOpCode(byte as u8)),
                     }
                 }
                 _ => return Err(Error::UndefinedInstruction(*instruction)),

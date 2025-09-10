@@ -80,9 +80,24 @@ impl<'a, 'b> Validator<'a, 'b> {
         self.abstract_value_stack
             .update(self.abstract_control_stack.height_of_top(), false);
     }
-
+    fn validate_start_section(&self) -> Result<()> {
+        if let Some(id) = self.module_environment.startsec {
+            let signature_index = self
+                .module_environment
+                .funcsec
+                .get(id as usize)
+                .ok_or(Error::UnknownFunction)?;
+            let signature =
+                lookup_signature(signature_index.sig_index, &self.module_environment.typesec);
+            if !signature.parameter.is_empty() || !signature.result.is_empty() {
+                return Err(Error::InvalidStartFunctionSignature);
+            }
+        }
+        Ok(())
+    }
     pub fn validate(&mut self) -> Result<Vec<SideTable>> {
         let mut side_tables = Vec::new();
+        self.validate_start_section()?;
         for (index, fun) in self.module_environment.codesec.iter().enumerate() {
             let signature_index = self
                 .module_environment
@@ -734,6 +749,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                     if self.module_environment.memorysec.is_empty() {
                         return Err(Error::UndefinedMemory)?;
                     }
+
                     self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::F64);
@@ -844,7 +860,10 @@ impl<'a, 'b> Validator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::FuncRef);
                 }
                 EXTENSION_PREFIX => {
-                    let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
+                    let byte = self
+                        .reader
+                        .next_leb128_u32()
+                        .ok_or(Error::InvalidIntegerRepresentation)?;
                     match byte {
                         I32_TRUNC_SAT_F32_S | I32_TRUNC_SAT_F32_U => {
                             self.abstract_value_stack.pop_expected(ValType::F32)?;
@@ -869,7 +888,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             if self.module_environment.datacountsec == 0
                                 || self.module_environment.datacountsec <= data_index
                             {
-                                return Err(Error::NoDataSegmentFound(data_index as usize))?;
+                                return Err(Error::NoDataSegmentFound(None))?;
                             }
                         }
                         MEMORY_INIT => {
@@ -885,7 +904,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             if self.module_environment.datacountsec == 0
                                 || self.module_environment.datacountsec <= data_index
                             {
-                                return Err(Error::NoDataSegmentFound(data_index as usize))?;
+                                return Err(Error::NoDataSegmentFound(Some(data_index as usize)))?;
                             }
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -921,7 +940,7 @@ impl<'a, 'b> Validator<'a, 'b> {
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                         }
-                        _ => return Err(Error::UndefinedOpCode(byte)),
+                        _ => return Err(Error::UndefinedOpCode(byte as u8)),
                     }
                 }
 
@@ -942,6 +961,10 @@ impl<'a, 'b> Validator<'a, 'b> {
             .reader
             .next_leb128_u32()
             .ok_or(Error::UndefinedMemory)?;
+
+        if align > 31 {
+            return Err(Error::MalformedMemOpFlags)?;
+        }
         if align > max_align {
             return Err(Error::InvalidAlignment)?;
         }
