@@ -17,10 +17,10 @@ use crate::core::error::Result;
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
-use binary::module_environment::{create_module_environment, ModuleEnvironment};
+use binary::module_environment::create_module_environment;
 use execution::linker::Linker;
 use execution::store::Store;
-use validation::{module::Module, validator::Validator};
+use validation::module::Module;
 
 pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>> {
     let mut module = initialize(input)?;
@@ -32,7 +32,21 @@ pub fn initialize(input: &[u8]) -> Result<Module> {
     info!("Initialize module");
     let mut reader = WasmReader::new(input.to_vec());
     let module_environment = create_module_environment(&mut reader)?;
-    validate(reader, module_environment)
+    Ok(Module {
+        reader,
+        typesec: module_environment.typesec,
+        funcsec: module_environment.funcsec,
+        codesec: module_environment.codesec,
+        exportsec: module_environment.exportsec,
+        memorysec: module_environment.memorysec,
+        datasec: module_environment.datasec,
+        globalsec: module_environment.globalsec,
+        importsec: module_environment.importsec,
+        tablesec: module_environment.tablesec,
+        elementsec: module_environment.elementsec,
+        startsec: module_environment.startsec,
+        sidetables: module_environment.sidetables,
+    })
 }
 
 pub fn instantiate(module: &mut Module, store: &mut Store, name: Option<&str>) -> Result<String> {
@@ -50,27 +64,6 @@ pub fn invoke(
     info!("Invoke `{name}` with {params:?}");
     let mut exec = Executor::new(store);
     exec.invoke(&instance_name, &name, &params)
-}
-
-fn validate(mut reader: WasmReader, module_environment: ModuleEnvironment) -> Result<Module> {
-    info!("Validate module");
-    let mut validator = Validator::new(&mut reader, &module_environment);
-    let sidetables = validator.validate()?;
-    Ok(Module {
-        reader,
-        typesec: module_environment.typesec,
-        funcsec: module_environment.funcsec,
-        codesec: module_environment.codesec,
-        exportsec: module_environment.exportsec,
-        memorysec: module_environment.memorysec,
-        datasec: module_environment.datasec,
-        globalsec: module_environment.globalsec,
-        importsec: module_environment.importsec,
-        tablesec: module_environment.tablesec,
-        elementsec: module_environment.elementsec,
-        startsec: module_environment.startsec,
-        sidetables,
-    })
 }
 
 // #[cfg(test)]

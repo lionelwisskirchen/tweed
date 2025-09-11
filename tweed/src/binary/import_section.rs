@@ -53,7 +53,10 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
             0x03 => {
                 let value_type =
                     ValType::lookup(reader.next_byte().ok_or(Error::InvalidSectionBytecode)?)?;
-                let is_mutable = match reader.next_leb128_u32()? {
+                let is_mutable = match reader
+                    .next_leb128_u32()
+                    .map_err(|_| Error::MalformedMutability)?
+                {
                     0x00 => false,
                     0x01 => true,
                     _ => return Err(Error::MalformedMutability),

@@ -20,6 +20,8 @@ fn run_spec_test(path: &Path) {
 
 #[test_log::test]
 fn spec_tests() {
+    run_spec_test(Path::new("./tests/spec/testsuite/start.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/store.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/address.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/align.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/block.wast"));

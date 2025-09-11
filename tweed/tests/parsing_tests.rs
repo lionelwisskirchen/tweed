@@ -2,7 +2,8 @@ use rstest::rstest;
 use tweed::{
     binary::{
         code_section::process_code_section, export_section::process_export_section,
-        function_section::process_function_section, type_section::process_type_section,
+        function_section::process_function_section, module_environment::ModuleEnvironment,
+        type_section::process_type_section,
     },
     core::wasm_reader::WasmReader,
     initialize,
@@ -18,7 +19,7 @@ use tweed::{
 #[case(b"\x01\x01\x01\x01\x01\x01")] // Invalid val type
 fn test_code_section(#[case] bytes: &[u8]) {
     let mut reader = WasmReader::new(bytes.to_vec());
-    let actual = process_code_section(&mut reader);
+    let actual = process_code_section(&mut reader, &ModuleEnvironment::default());
     assert!(actual.is_err(), "Expected an error but got: {:?}", actual);
 }
 

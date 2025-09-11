@@ -7,7 +7,7 @@ use crate::core::signature_lookup::lookup_signature;
 
 use crate::core::opcode::*;
 
-use crate::binary::{code_section::FuncCode, type_section::FuncType};
+use crate::binary::type_section::FuncType;
 
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::control_stack::ControlStack;
@@ -18,7 +18,7 @@ use extensions::*;
 
 use super::side_table::SideTable;
 
-pub struct Validator<'a, 'b> {
+pub struct CodeValidator<'a, 'b> {
     reader: &'a mut WasmReader,
     module_environment: &'b ModuleEnvironment,
     abstract_control_stack: ControlStack,
@@ -26,9 +26,9 @@ pub struct Validator<'a, 'b> {
     side_table: SideTable,
 }
 
-impl<'a, 'b> Validator<'a, 'b> {
+impl<'a, 'b> CodeValidator<'a, 'b> {
     pub fn new(reader: &'a mut WasmReader, module_environment: &'b ModuleEnvironment) -> Self {
-        Validator {
+        CodeValidator {
             reader,
             module_environment,
             abstract_control_stack: ControlStack::default(),
@@ -37,10 +37,10 @@ impl<'a, 'b> Validator<'a, 'b> {
         }
     }
 
-    fn initialize_locals(&mut self, function: &FuncCode, signature: &FuncType) -> Vec<ValType> {
+    fn initialize_locals(&mut self, local_vars: &[ValType], signature: &FuncType) -> Vec<ValType> {
         let mut locals = Vec::new();
         locals.append(&mut signature.parameter.clone());
-        locals.append(&mut function.locals.clone());
+        locals.append(&mut local_vars.to_owned());
         locals
     }
     fn push_ctrl(&mut self, ctrl: ControlType) {
@@ -80,39 +80,6 @@ impl<'a, 'b> Validator<'a, 'b> {
         self.abstract_value_stack
             .update(self.abstract_control_stack.height_of_top(), false);
     }
-    fn validate_start_section(&self) -> Result<()> {
-        if let Some(id) = self.module_environment.startsec {
-            let signature_index = self
-                .module_environment
-                .funcsec
-                .get(id as usize)
-                .ok_or(Error::UnknownFunction)?;
-            let signature =
-                lookup_signature(signature_index.sig_index, &self.module_environment.typesec);
-            if !signature.parameter.is_empty() || !signature.result.is_empty() {
-                return Err(Error::InvalidStartFunctionSignature);
-            }
-        }
-        Ok(())
-    }
-    pub fn validate(&mut self) -> Result<Vec<SideTable>> {
-        let mut side_tables = Vec::new();
-        self.validate_start_section()?;
-        for (index, fun) in self.module_environment.codesec.iter().enumerate() {
-            let signature_index = self
-                .module_environment
-                .funcsec
-                .get(index)
-                .ok_or(Error::InvalidSignatureIndex)?
-                .sig_index;
-
-            let signature = lookup_signature(signature_index, &self.module_environment.typesec);
-
-            let side_table = self.validate_code(fun, &signature)?;
-            side_tables.push(side_table);
-        }
-        Ok(side_tables)
-    }
     fn initialize_globals(&mut self) -> Vec<GlobalType> {
         let mut imported_globals: Vec<GlobalType> = self
             .module_environment
@@ -131,10 +98,17 @@ impl<'a, 'b> Validator<'a, 'b> {
         imported_globals.extend(globals);
         imported_globals
     }
-    fn validate_code(&mut self, function: &FuncCode, signature: &FuncType) -> Result<SideTable> {
-        let locals = self.initialize_locals(function, signature);
+    pub fn validate_code(&mut self, locals: &[ValType], index: usize) -> Result<SideTable> {
+        let signature_index = self
+            .module_environment
+            .funcsec
+            .get(index)
+            .ok_or(Error::InvalidSignatureIndex)?
+            .sig_index;
+
+        let signature = lookup_signature(signature_index, &self.module_environment.typesec);
+        let locals = self.initialize_locals(locals, &signature);
         let globals = self.initialize_globals();
-        self.reader.seek(function.start);
         self.push_ctrl(ControlType::Func {
             func_type: signature.clone(),
             sidetable_idxs: Vec::new(),
@@ -1042,7 +1016,7 @@ mod tests {
     fn test_validation_undefined_opcode() {
         let bytes = wat::parse_str(
             "(module
-               
+
              )",
         )
         .unwrap();
@@ -1057,19 +1031,14 @@ mod tests {
                 result: vec![ValType::I32],
             },
         ];
-        let code = FuncCode {
-            locals: vec![],
-            start: 0,
-            end: 40,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        assert!(validator.validate().is_err());
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        assert!(validator.validate_code(&vec![], 0).is_err());
     }
 
     #[test]
@@ -1099,20 +1068,17 @@ mod tests {
                 result: vec![ValType::I32],
             },
         ];
-        let code = FuncCode {
-            locals: vec![],
-            start: 29,
-            end: 40,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
+            codesec: vec![],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![SideTable::new()];
+        reader.seek(29);
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        let actual_sidetable = validator.validate_code(&vec![], 0)?;
+        let expected_sidetable = SideTable::new();
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }
@@ -1142,20 +1108,16 @@ mod tests {
             parameter: vec![],
             result: vec![],
         }];
-        let code = FuncCode {
-            locals: vec![],
-            start: 23,
-            end: 41,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![SideTable {
+        reader.seek(23);
+
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+        let actual_sidetable = validator.validate_code(&vec![], 0)?;
+        let expected_sidetable = SideTable {
             entries: vec![
                 SideTableEntry {
                     ip: 15,
@@ -1176,7 +1138,7 @@ mod tests {
                     pop: 0,
                 },
             ],
-        }];
+        };
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }
@@ -1203,20 +1165,16 @@ mod tests {
             parameter: vec![],
             result: vec![ValType::I32],
         }];
-        let code = FuncCode {
-            locals: vec![],
-            start: 24,
-            end: 34,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![SideTable {
+        reader.seek(24);
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        let actual_sidetable = validator.validate_code(&vec![], 0)?;
+        let expected_sidetable = SideTable {
             entries: vec![
                 SideTableEntry {
                     ip: 5,
@@ -1231,7 +1189,7 @@ mod tests {
                     pop: 0,
                 },
             ],
-        }];
+        };
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }
@@ -1264,20 +1222,16 @@ mod tests {
             parameter: vec![],
             result: vec![ValType::I32],
         }];
-        let code = FuncCode {
-            locals: vec![],
-            start: 24,
-            end: 34,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![SideTable {
+        reader.seek(24);
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        let actual_sidetable = validator.validate_code(&vec![], 0)?;
+        let expected_sidetable = SideTable {
             entries: vec![
                 SideTableEntry {
                     ip: 7,
@@ -1310,7 +1264,7 @@ mod tests {
                     pop: 0,
                 },
             ],
-        }];
+        };
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }
@@ -1355,51 +1309,37 @@ mod tests {
             },
         ];
 
-        let code = vec![
-            FuncCode {
-                locals: vec![],
-                start: 29,
-                end: 29,
-            },
-            FuncCode {
-                locals: vec![],
-                start: 32,
-                end: 56,
-            },
-        ];
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: code,
             funcsec: vec![FuncDecl { sig_index: 0 }, FuncDecl { sig_index: 1 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![
-            SideTable { entries: vec![] },
-            SideTable {
-                entries: vec![
-                    SideTableEntry {
-                        ip: 7,
-                        stp: 2,
-                        vals: 0,
-                        pop: 0,
-                    },
-                    SideTableEntry {
-                        ip: 5,
-                        stp: 1,
-                        vals: 0,
-                        pop: 0,
-                    },
-                    SideTableEntry {
-                        ip: 5,
-                        stp: 1,
-                        vals: 1,
-                        pop: 0,
-                    },
-                ],
-            },
-        ];
+        reader.seek(32);
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        let actual_sidetable = validator.validate_code(&vec![], 1)?;
+        let expected_sidetable = SideTable {
+            entries: vec![
+                SideTableEntry {
+                    ip: 7,
+                    stp: 2,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 5,
+                    stp: 1,
+                    vals: 0,
+                    pop: 0,
+                },
+                SideTableEntry {
+                    ip: 5,
+                    stp: 1,
+                    vals: 1,
+                    pop: 0,
+                },
+            ],
+        };
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }
@@ -1433,27 +1373,23 @@ mod tests {
             result: vec![],
         }];
 
-        let code = FuncCode {
-            locals: vec![ValType::I32],
-            start: 25,
-            end: 42,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![SideTable {
+        reader.seek(25);
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        let actual_sidetable = validator.validate_code(&vec![ValType::I32], 0)?;
+        let expected_sidetable = SideTable {
             entries: vec![SideTableEntry {
                 ip: -14,
                 stp: 0,
                 vals: 0,
                 pop: 0,
             }],
-        }];
+        };
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }
@@ -1483,7 +1419,7 @@ mod tests {
         )
       )
       br $label1
-     )     
+     )
       i32.const 10
       i32.lt_s
       br_if $my_loop
@@ -1498,20 +1434,17 @@ mod tests {
             result: vec![],
         }];
 
-        let code = FuncCode {
-            locals: vec![ValType::I32],
-            start: 25,
-            end: 42,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![SideTable {
+        reader.seek(25);
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        let actual_sidetable = validator.validate_code(&vec![ValType::I32], 0)?;
+
+        let expected_sidetable = SideTable {
             entries: vec![
                 SideTableEntry {
                     ip: 7,
@@ -1550,7 +1483,7 @@ mod tests {
                     pop: 0,
                 },
             ],
-        }];
+        };
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }
@@ -1566,11 +1499,11 @@ mod tests {
         (block
                i32.const 0
                (br_table
-                         2  
-                         1  
-                         0  
+                         2
+                         1
+                         0
                          3)
-	) 
+	)
         i32.const 100
         return
        )
@@ -1591,20 +1524,16 @@ return
             result: vec![ValType::I32],
         }];
 
-        let code = FuncCode {
-            locals: vec![],
-            start: 24,
-            end: 60,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![SideTable {
+        reader.seek(24);
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        let actual_sidetable = validator.validate_code(&vec![], 0)?;
+        let expected_sidetable = SideTable {
             entries: vec![
                 SideTableEntry {
                     ip: 15,
@@ -1631,7 +1560,7 @@ return
                     pop: 0,
                 },
             ],
-        }];
+        };
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }
@@ -1640,10 +1569,10 @@ return
     fn test_pop_val() -> Result<()> {
         let bytes = wat::parse_str(
             "
-(module	   
+(module
    (func (result i32)
        (block $label1 (result i32)
-          i32.const 12	       
+          i32.const 12
           i32.const 10
           i32.const 10
           br $label1
@@ -1659,27 +1588,23 @@ return
             parameter: vec![],
             result: vec![ValType::I32],
         }];
-        let code = FuncCode {
-            locals: vec![],
-            start: 24,
-            end: 38,
-        };
         let module_environment = ModuleEnvironment {
             typesec,
-            codesec: vec![code],
             funcsec: vec![FuncDecl { sig_index: 0 }],
             ..Default::default()
         };
-        let mut validator = Validator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate()?;
-        let expected_sidetable = vec![SideTable {
+        reader.seek(24);
+        let mut validator = CodeValidator::new(&mut reader, &module_environment);
+
+        let actual_sidetable = validator.validate_code(&vec![], 0)?;
+        let expected_sidetable = SideTable {
             entries: vec![SideTableEntry {
                 ip: 2,
                 stp: 1,
                 vals: 1,
                 pop: 2,
             }],
-        }];
+        };
         assert_eq!(actual_sidetable, expected_sidetable);
         Ok(())
     }

@@ -16,6 +16,7 @@ pub fn process_memory_section(reader: &mut WasmReader) -> Result<Vec<Limits>> {
     for _ in 0..number_of_memories {
         let flags = reader.next_leb128_u32()?;
         let min = reader.next_leb128_u32()?;
+        info!("MIN {min}");
         let mut max = None;
         if flags != 0 {
             max = Some(reader.next_leb128_u32()?);

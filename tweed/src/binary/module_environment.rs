@@ -7,6 +7,7 @@ use crate::{
         error::{Error, Result},
         wasm_reader::WasmReader,
     },
+    validation::side_table::SideTable,
 };
 use alloc::vec::Vec;
 
@@ -37,6 +38,7 @@ pub struct ModuleEnvironment {
     pub importsec: Imports,
     pub datacountsec: u32,
     pub startsec: Option<u32>,
+    pub sidetables: Vec<SideTable>,
 }
 
 pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnvironment> {
@@ -102,7 +104,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             0x08 => {
                 info!("Process Start Section");
-                module.startsec = Some(process_start_section(reader)?);
+                module.startsec = Some(process_start_section(reader, &module)?);
             }
             0x09 => {
                 info!("Process Element Section");
@@ -112,7 +114,9 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             0x0A => {
                 info!("Process Code Section");
-                module.codesec = process_code_section(reader)?;
+                let (functions, sidetables) = process_code_section(reader, &module)?;
+                module.codesec = functions;
+                module.sidetables = sidetables;
             }
             0x0B => {
                 info!("Process Data Section");

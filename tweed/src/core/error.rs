@@ -5,6 +5,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     ReadingOutOfBounds,
+    IntegerTooLarge,
     InvalidIntegerRepresentation,
     TrapUnreachable,
     InvalidStartFunctionSignature,
@@ -72,6 +73,7 @@ impl Display for Error {
             Error::TrapUnreachable => f.write_str("unreachable"),
             Error::InvalidStartFunctionSignature => f.write_str("start function"),
             Error::InvalidResultArity => f.write_str("invalid result arity"),
+            Error::IntegerTooLarge => f.write_str("integer too large"),
             Error::NoDataSegmentFound(idx) => {
                 if let Some(i) = idx {
                     f.write_fmt(format_args!("unknown data segment {i}"))

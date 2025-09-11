@@ -93,7 +93,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 parameter: vec![],
                 result: vec![],
             },
-            |_, args| Ok(vec![]),
+            |_, _| Ok(vec![]),
         )
         .unwrap();
 
