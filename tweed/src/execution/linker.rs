@@ -1,3 +1,4 @@
+use crate::alloc::string::ToString;
 use crate::binary::data_section::SegmentMode;
 use crate::binary::element_section::{ElementItems, Mode};
 use crate::binary::export_section::ExportContext;

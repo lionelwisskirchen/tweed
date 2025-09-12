@@ -1,3 +1,4 @@
+use crate::alloc::borrow::ToOwned;
 use crate::binary::global_section::GlobalType;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::{Error, Result};

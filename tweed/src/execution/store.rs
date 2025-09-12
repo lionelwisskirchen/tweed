@@ -1,7 +1,10 @@
 extern crate alloc;
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
+use super::instance::Instance;
+use super::linker::{MAX_MEM_PAGES, PAGE_SIZE};
+use crate::alloc::string::ToString;
 use crate::binary::table_section::Table;
 use crate::core::error::{Error, Result};
 use crate::core::value_types::ValType;
@@ -16,9 +19,6 @@ use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cell::RefCell;
-
-use super::instance::Instance;
-use super::linker::{MAX_MEM_PAGES, PAGE_SIZE};
 
 #[derive(Debug, Default)]
 pub struct StoreData {

@@ -1,16 +1,17 @@
 extern crate alloc;
 
-use alloc::vec::Vec;
-use extensions::*;
-
+use super::execution_stack::{CallStack, ExecutionStack};
+use super::store::{map_memory, FuncInstance, HostEnv, Internal, MemoryInstance, Store};
+use crate::alloc::string::ToString;
 use crate::core::error::{Error, Result};
 use crate::core::opcode::*;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
-
-use super::execution_stack::{CallStack, ExecutionStack};
-use super::store::{map_memory, FuncInstance, HostEnv, Internal, MemoryInstance, Store};
+use alloc::string::String;
+use alloc::vec::Vec;
+use extensions::*;
+use libm;
 
 #[derive(Default, Debug, Clone)]
 pub struct Frame {
@@ -1307,14 +1308,14 @@ impl<'store> Executor<'store> {
                 F64_COPYSIGN => {
                     let z_2 = self.stack.pop_f64()?;
                     let z_1 = self.stack.pop_f64()?;
-                    let res = Value::F64(z_1.copysign(z_2));
+                    let res = Value::F64(libm::copysign(z_1, z_2));
                     trace!("Instruction: f64.copysign [{z_1} {z_2}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_COPYSIGN => {
                     let z_2 = self.stack.pop_f32()?;
                     let z_1 = self.stack.pop_f32()?;
-                    let res = Value::F32(z_1.copysign(z_2));
+                    let res = Value::F32(libm::copysignf(z_1, z_2));
                     trace!("Instruction: f32.copysign [{z_1} {z_2}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
