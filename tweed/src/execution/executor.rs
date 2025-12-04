@@ -798,6 +798,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 BR_TABLE => {
+                    // TODO br_table vec[Branch index] not += branch_index!
                     let branch_index = self.stack.pop_i32()?;
                     trace!("BR_TABLE({branch_index})");
                     let number_of_branches = reader.next_leb128_u32()? as usize;
@@ -1675,11 +1676,9 @@ impl<'store> Executor<'store> {
                         }
                         I32_TRUNC_SAT_F32_U => {
                             let val = self.stack.pop_f32()?;
-                            let res = if val.is_nan() {
+                            let res = if val.is_nan() || val <= 0.0 {
                                 0
-                            } else if val <= (u32::MIN as f32) {
-                                u32::MIN
-                            } else if val >= (u32::MAX as f32) {
+                            } else if val >= u32::MAX as f32 {
                                 u32::MAX
                             } else {
                                 val as u32
@@ -1703,10 +1702,8 @@ impl<'store> Executor<'store> {
                         }
                         I32_TRUNC_SAT_F64_U => {
                             let val = self.stack.pop_f64()?;
-                            let res = if val.is_nan() {
+                            let res = if val.is_nan() || val <= 0.0 {
                                 0
-                            } else if val <= (u32::MIN as f64) {
-                                u32::MIN
                             } else if val >= (u32::MAX as f64) {
                                 u32::MAX
                             } else {
@@ -1745,10 +1742,8 @@ impl<'store> Executor<'store> {
                         }
                         I64_TRUNC_SAT_F64_U => {
                             let val = self.stack.pop_f64()?;
-                            let res = if val.is_nan() {
+                            let res = if val.is_nan() || val <= 0.0 {
                                 0
-                            } else if val <= (u64::MIN as f64) {
-                                u64::MIN
                             } else if val >= (u64::MAX as f64) {
                                 u64::MAX
                             } else {
@@ -1759,10 +1754,8 @@ impl<'store> Executor<'store> {
                         }
                         I64_TRUNC_SAT_F32_U => {
                             let val = self.stack.pop_f32()?;
-                            let res = if val.is_nan() {
+                            let res = if val.is_nan() || val <= 0.0 {
                                 0
-                            } else if val <= (u64::MIN as f32) {
-                                u64::MIN
                             } else if val >= (u64::MAX as f32) {
                                 u64::MAX
                             } else {

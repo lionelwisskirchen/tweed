@@ -113,9 +113,9 @@ impl Linker {
         &mut self,
         module: &mut Module,
         store: &mut Store,
-        name: Option<&str>,
+        instance_name: Option<&str>,
     ) -> Result<String> {
-        let name = match name {
+        let name = match instance_name {
             Some(n) if !store.instance_exists(n) => n.to_string(),
             Some(_) => return Err(Error::InstanceNameTaken),
             None => format!("{}#{}", DEFAULT_MODULE, store.get_instance_count()),

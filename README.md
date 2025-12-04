@@ -2,18 +2,17 @@
 # Tweed
 **In-Place WebAssembly (WASM) Interpreter**
 
-A modular Rust project offering an in-place WASM interpreter, microcontroller integration (ESP32-C3), and a minimal CLI. 
+A modular Rust project offering an in-place WASM interpreter and a minimal CLI. 
 
 ---
 
 ## 📦 **Crates Overview**
-The project is split into three core crates:
+The project is split into two core crates:
 
 | Crate         | Purpose                                                             |
 |---------------|---------------------------------------------------------------------|
 | **`tweed`**   | Core library for the in-place WASM interpreter.                     |
 | **`cli`**     | Minimal CLI tool to interact with the interpreter.                  |
-| **`esp32c3`** | Provides an interface for ESP32-C3 microcontrollers to use `tweed`. |
 
 ---
 
@@ -31,10 +30,13 @@ tweed = { path = "./tweed" }
 use tweed::{initialize, instantiate, invoke};  
 
 let wasm_bytes = include_bytes!("module.wasm");  
-let module = initialize(wasm_bytes)?;  
-let instance = instantiate(module)?;  
-let result = invoke(instance, "add", vec![Value::I32(1), Value::I32(2)])?;  
-println!("Result: {:?}", result);  
+let module: Module = initialize(wasm_bytes)?;
+
+let store: Store = Store::default();
+
+let instance_name = instantiate(&mut module, &mut store, None)?; 
+let result = invoke(instance_name, "add", vec![Value::I32(1), Value::I32(2)])?;  
+println!("Result: {:?}", result);
 ```  
 
 ---
@@ -52,7 +54,8 @@ cd cli && cargo install --path .
 tweed-cli <PATH> invoke <FUNCTION> [PARAMS...]  
 ```  
 
-**Example**:  
+**Example**:
+The following command invokes the function named `add` with the parameter `1` and `2`. Currently, only `i32` data types are allowed as arguments.
 ```sh  
 tweed-cli ./module.wasm invoke add 1 2  
 Result: 3  

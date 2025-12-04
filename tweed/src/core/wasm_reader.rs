@@ -133,11 +133,7 @@ impl WasmReader {
     }
     pub fn next_chunk_as_string(&mut self, number_of_bytes: usize) -> Option<String> {
         let bytes = self.next_chunk(number_of_bytes)?;
-        if let Ok(parsed_string) = String::from_utf8(bytes.to_vec()) {
-            Some(parsed_string)
-        } else {
-            None
-        }
+        String::from_utf8(bytes.to_vec()).ok()
     }
     pub fn compare_chunk(&mut self, expected: &[u8]) -> Option<&[u8]> {
         let slice = self.next_chunk(expected.len())?;

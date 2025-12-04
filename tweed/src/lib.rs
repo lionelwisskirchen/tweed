@@ -49,10 +49,14 @@ pub fn initialize(input: &[u8]) -> Result<Module> {
     })
 }
 
-pub fn instantiate(module: &mut Module, store: &mut Store, name: Option<&str>) -> Result<String> {
+pub fn instantiate(
+    module: &mut Module,
+    store: &mut Store,
+    instance_name: Option<&str>,
+) -> Result<String> {
     info!("Instantiate module");
     let mut linker = Linker::default();
-    linker.instantiate(module, store, name)
+    linker.instantiate(module, store, instance_name)
 }
 
 pub fn invoke(
@@ -65,61 +69,3 @@ pub fn invoke(
     let mut exec = Executor::new(store);
     exec.invoke(&instance_name, &name, &params)
 }
-
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-
-//     #[test]
-//     fn test_element_section() {
-//         let bytes = wat::parse_str(
-//             r#"(module
-//   (table $t2 2 externref)
-//   (table $t3 3 funcref)
-//   (elem (table $t3) (i32.const 1) func $dummy)
-//   (func $dummy)
-
-//   (func (export "init") (param $r externref)
-//     (table.set $t2 (i32.const 1) (local.get $r))
-//     (table.set $t3 (i32.const 2) (table.get $t3 (i32.const 1)))
-//   )
-
-//   (func (export "get-externref") (param $i i32) (result externref)
-//     (table.get (local.get $i))
-//   )
-//   (func $f3 (export "get-funcref") (param $i i32) (result funcref)
-//     (table.get $t3 (local.get $i))
-//   )
-
-//   (func (export "is_null-funcref") (param $i i32) (result i32)
-//     (ref.is_null (call $f3 (local.get $i)))
-//   )
-// )"#,
-//         )
-//         .unwrap();
-
-//         let mut module = initialize(&bytes).unwrap();
-//         let mut store = Store::default();
-//         let mut instance = instantiate(&mut module, &mut store).unwrap();
-//         println!("{:?}",instance);
-// 	println!("{:?}", store);
-//         invoke(
-//             &mut instance,
-//             "init".to_string(),
-//             vec![Value::ExternRef(1)],
-//             &mut store,
-//             &mut module.reader,
-//         )
-//         .unwrap();
-//         let result = invoke(
-//             &mut instance,
-//             "get-externref".to_string(),
-//             vec![Value::I32(0)],
-//             &mut store,
-//             &mut module.reader,
-//         )
-//         .unwrap();
-//         println!("{:?}", result);
-//         assert!(false);
-//     }
-// }
