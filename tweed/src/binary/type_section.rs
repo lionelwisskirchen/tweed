@@ -1,4 +1,4 @@
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use alloc::vec::Vec;
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -14,21 +14,21 @@ pub fn process_type_section(reader: &mut WasmReader) -> Result<Vec<FuncType>> {
     let number_of_types = reader.next_leb128_u32()?;
 
     for _ in 0..number_of_types {
-        match reader.next_byte().ok_or(Error::ReadingOutOfBounds)? {
+        match reader.next_byte()? {
             0x60 => {} // https://www.w3.org/TR/2025/CRD-wasm-core-2-20250616/#types%E2%91%A6
-            _ => return Err(Error::InvalidIntegerRepresentation),
+            _ => return Err(ValidationError::InvalidIntegerRepresentation),
         };
         let number_of_params = reader.next_leb128_u32()?;
         let params = reader
             .next_chunk(number_of_params as usize)
-            .ok_or(Error::InvalidSectionBytecode)?
+            .map_err(|_| ValidationError::InvalidSectionBytecode)?
             .iter()
             .map(ValType::lookup)
             .collect::<Result<Vec<_>>>()?;
         let number_of_results = reader.next_leb128_u32()?;
         let results = reader
             .next_chunk(number_of_results as usize)
-            .ok_or(Error::InvalidSectionBytecode)?
+            .map_err(|_| ValidationError::InvalidSectionBytecode)?
             .iter()
             .map(ValType::lookup)
             .collect::<Result<Vec<_>>>()?;

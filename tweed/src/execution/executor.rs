@@ -3,10 +3,10 @@ extern crate alloc;
 use super::execution_stack::{CallStack, ExecutionStack};
 use super::store::{map_memory, FuncInstance, HostEnv, Internal, MemoryInstance, Store};
 use crate::alloc::string::ToString;
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::opcode::*;
 use crate::core::value_types::ValType;
-use crate::core::wasm_reader::WasmReader;
+use crate::core::wasm_reader::ValidatedWasmReader;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -142,47 +142,47 @@ impl<'store> Executor<'store> {
             .store
             .reader
             .get_mut(&current_frame.instance_name)
-            .ok_or(Error::InvalidSectionBytecode)?;
+            .ok_or(ValidationError::InvalidSectionBytecode)?;
         let instance = self
             .store
             .instances
             .get_mut(&current_frame.instance_name)
-            .ok_or(Error::InvalidSectionBytecode)?;
+            .ok_or(ValidationError::InvalidSectionBytecode)?;
 
         reader.seek(current_frame.start + current_frame.program_counter);
         while reader.current_index() < current_frame.end {
-            let instruction = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
-            match *instruction {
+            let instruction = reader.next_byte();
+            match instruction {
                 UNREACHABLE => {
-                    return Err(Error::TrapUnreachable);
+                    return Err(ValidationError::TrapUnreachable);
                 }
                 I32_CONST => {
-                    let value = reader.next_leb128_i32().unwrap();
+                    let value = reader.next_leb128_i32();
                     trace!("I32_CONST({})", value);
                     self.stack.push(Value::I32(value))?;
                 }
                 I64_CONST => {
-                    let value = reader.next_leb128_i64().unwrap();
+                    let value = reader.next_leb128_i64();
                     trace!("I64_CONST({})", value);
                     self.stack.push(Value::I64(value))?;
                 }
                 F32_CONST => {
-                    let value = reader.next_f32().unwrap();
+                    let value = reader.next_f32();
                     trace!("F32_CONST({})", value);
                     self.stack.push(Value::F32(value))?;
                 }
                 F64_CONST => {
-                    let value = reader.next_f64().unwrap();
+                    let value = reader.next_f64();
                     trace!("F64_CONST({})", value);
                     self.stack.push(Value::F64(value))?;
                 }
                 BLOCK => {
                     trace!("BLOCK");
-                    reader.skip_block_type()?;
+                    reader.skip_block_type();
                 }
                 LOOP => {
                     trace!("LOOP");
-                    reader.skip_block_type()?;
+                    reader.skip_block_type();
                 }
                 IF => {
                     let bool_val = self.stack.pop()?;
@@ -190,7 +190,7 @@ impl<'store> Executor<'store> {
                     if bool_val == Value::I32(0) {
                         Self::do_goto(&mut self.stack, current_frame, reader)?;
                     } else {
-                        reader.skip_block_type()?;
+                        reader.skip_block_type();
                         current_frame.side_table_pointer += 1;
                     }
                 }
@@ -199,12 +199,12 @@ impl<'store> Executor<'store> {
                     Self::do_goto(&mut self.stack, current_frame, reader)?;
                 }
                 LOCAL_GET => {
-                    let idx = reader.next_leb128_u32().unwrap() as usize;
+                    let idx = reader.next_leb128_u32() as usize;
                     trace!("LOCAL_GET({})", idx);
                     let local = current_frame
                         .locals
                         .get(idx)
-                        .ok_or(Error::InvalidLocalIndex)?;
+                        .ok_or(ValidationError::InvalidLocalIndex)?;
                     self.stack.push(*local)?;
                 }
                 I32_POPCNT => {
@@ -214,46 +214,52 @@ impl<'store> Executor<'store> {
                     self.stack.push(Value::I32(res))?;
                 }
                 LOCAL_SET => {
-                    let idx = reader.next_leb128_u32().unwrap() as usize;
+                    let idx = reader.next_leb128_u32() as usize;
                     let local = current_frame
                         .locals
                         .get_mut(idx)
-                        .ok_or(Error::InvalidLocalIndex)?;
+                        .ok_or(ValidationError::InvalidLocalIndex)?;
                     let new_value = self.stack.pop()?;
                     trace!("LOCAL_SET({}) TO {:?}", idx, new_value);
                     *local = new_value;
                 }
                 GLOBAL_GET => {
-                    let idx = reader.next_leb128_u32().unwrap() as usize;
+                    let idx = reader.next_leb128_u32() as usize;
                     trace!("GLOBAL_GET({})", idx);
-                    let global_addr = instance.globaladdr.get(idx).ok_or(Error::UnknownGlobal)?;
+                    let global_addr = instance
+                        .globaladdr
+                        .get(idx)
+                        .ok_or(ValidationError::UnknownGlobal)?;
                     let global = self
                         .store
                         .data
                         .globals
                         .get_mut(*global_addr)
-                        .ok_or(Error::UnknownGlobal)?;
+                        .ok_or(ValidationError::UnknownGlobal)?;
                     self.stack.push(global.value)?;
                 }
                 GLOBAL_SET => {
-                    let idx = reader.next_leb128_u32().unwrap() as usize;
-                    let global_addr = instance.globaladdr.get(idx).ok_or(Error::UnknownGlobal)?;
+                    let idx = reader.next_leb128_u32() as usize;
+                    let global_addr = instance
+                        .globaladdr
+                        .get(idx)
+                        .ok_or(ValidationError::UnknownGlobal)?;
                     let global = self
                         .store
                         .data
                         .globals
                         .get_mut(*global_addr)
-                        .ok_or(Error::UnknownGlobal)?;
+                        .ok_or(ValidationError::UnknownGlobal)?;
                     let new_value = self.stack.pop()?;
                     trace!("GLOBAL_SET({}) TO {:?}", idx, new_value);
                     global.value = new_value;
                 }
                 LOCAL_TEE => {
-                    let idx = reader.next_leb128_u32().unwrap() as usize;
+                    let idx = reader.next_leb128_u32() as usize;
                     let local = current_frame
                         .locals
                         .get_mut(idx)
-                        .ok_or(Error::InvalidLocalIndex)?;
+                        .ok_or(ValidationError::InvalidLocalIndex)?;
                     let new_value = self.stack.pop()?;
                     trace!("LOCAL_TEE({}) TO {:?}", idx, new_value);
                     *local = new_value;
@@ -307,10 +313,10 @@ impl<'store> Executor<'store> {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
                     trace!("I64_DIV_S({left}, {right})");
                     if right == 0 {
-                        return Err(Error::DivisionByZero);
+                        return Err(ValidationError::DivisionByZero);
                     }
                     if left == i64::MIN && right == -1 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     self.stack.push((left / right).into())?;
                 }
@@ -318,7 +324,7 @@ impl<'store> Executor<'store> {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
                     trace!("I64_DIV_U({left}, {right})");
                     if right == 0 {
-                        return Err(Error::DivisionByZero);
+                        return Err(ValidationError::DivisionByZero);
                     }
                     self.stack.push(((left as u64) / (right as u64)).into())?;
                 }
@@ -327,7 +333,7 @@ impl<'store> Executor<'store> {
                     trace!("I64_REM_S({left}, {right})");
 
                     if right == 0 {
-                        return Err(Error::DivisionByZero);
+                        return Err(ValidationError::DivisionByZero);
                     }
                     let result = left.checked_rem(right);
                     self.stack.push(result.unwrap_or_default().into())?;
@@ -337,7 +343,7 @@ impl<'store> Executor<'store> {
                     trace!("I64_REM_U({left}, {right})");
 
                     if right == 0 {
-                        return Err(Error::DivisionByZero);
+                        return Err(ValidationError::DivisionByZero);
                     }
                     let result = (left as u64).checked_rem(right as u64);
                     self.stack.push(result.unwrap_or_default().into())?;
@@ -417,10 +423,10 @@ impl<'store> Executor<'store> {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
                     trace!("I32_DIV_S({left}, {right})");
                     if right == 0 {
-                        return Err(Error::DivisionByZero);
+                        return Err(ValidationError::DivisionByZero);
                     }
                     if left == i32::MIN && right == -1 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     self.stack.push((left / right).into())?;
                 }
@@ -428,7 +434,7 @@ impl<'store> Executor<'store> {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
                     trace!("I32_DIV_U({left}, {right})");
                     if right == 0 {
-                        return Err(Error::DivisionByZero);
+                        return Err(ValidationError::DivisionByZero);
                     }
                     self.stack.push(((left as u32) / (right as u32)).into())?;
                 }
@@ -437,7 +443,7 @@ impl<'store> Executor<'store> {
                     trace!("I32_REM_S({left}, {right})");
 
                     if right == 0 {
-                        return Err(Error::DivisionByZero);
+                        return Err(ValidationError::DivisionByZero);
                     }
                     let result = left.checked_rem(right);
                     self.stack.push(result.unwrap_or_default().into())?;
@@ -447,7 +453,7 @@ impl<'store> Executor<'store> {
                     trace!("I32_REM_U({left}, {right})");
 
                     if right == 0 {
-                        return Err(Error::DivisionByZero);
+                        return Err(ValidationError::DivisionByZero);
                     }
                     let result = (left as u32).checked_rem(right as u32);
                     self.stack.push(result.unwrap_or_default().into())?;
@@ -777,16 +783,16 @@ impl<'store> Executor<'store> {
                     let bool_val = self.stack.pop_i32()?;
                     trace!("BR_IF({bool_val})");
                     if bool_val == 0 {
-                        reader.skip_depth()?;
+                        reader.next_leb128_u32(); // skip depth
                         current_frame.side_table_pointer += 1;
                     } else {
                         Self::do_goto(&mut self.stack, current_frame, reader)?;
                     }
                 }
                 SELECT_T => {
-                    reader.next_leb128_u32()?;
+                    reader.next_leb128_u32();
 
-                    reader.next_byte().ok_or(Error::UnsupportedValueType)?;
+                    reader.next_byte();
                     let c = self.stack.pop_i32()?;
                     let val_2 = self.stack.pop()?; // TODO Type check?
                     let val_1 = self.stack.pop()?;
@@ -801,7 +807,7 @@ impl<'store> Executor<'store> {
                     // TODO br_table vec[Branch index] not += branch_index!
                     let branch_index = self.stack.pop_i32()?;
                     trace!("BR_TABLE({branch_index})");
-                    let number_of_branches = reader.next_leb128_u32()? as usize;
+                    let number_of_branches = reader.next_leb128_u32() as usize;
                     if branch_index as usize >= number_of_branches {
                         current_frame.side_table_pointer += number_of_branches;
                     } else {
@@ -824,52 +830,52 @@ impl<'store> Executor<'store> {
                     }
                 }
                 CALL_INDIRECT => {
-                    let type_index = reader.next_leb128_u32()?;
+                    let type_index = reader.next_leb128_u32();
 
-                    let table_index = reader.next_leb128_u32()?;
+                    let table_index = reader.next_leb128_u32();
 
                     let table_addr = instance
                         .tableaddr
                         .get(table_index as usize)
-                        .ok_or(Error::UnknownTable)?;
+                        .ok_or(ValidationError::UnknownTable)?;
 
                     let table = self
                         .store
                         .data
                         .tables
                         .get(*table_addr)
-                        .ok_or(Error::UnknownTable)?;
+                        .ok_or(ValidationError::UnknownTable)?;
 
                     let func_type = instance
                         .types
                         .get(type_index as usize)
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                        .ok_or(ValidationError::InvalidFunctionIndex)?;
 
                     let entry_index = self.stack.pop_i32()? as usize;
                     let Ok(entry) = table.get(entry_index) else {
-                        return Err(Error::UndefinedElement);
+                        return Err(ValidationError::UndefinedElement);
                     };
                     let index = match entry {
-                        Value::RefNull(_) => return Err(Error::UninitializedReference),
+                        Value::RefNull(_) => return Err(ValidationError::UninitializedReference),
                         Value::FuncRef(idx) => idx,
-                        Value::ExternRef(_) => return Err(Error::TypeMismatch),
+                        Value::ExternRef(_) => return Err(ValidationError::TypeMismatch),
                         _ => unreachable!(),
                     };
                     let function_addr = instance
                         .funcaddr
                         .get(index as usize)
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                        .ok_or(ValidationError::InvalidFunctionIndex)?;
 
                     let function = self
                         .store
                         .data
                         .functions
                         .get_mut(*function_addr)
-                        .ok_or(Error::InvalidFunctionIndex)?
+                        .ok_or(ValidationError::InvalidFunctionIndex)?
                         .clone();
 
                     if function.get_signature() != func_type {
-                        return Err(Error::IndirectCallTypeMismatch);
+                        return Err(ValidationError::IndirectCallTypeMismatch);
                     };
 
                     match function {
@@ -891,20 +897,20 @@ impl<'store> Executor<'store> {
                     }
                 }
                 CALL => {
-                    let index = reader.next_leb128_u32()?;
+                    let index = reader.next_leb128_u32();
                     trace!("CALL({index})");
 
                     let function_addr = instance
                         .funcaddr
                         .get(index as usize)
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                        .ok_or(ValidationError::InvalidFunctionIndex)?;
 
                     let function = self
                         .store
                         .data
                         .functions
                         .get_mut(*function_addr)
-                        .ok_or(Error::InvalidFunctionIndex)?
+                        .ok_or(ValidationError::InvalidFunctionIndex)?
                         .clone();
                     match function {
                         FuncInstance::Internal(instance) => {
@@ -925,7 +931,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_STORE => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_i64()?).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("I64_STORE({store_data:?} to {rel_address:?})");
@@ -933,7 +939,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 F32_STORE => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_f32()?).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("F64_STORE({store_data:?} to {rel_address:?})");
@@ -941,7 +947,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 F64_STORE => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_f64()?).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("F64_STORE({store_data:?} to {rel_address:?})");
@@ -949,7 +955,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I64_STORE8 => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_i64()? as u8).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("I64_STORE8({store_data:?} to {rel_address:?})");
@@ -957,7 +963,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I64_STORE16 => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_i64()? as u16).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("I64_STORE16({store_data:?} to {rel_address:?})");
@@ -965,7 +971,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I64_STORE32 => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_i64()? as u32).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("I64_STORE32({store_data:?} to {rel_address:?})");
@@ -974,7 +980,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I64_LOAD => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: i64 = Self::load(mem, offset, address, 8)?;
@@ -982,7 +988,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(data.into())?;
                 }
                 F64_LOAD => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: f64 = Self::load(mem, offset, address, 8)?;
@@ -990,7 +996,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(data.into())?;
                 }
                 I32_STORE => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("I32_STORE({store_data:?} to {rel_address:?})");
@@ -998,7 +1004,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I32_STORE8 => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_i32()? as u8).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("I32_STORE8({store_data:?} to {rel_address:?})");
@@ -1007,7 +1013,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I32_STORE16 => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let store_data = (self.stack.pop_i32()? as u16).to_le_bytes();
                     let rel_address = self.stack.pop_i32()? as u32;
                     trace!("I32_STORE16({store_data:?} to {rel_address:?})");
@@ -1016,7 +1022,7 @@ impl<'store> Executor<'store> {
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I32_LOAD => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: i32 = Self::load(mem, offset, address, 4)?;
@@ -1025,7 +1031,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(data.into())?;
                 }
                 F32_LOAD => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: f32 = Self::load(mem, offset, address, 4)?;
@@ -1034,7 +1040,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(data.into())?;
                 }
                 I64_LOAD8_S => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: i8 = Self::load(mem, offset, address, 1)?;
@@ -1042,7 +1048,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD8_U => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: u8 = Self::load(mem, offset, address, 1)?;
@@ -1050,7 +1056,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD16_S => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: i16 = Self::load(mem, offset, address, 2)?;
@@ -1058,7 +1064,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD16_U => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: u16 = Self::load(mem, offset, address, 2)?;
@@ -1066,7 +1072,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD32_S => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: i32 = Self::load(mem, offset, address, 4)?;
@@ -1074,7 +1080,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD32_U => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: u32 = Self::load(mem, offset, address, 4)?;
@@ -1082,7 +1088,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u64).into())?;
                 }
                 I32_LOAD8_U => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: u8 = Self::load(mem, offset, address, 1)?;
@@ -1090,7 +1096,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u32).into())?;
                 }
                 I32_LOAD16_U => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: u16 = Self::load(mem, offset, address, 2)?;
@@ -1098,7 +1104,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u32).into())?;
                 }
                 I32_LOAD16_S => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: i16 = Self::load(mem, offset, address, 2)?;
@@ -1106,7 +1112,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u32).into())?;
                 }
                 I32_LOAD8_S => {
-                    let (_, offset) = reader.read_mem_args()?;
+                    let (_, offset) = reader.read_mem_args();
                     let address = self.stack.pop_i32()? as u32;
                     let mem = map_memory(0, instance, &mut self.store.data)?;
                     let data: i8 = Self::load(mem, offset, address, 1)?;
@@ -1114,13 +1120,13 @@ impl<'store> Executor<'store> {
                     self.stack.push((data as u32).into())?;
                 }
                 TABLE_GET => {
-                    let table_idx = reader.next_leb128_u32()? as usize;
+                    let table_idx = reader.next_leb128_u32() as usize;
                     trace!("TABLE_GET '{table_idx:?}'");
 
                     let table_addr = instance
                         .tableaddr
                         .get(table_idx)
-                        .ok_or(Error::TableAccessOutOfBounds)?;
+                        .ok_or(ValidationError::TableAccessOutOfBounds)?;
                     let offset = self.stack.pop_i32()? as usize;
                     let table = self.store.data.tables.get_mut(*table_addr).unwrap(); // validated
                     let value = table.get(offset)?;
@@ -1128,11 +1134,11 @@ impl<'store> Executor<'store> {
                     trace!("TABLE_GET '{}' [{}] -> [{:?}]", table_idx, offset, value);
                 }
                 TABLE_SET => {
-                    let table_idx = reader.next_leb128_u32()? as usize;
+                    let table_idx = reader.next_leb128_u32() as usize;
                     let table_addr = instance
                         .tableaddr
                         .get(table_idx)
-                        .ok_or(Error::TableAccessOutOfBounds)?;
+                        .ok_or(ValidationError::TableAccessOutOfBounds)?;
                     let table = self.store.data.tables.get_mut(*table_addr).unwrap(); // validated
                     let val = self.stack.pop()?;
                     let index = self.stack.pop_i32()? as usize;
@@ -1143,14 +1149,14 @@ impl<'store> Executor<'store> {
                 I32_TRUNC_F32_S => {
                     let value = self.stack.pop_f32()?;
                     if value.is_nan() {
-                        return Err(Error::InvalidConversionToInt);
+                        return Err(ValidationError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     // -2147483904.0 Because -2147483647.0 is not representable as f32
                     if value >= 2147483648.0 || value <= -2147483904.0 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     let res = Value::I32(value as i32);
                     trace!("Instruction: i32.trunc_f32_s [{value:?}] -> [{res:?}]");
@@ -1159,10 +1165,10 @@ impl<'store> Executor<'store> {
                 I32_TRUNC_F32_U => {
                     let value = self.stack.pop_f32()?;
                     if value.is_nan() {
-                        return Err(Error::InvalidConversionToInt);
+                        return Err(ValidationError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     trace!(
                         "Instruction: i32.trunc_f32_u [{value:?}] {}",
@@ -1170,7 +1176,7 @@ impl<'store> Executor<'store> {
                     );
 
                     if value >= 4294967296.0 || value <= -1.0 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     let res = Value::I32(value as u32 as i32);
                     trace!("Instruction: i32.trunc_f32_u [{value:?}] -> [{res:?}]");
@@ -1179,14 +1185,14 @@ impl<'store> Executor<'store> {
                 I32_TRUNC_F64_S => {
                     let value = self.stack.pop_f64()?;
                     if value.is_nan() {
-                        return Err(Error::InvalidConversionToInt);
+                        return Err(ValidationError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
 
                     if value >= 2147483648.0 || value <= -2147483649.0 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     let res = Value::I32(value as i32);
                     trace!("Instruction: i32.trunc_f64_s [{value:?}] -> [{res:?}]");
@@ -1195,13 +1201,13 @@ impl<'store> Executor<'store> {
                 I32_TRUNC_F64_U => {
                     let value = self.stack.pop_f64()?;
                     if value.is_nan() {
-                        return Err(Error::InvalidConversionToInt);
+                        return Err(ValidationError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     if value >= 4294967296.0 || value <= -1.0 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     let res = Value::I32(value as u32 as i32);
                     trace!("Instruction: i32.trunc_f64_u [{value:?}] -> [{res:?}]");
@@ -1210,13 +1216,13 @@ impl<'store> Executor<'store> {
                 I64_TRUNC_F32_S => {
                     let value = self.stack.pop_f32()?;
                     if value.is_nan() {
-                        return Err(Error::InvalidConversionToInt);
+                        return Err(ValidationError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     if value >= 9223372036854775808.0 || value <= -9223373136366403584.0 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     let res = Value::I64(value as i64);
                     trace!("Instruction: i64.trunc_f32_s  [{value:?}] -> [{res:?}]");
@@ -1225,14 +1231,14 @@ impl<'store> Executor<'store> {
                 I64_TRUNC_F32_U => {
                     let value = self.stack.pop_f32()?;
                     if value.is_nan() {
-                        return Err(Error::InvalidConversionToInt);
+                        return Err(ValidationError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     // 2^64
                     if value >= 18446744073709551616.0 || value <= -1.0 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     let res = Value::I64(value as u64 as i64);
                     trace!("Instruction: i64.trunc_f32_u  [{value:?}] -> [{res:?}]");
@@ -1242,13 +1248,13 @@ impl<'store> Executor<'store> {
                 I64_TRUNC_F64_S => {
                     let value = self.stack.pop_f64()?;
                     if value.is_nan() {
-                        return Err(Error::InvalidConversionToInt);
+                        return Err(ValidationError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     if value >= 9223372036854775808.0 || value <= -9223372036854777856.0 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     let res = Value::I64(value as i64);
                     trace!("Instruction: i64.trunc_f64_s  [{value:?}] -> [{res:?}]");
@@ -1257,13 +1263,13 @@ impl<'store> Executor<'store> {
                 I64_TRUNC_F64_U => {
                     let value = self.stack.pop_f64()?;
                     if value.is_nan() {
-                        return Err(Error::InvalidConversionToInt);
+                        return Err(ValidationError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     if value >= 18446744073709551616.0 || value <= -1.0 {
-                        return Err(Error::IntegerOverflow);
+                        return Err(ValidationError::IntegerOverflow);
                     }
                     let res = Value::I64(value as u64 as i64);
                     trace!("Instruction: i64.trunc_f64_u  [{value:?}] -> [{res:?}]");
@@ -1618,10 +1624,8 @@ impl<'store> Executor<'store> {
                 }
 
                 REF_NULL => {
-                    let ref_type = crate::core::value_types::RefType::from_byte(
-                        *reader.next_byte().ok_or(Error::MissingValue)?,
-                    )
-                    .ok_or(Error::UnexpectedValueType)?;
+                    let ref_type = crate::core::value_types::RefType::from_byte(reader.next_byte())
+                        .ok_or(ValidationError::UnexpectedValueType)?;
                     self.stack.push(Value::RefNull(ref_type))?;
                 }
                 REF_IS_NULL => {
@@ -1632,11 +1636,11 @@ impl<'store> Executor<'store> {
                     }
                 }
                 REF_FUNC => {
-                    let func_idx = reader.next_leb128_u32()? as usize;
+                    let func_idx = reader.next_leb128_u32() as usize;
                     self.stack.push(Value::FuncRef(func_idx))?;
                 }
                 MEMORY_SIZE => {
-                    let idx = *reader.next_byte().unwrap(); // validated
+                    let idx = reader.next_byte();
                     let mem = map_memory(idx as usize, instance, &mut self.store.data).unwrap();
                     // always 0
                     let size = mem.size();
@@ -1645,7 +1649,7 @@ impl<'store> Executor<'store> {
                     trace!("Instruction: memory.size [] -> [{}]", size);
                 }
                 MEMORY_GROW => {
-                    let idx = *reader.next_byte().unwrap(); // validated
+                    let idx = reader.next_byte();
                     let mem = map_memory(idx as usize, instance, &mut self.store.data).unwrap();
                     // always 0
                     let size = mem.pages();
@@ -1658,7 +1662,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 EXTENSION_PREFIX => {
-                    let byte = reader.next_leb128_u32()?;
+                    let byte = reader.next_leb128_u32();
                     match byte {
                         I32_TRUNC_SAT_F32_S => {
                             let val = self.stack.pop_f32()?;
@@ -1765,15 +1769,15 @@ impl<'store> Executor<'store> {
                             self.stack.push(Value::I64(res as i64))?;
                         }
                         DATA_DROP => {
-                            let data_index = reader.next_leb128_u32().unwrap(); // validated
+                            let data_index = reader.next_leb128_u32();
                             let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
 
                             let data_inst = self.store.data.datas.get_mut(*data_addr).unwrap(); // validated
                             data_inst.clear();
                         }
                         MEMORY_INIT => {
-                            let data_index = reader.next_leb128_u32().unwrap(); // validated
-                            let memory_index = *reader.next_byte().unwrap(); // validated
+                            let data_index = reader.next_leb128_u32();
+                            let memory_index = reader.next_byte();
 
                             let number_of_bytes = self.stack.pop_i32()? as usize;
                             let start_in_data_segment = self.stack.pop_i32()? as usize;
@@ -1782,7 +1786,7 @@ impl<'store> Executor<'store> {
                             let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
                             let data_inst = self.store.data.datas.get(*data_addr).unwrap(); // validated
                             if start_in_data_segment + number_of_bytes > data_inst.data.len() {
-                                return Err(Error::MemoryAccessOutOfBounds);
+                                return Err(ValidationError::MemoryAccessOutOfBounds);
                             }
                             let data =
                                 data_inst.load_slice(start_in_data_segment, number_of_bytes)?;
@@ -1795,10 +1799,7 @@ impl<'store> Executor<'store> {
                         }
 
                         MEMORY_COPY => {
-                            let (dest, src) = (
-                                *reader.next_byte().unwrap(), // validated and 0
-                                *reader.next_byte().unwrap(), // validated and 0
-                            );
+                            let (dest, src) = (reader.next_byte(), reader.next_byte());
 
                             let number_of_bytes = self.stack.pop_i32()? as usize;
                             let src_address = self.stack.pop_i32()? as usize;
@@ -1816,7 +1817,7 @@ impl<'store> Executor<'store> {
                             trace!("MEMORY_COPY: {number_of_bytes} bytes from {src}:{src_address} to {dest}:{dest_address}");
                         }
                         MEMORY_FILL => {
-                            let idx = *reader.next_byte().unwrap(); // validated
+                            let idx = reader.next_byte();
                             let mem =
                                 map_memory(idx as usize, instance, &mut self.store.data).unwrap(); // always 0
                             let number_of_bytes = self.stack.pop_i32()? as usize;
@@ -1826,10 +1827,10 @@ impl<'store> Executor<'store> {
                             mem.store(address, 0, &data)?;
                             trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");
                         }
-                        _ => return Err(Error::UndefinedOpCode(byte as u8)),
+                        _ => return Err(ValidationError::UndefinedOpCode(byte as u8)),
                     }
                 }
-                _ => return Err(Error::UndefinedInstruction(*instruction)),
+                _ => return Err(ValidationError::UndefinedInstruction(instruction)),
             };
         }
         current_frame.program_counter = reader.current_index() - current_frame.start + 1;
@@ -1839,13 +1840,13 @@ impl<'store> Executor<'store> {
     fn do_goto(
         stack: &mut ExecutionStack,
         current_frame: &mut Frame,
-        reader: &mut WasmReader,
+        reader: &mut ValidatedWasmReader,
     ) -> Result<()> {
         let side_table_entry = current_frame
             .side_table
             .entries
             .get(current_frame.side_table_pointer)
-            .ok_or(Error::InvalidSidetableIndex)?;
+            .ok_or(ValidationError::InvalidSidetableIndex)?;
         let pos = reader.current_index() as i32 + side_table_entry.ip;
         current_frame.side_table_pointer = current_frame
             .side_table_pointer
@@ -1863,7 +1864,7 @@ impl<'store> Executor<'store> {
     {
         let address = offset
             .checked_add(address)
-            .ok_or(Error::MemoryAccessOutOfBounds)? as usize;
+            .ok_or(ValidationError::MemoryAccessOutOfBounds)? as usize;
         memory.load(address, bytes)
     }
 }

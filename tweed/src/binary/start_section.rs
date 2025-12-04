@@ -1,5 +1,5 @@
-use crate::core::error::Error;
 use crate::core::error::Result;
+use crate::core::error::ValidationError;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::wasm_reader::WasmReader;
 
@@ -16,10 +16,10 @@ pub fn process_start_section(
     let signature_index = environment
         .funcsec
         .get(start_function_idx as usize)
-        .ok_or(Error::UnknownFunction)?;
+        .ok_or(ValidationError::UnknownFunction)?;
     let signature = lookup_signature(signature_index.sig_index, &environment.typesec);
     if !signature.parameter.is_empty() || !signature.result.is_empty() {
-        return Err(Error::InvalidStartFunctionSignature);
+        return Err(ValidationError::InvalidStartFunctionSignature);
     }
     Ok(start_function_idx)
 }

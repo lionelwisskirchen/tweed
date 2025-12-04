@@ -1,4 +1,4 @@
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
@@ -33,14 +33,10 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
     let mut imports = Imports::default();
     for _ in 0..number_of_imports {
         let length_of_module_name = reader.next_leb128_u32()?;
-        let module_name = reader
-            .next_chunk_as_string(length_of_module_name as usize)
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let module_name = reader.next_chunk_as_string(length_of_module_name as usize)?;
         let length_of_import_name = reader.next_leb128_u32()?;
-        let import_name = reader
-            .next_chunk_as_string(length_of_import_name as usize)
-            .ok_or(Error::InvalidSectionBytecode)?;
-        let import_kind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
+        let import_name = reader.next_chunk_as_string(length_of_import_name as usize)?;
+        let import_kind = reader.next_byte()?;
         match import_kind {
             0x00 => {
                 let index = reader.next_leb128_u32()?;
@@ -51,15 +47,14 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                 });
             }
             0x03 => {
-                let value_type =
-                    ValType::lookup(reader.next_byte().ok_or(Error::InvalidSectionBytecode)?)?;
+                let value_type = ValType::lookup(&reader.next_byte()?)?;
                 let is_mutable = match reader
                     .next_leb128_u32()
-                    .map_err(|_| Error::MalformedMutability)?
+                    .map_err(|_| ValidationError::MalformedMutability)?
                 {
                     0x00 => false,
                     0x01 => true,
-                    _ => return Err(Error::MalformedMutability),
+                    _ => return Err(ValidationError::MalformedMutability),
                 };
 
                 imports.globals.push(GlobalImport {
@@ -71,7 +66,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                     },
                 });
             }
-            _ => return Err(Error::UnsupportedExportKind),
+            _ => return Err(ValidationError::UnsupportedExportKind),
         }
     }
     Ok(imports)

@@ -1,5 +1,5 @@
 extern crate alloc;
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -24,11 +24,9 @@ pub fn process_export_section(reader: &mut WasmReader) -> Result<Vec<Export>> {
     let mut aggregated_exports = Vec::new();
     for _ in 0..number_of_exports {
         let length_of_export_name = reader.next_leb128_u32()?;
-        let export_name = reader
-            .next_chunk_as_string(length_of_export_name as usize)
-            .ok_or(Error::InvalidSectionBytecode)?;
+        let export_name = reader.next_chunk_as_string(length_of_export_name as usize)?;
 
-        let export_kind = *reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
+        let export_kind = reader.next_byte()?;
         let index = reader.next_leb128_u32()?;
         match export_kind {
             0x00 => {
@@ -52,7 +50,7 @@ pub fn process_export_section(reader: &mut WasmReader) -> Result<Vec<Export>> {
                     context,
                 });
             }
-            _ => return Err(Error::UnsupportedExportKind),
+            _ => return Err(ValidationError::UnsupportedExportKind),
         }
     }
     Ok(aggregated_exports)

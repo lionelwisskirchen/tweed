@@ -1,5 +1,5 @@
 extern crate alloc;
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use crate::validation::side_table::SideTable;
 use crate::validation::validator::CodeValidator;
@@ -30,8 +30,7 @@ pub fn process_code_section(
         let mut locals = Vec::new();
         for _ in 0..number_of_locals {
             let count = reader.next_leb128_u32()?;
-            let local_type =
-                ValType::lookup(reader.next_byte().ok_or(Error::InvalidSectionBytecode)?)?;
+            let local_type = ValType::lookup(&reader.next_byte()?)?;
             for _ in 0..count {
                 locals.push(local_type);
             }
@@ -40,7 +39,7 @@ pub fn process_code_section(
         let mut validator = CodeValidator::new(reader, environment);
         let side_table = validator.validate_code(&locals, code_index as usize)?;
         if reader.current_index() > start_position + func_body_size as usize {
-            return Err(Error::ReadingOutOfBounds);
+            return Err(ValidationError::ReadingOutOfBounds);
         }
         let function = FuncCode {
             locals,

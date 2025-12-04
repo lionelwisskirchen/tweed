@@ -4,7 +4,7 @@ use crate::{
         start_section::process_start_section,
     },
     core::{
-        error::{Error, Result},
+        error::{Result, ValidationError},
         wasm_reader::WasmReader,
     },
     validation::side_table::SideTable,
@@ -47,12 +47,12 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
     };
     reader
         .compare_chunk(&[0x00, 0x61, 0x73, 0x6D])
-        .ok_or(Error::InvalidMagic)?;
+        .map_err(|_| ValidationError::InvalidMagic)?;
     reader
         .compare_chunk(&[0x01, 0x00, 0x00, 0x00])
-        .ok_or(Error::InvalidVersion)?;
+        .map_err(|_| ValidationError::InvalidVersion)?;
 
-    while let Some(section_code) = reader.next_byte() {
+    while let Ok(section_code) = reader.next_byte() {
         match section_code {
             0x00 => {
                 let size = reader.next_leb128_u32()?;
@@ -60,7 +60,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 let length_name = reader.next_leb128_u32()?;
                 reader
                     .next_chunk_as_string(length_name as usize)
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                    .map_err(|_| ValidationError::InvalidSectionBytecode)?;
                 reader.seek(end);
             }
             0x01 => {
@@ -128,7 +128,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 module.datacountsec = process_data_count_section(reader)?;
             }
             _ => {
-                return Err(Error::UnknownSectionCode(*section_code));
+                return Err(ValidationError::UnknownSectionCode(section_code));
             }
         }
     }

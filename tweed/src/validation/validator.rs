@@ -1,7 +1,7 @@
 use crate::alloc::borrow::ToOwned;
 use crate::binary::global_section::GlobalType;
 use crate::binary::module_environment::ModuleEnvironment;
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::value_types::{RefType, ValType};
 
 use crate::core::signature_lookup::lookup_signature;
@@ -104,7 +104,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             .module_environment
             .funcsec
             .get(index)
-            .ok_or(Error::InvalidSignatureIndex)?
+            .ok_or(ValidationError::InvalidSignatureIndex)?
             .sig_index;
 
         let signature = lookup_signature(signature_index, &self.module_environment.typesec);
@@ -118,7 +118,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         });
 
         loop {
-            let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
+            let byte = self.reader.next_byte()?;
             trace!("Validating Byte: {byte:#04X}");
             trace!("Stack: {:?}", self.abstract_value_stack);
             match byte {
@@ -140,17 +140,23 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 LOCAL_GET => {
                     let idx = self.reader.next_leb128_u32()?;
-                    let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
+                    let value = locals
+                        .get(idx as usize)
+                        .ok_or(ValidationError::InvalidLocalIndex)?;
                     self.abstract_value_stack.push(*value);
                 }
                 LOCAL_SET => {
                     let idx = self.reader.next_leb128_u32()?;
-                    let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
+                    let value = locals
+                        .get(idx as usize)
+                        .ok_or(ValidationError::InvalidLocalIndex)?;
                     self.abstract_value_stack.pop_expected(*value)?;
                 }
                 LOCAL_TEE => {
                     let idx = self.reader.next_leb128_u32()?;
-                    let value = locals.get(idx as usize).ok_or(Error::InvalidLocalIndex)?;
+                    let value = locals
+                        .get(idx as usize)
+                        .ok_or(ValidationError::InvalidLocalIndex)?;
                     self.abstract_value_stack.is_on_top(value)?;
                 }
                 I32_ADD | I32_SUB | I32_MUL | I32_DIV_S | I32_DIV_U | I32_REM_S | I32_REM_U => {
@@ -201,7 +207,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                                 .pop_expected_vec(&expected_results)?;
 
                             if *height_of_value_stack != self.abstract_value_stack.height() {
-                                return Err(Error::TypeMismatch);
+                                return Err(ValidationError::TypeMismatch);
                             }
                             *has_else = true;
 
@@ -215,7 +221,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             entry.stp = side_table_len as i32 - *side_table_entry as i32;
                         }
                         _ => {
-                            return Err(Error::InvalidControlFlow);
+                            return Err(ValidationError::InvalidControlFlow);
                         }
                     }
                 }
@@ -223,15 +229,17 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     let idx = self.reader.next_leb128_u32()?;
                     let value = globals
                         .get(idx as usize)
-                        .ok_or(Error::UnknownGlobal)?
+                        .ok_or(ValidationError::UnknownGlobal)?
                         .value_type;
                     self.abstract_value_stack.push(value);
                 }
                 GLOBAL_SET => {
                     let idx = self.reader.next_leb128_u32()?;
-                    let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
+                    let global = globals
+                        .get(idx as usize)
+                        .ok_or(ValidationError::UnknownGlobal)?;
                     if !global.is_mutable {
-                        return Err(Error::GlobalIsImmutable);
+                        return Err(ValidationError::GlobalIsImmutable);
                     }
                     self.abstract_value_stack.pop_expected(global.value_type)?;
                 }
@@ -392,7 +400,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     let table_idx = self.reader.next_leb128_u32()? as usize;
 
                     if self.module_environment.tablesec.len() <= table_idx {
-                        return Err(Error::UndefinedTable);
+                        return Err(ValidationError::UndefinedTable);
                     }
                     let ref_type = self
                         .module_environment
@@ -407,7 +415,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     let table_idx = self.reader.next_leb128_u32()? as usize;
 
                     if self.module_environment.tablesec.len() <= table_idx {
-                        return Err(Error::UndefinedTable);
+                        return Err(ValidationError::UndefinedTable);
                     }
 
                     let ref_type = self
@@ -424,10 +432,10 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 SELECT_T => {
                     let num = self.reader.next_leb128_u32()?;
                     if num != 1 {
-                        return Err(Error::InvalidResultArity);
+                        return Err(ValidationError::InvalidResultArity);
                     }
-                    let ty_byte = self.reader.next_byte().ok_or(Error::UnsupportedValueType)?;
-                    let ty = ValType::lookup(ty_byte)?;
+                    let ty_byte = self.reader.next_byte()?;
+                    let ty = ValType::lookup(&ty_byte)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ty)?;
                     self.abstract_value_stack.pop_expected(ty)?;
@@ -437,7 +445,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     let val1 = self.abstract_value_stack.pop_val()?;
                     if !val1.is_numeric() {
-                        return Err(Error::IllegalSelectType);
+                        return Err(ValidationError::IllegalSelectType);
                     };
                     self.abstract_value_stack.pop_expected(val1)?;
                     self.abstract_value_stack.push(val1);
@@ -546,7 +554,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                                 self.resolve_sidetable_entries(&[side_table_entry]);
                                 // Parameter pass through when there is no else block
                                 if func_type.result.len() > func_type.parameter.len() {
-                                    return Err(Error::TypeMismatch);
+                                    return Err(ValidationError::TypeMismatch);
                                 }
                             }
 
@@ -573,15 +581,15 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         .module_environment
                         .tablesec
                         .get(table_index as usize)
-                        .ok_or(Error::UnknownTable)?;
+                        .ok_or(ValidationError::UnknownTable)?;
                     if table.ref_type != RefType::FuncRef {
-                        return Err(Error::TypeMismatch);
+                        return Err(ValidationError::TypeMismatch);
                     }
                     let func_type = self
                         .module_environment
                         .typesec
                         .get(type_index as usize)
-                        .ok_or(Error::UnknownType)?;
+                        .ok_or(ValidationError::UnknownType)?;
 
                     self.abstract_value_stack.pop_expected(ValType::I32)?; // Table Entry Index
                     self.abstract_value_stack
@@ -595,19 +603,19 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         .module_environment
                         .funcsec
                         .get(func_index as usize)
-                        .ok_or(Error::InvalidFunctionIndex)?
+                        .ok_or(ValidationError::InvalidFunctionIndex)?
                         .sig_index;
                     let sig = self
                         .module_environment
                         .typesec
                         .get(type_idx as usize)
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                        .ok_or(ValidationError::InvalidFunctionIndex)?;
                     self.abstract_value_stack.pop_expected_vec(&sig.parameter)?;
                     self.abstract_value_stack.push_vec(&sig.result);
                 }
                 I32_STORE => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -615,7 +623,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I32_STORE8 => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -623,7 +631,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I32_STORE16 => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -631,7 +639,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I64_STORE => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
@@ -639,7 +647,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I64_STORE8 => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
@@ -647,7 +655,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I64_STORE16 => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
@@ -655,7 +663,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I64_STORE32 => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
@@ -663,7 +671,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 F32_STORE => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::F32)?;
@@ -671,7 +679,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 F64_STORE => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
@@ -680,7 +688,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
 
                 I32_LOAD => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -688,7 +696,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 F32_LOAD => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -696,7 +704,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 F64_LOAD => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
 
                     self.check_align(3)?;
@@ -705,7 +713,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I32_LOAD8_U => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -713,7 +721,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I64_LOAD8_S | I64_LOAD8_U => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -721,7 +729,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I64_LOAD16_U | I64_LOAD16_S => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -729,7 +737,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I64_LOAD32_U | I64_LOAD32_S => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -737,7 +745,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I32_LOAD8_S => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
 
                     self.check_align(0)?;
@@ -746,7 +754,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I32_LOAD16_U | I32_LOAD16_S => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -758,7 +766,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 I64_LOAD => {
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -767,34 +775,34 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 REF_IS_NULL => {
                     let value = self.abstract_value_stack.pop_val()?;
                     if !value.is_ref() {
-                        return Err(Error::TypeMismatch);
+                        return Err(ValidationError::TypeMismatch);
                     }
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 REF_NULL => {
-                    let ref_type = self.reader.next_byte().ok_or(Error::MissingValue)?;
-                    self.abstract_value_stack.push(ValType::lookup(ref_type)?);
+                    let ref_type = self.reader.next_byte()?;
+                    self.abstract_value_stack.push(ValType::lookup(&ref_type)?);
                 }
                 MEMORY_GROW => {
-                    let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
+                    let idx = self.reader.next_byte()?;
                     if idx != 0 {
-                        return Err(Error::MultipleMemoriesNotImplemented);
+                        return Err(ValidationError::MultipleMemoriesNotImplemented);
                     }
 
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 MEMORY_SIZE => {
-                    let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
+                    let idx = self.reader.next_byte()?;
                     if idx != 0 {
-                        return Err(Error::MultipleMemoriesNotImplemented);
+                        return Err(ValidationError::MultipleMemoriesNotImplemented);
                     }
 
                     if self.module_environment.memorysec.is_empty() {
-                        return Err(Error::UndefinedMemory)?;
+                        return Err(ValidationError::UndefinedMemory)?;
                     }
                     self.abstract_value_stack.push(ValType::I32);
                 }
@@ -804,7 +812,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.module_environment
                         .funcsec
                         .get(func_idx)
-                        .ok_or(Error::InvalidFunctionIndex)?;
+                        .ok_or(ValidationError::InvalidFunctionIndex)?;
                     self.abstract_value_stack.push(ValType::FuncRef);
                 }
                 EXTENSION_PREFIX => {
@@ -832,63 +840,62 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             if self.module_environment.datacountsec == 0
                                 || self.module_environment.datacountsec <= data_index
                             {
-                                return Err(Error::NoDataSegmentFound(None))?;
+                                return Err(ValidationError::NoDataSegmentFound(None))?;
                             }
                         }
                         MEMORY_INIT => {
                             let data_index = self.reader.next_leb128_u32()?;
-                            let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
+                            let idx = self.reader.next_byte()?;
                             if idx != 0 {
-                                return Err(Error::MultipleMemoriesNotImplemented);
+                                return Err(ValidationError::MultipleMemoriesNotImplemented);
                             }
                             if self.module_environment.memorysec.is_empty() {
-                                return Err(Error::UnknownMemory(idx as usize))?;
+                                return Err(ValidationError::UnknownMemory(idx as usize))?;
                             }
                             if self.module_environment.datacountsec == 0
                                 || self.module_environment.datacountsec <= data_index
                             {
-                                return Err(Error::NoDataSegmentFound(Some(data_index as usize)))?;
+                                return Err(ValidationError::NoDataSegmentFound(Some(
+                                    data_index as usize,
+                                )))?;
                             }
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                         }
                         MEMORY_COPY => {
-                            let (dest, src) = (
-                                *self.reader.next_byte().ok_or(Error::MissingValue)?,
-                                *self.reader.next_byte().ok_or(Error::MissingValue)?,
-                            );
+                            let (dest, src) = (self.reader.next_byte()?, self.reader.next_byte()?);
                             if dest != 0 || src != 0 {
-                                return Err(Error::MultipleMemoriesNotImplemented);
+                                return Err(ValidationError::MultipleMemoriesNotImplemented);
                             }
 
                             if self.module_environment.memorysec.is_empty() {
-                                return Err(Error::UndefinedMemory)?;
+                                return Err(ValidationError::UndefinedMemory)?;
                             }
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                         }
                         MEMORY_FILL => {
-                            let idx = *self.reader.next_byte().ok_or(Error::MissingValue)?;
+                            let idx = self.reader.next_byte()?;
                             if idx != 0 {
-                                return Err(Error::MultipleMemoriesNotImplemented);
+                                return Err(ValidationError::MultipleMemoriesNotImplemented);
                             }
 
                             if self.module_environment.memorysec.is_empty() {
-                                return Err(Error::UndefinedMemory)?;
+                                return Err(ValidationError::UndefinedMemory)?;
                             }
 
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                         }
-                        _ => return Err(Error::UndefinedOpCode(byte as u8)),
+                        _ => return Err(ValidationError::UndefinedOpCode(byte as u8)),
                     }
                 }
 
                 UNREACHABLE => self.unreachable(),
-                _ => return Err(Error::UndefinedOpCode(byte)),
+                _ => return Err(ValidationError::UndefinedOpCode(byte)),
             };
         }
         let result = self.side_table.clone();
@@ -900,10 +907,10 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         let _offset = self.reader.next_leb128_u32()?;
 
         if align > 31 {
-            return Err(Error::MalformedMemOpFlags)?;
+            return Err(ValidationError::MalformedMemOpFlags)?;
         }
         if align > max_align {
-            return Err(Error::InvalidAlignment)?;
+            return Err(ValidationError::InvalidAlignment)?;
         }
         Ok(())
     }
@@ -911,7 +918,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
     fn read_depth(&mut self) -> u32 {
         self.reader
             .next_leb128_u32()
-            .expect("Error parsing break depth")
+            .expect("ValidationError parsing break depth")
     }
 
     fn reset(&mut self) {
@@ -924,7 +931,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         self.abstract_value_stack.pop_expected_vec(args)?;
 
         if height_of_value_stack != self.abstract_value_stack.height() {
-            return Err(Error::TypeMismatch);
+            return Err(ValidationError::TypeMismatch);
         }
 
         self.abstract_value_stack.push_vec(args);
@@ -1003,7 +1010,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         let func_idx = self
             .reader
             .next_leb128_u32()
-            .expect("Error parsing block func idx");
+            .expect("ValidationError parsing block func idx");
         lookup_signature(func_idx, &self.module_environment.typesec)
     }
 }

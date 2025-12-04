@@ -2,7 +2,7 @@ use crate::binary::function_section::FuncDecl;
 use crate::binary::import_section::GlobalImport;
 use crate::core::opcode::*;
 
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 
@@ -16,9 +16,9 @@ pub fn validate_const_expr(
 ) -> Result<()> {
     let mut abstract_value_stack: ValidationStack = ValidationStack::default();
     loop {
-        let byte = reader.next_byte().ok_or(Error::InvalidControlFlow)?;
+        let byte = reader.next_byte()?;
         trace!("Validate Const Expression Byte: {byte:#04X}");
-        match *byte {
+        match byte {
             I32_CONST => {
                 reader.next_leb128_i32()?;
                 abstract_value_stack.push(ValType::I32);
@@ -47,31 +47,35 @@ pub fn validate_const_expr(
             }
             GLOBAL_GET => {
                 let idx = reader.next_leb128_u32()?;
-                let global = globals.get(idx as usize).ok_or(Error::UnknownGlobal)?;
+                let global = globals
+                    .get(idx as usize)
+                    .ok_or(ValidationError::UnknownGlobal)?;
 
                 if global.context.is_mutable {
-                    return Err(Error::UndefinedContantExpression);
+                    return Err(ValidationError::UndefinedContantExpression);
                 }
                 abstract_value_stack.push(global.context.value_type);
             }
             REF_NULL => {
-                let ref_type = reader.next_byte().ok_or(Error::MissingValue)?;
-                abstract_value_stack.push(ValType::lookup(ref_type)?);
+                let ref_type = reader.next_byte()?;
+                abstract_value_stack.push(ValType::lookup(&ref_type)?);
             }
             REF_FUNC => {
                 let func_idx = reader.next_leb128_u32()? as usize;
 
-                functions.get(func_idx).ok_or(Error::InvalidFunctionIndex)?;
+                functions
+                    .get(func_idx)
+                    .ok_or(ValidationError::InvalidFunctionIndex)?;
                 abstract_value_stack.push(ValType::FuncRef);
             }
             END => {
                 abstract_value_stack.pop_expected_vec(result)?;
                 if !abstract_value_stack.is_empty() {
-                    return Err(Error::TypeMismatch);
+                    return Err(ValidationError::TypeMismatch);
                 }
                 return Ok(());
             }
-            _ => return Err(Error::UndefinedContantExpression),
+            _ => return Err(ValidationError::UndefinedContantExpression),
         }
     }
 }

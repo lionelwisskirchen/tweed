@@ -1,4 +1,4 @@
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::constant_expression_validator::validate_const_expr;
@@ -31,15 +31,15 @@ pub fn process_global_section(
 
     let mut globals = Vec::new();
     for _ in 0..number_of_globals {
-        let value_type = ValType::lookup(reader.next_byte().ok_or(Error::InvalidSectionBytecode)?)?;
+        let value_type = ValType::lookup(&reader.next_byte()?)?;
 
         let is_mutable = match reader
             .next_leb128_u32()
-            .map_err(|_| Error::MalformedMutability)?
+            .map_err(|_| ValidationError::MalformedMutability)?
         {
             0x00 => false,
             0x01 => true,
-            _ => return Err(Error::MalformedMutability),
+            _ => return Err(ValidationError::MalformedMutability),
         };
         let start = reader.current_index();
         /* We need to validate the constant expression here, as the size of the expression body is implicit.

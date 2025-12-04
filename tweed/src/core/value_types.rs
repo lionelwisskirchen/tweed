@@ -1,5 +1,5 @@
 use crate::{
-    core::error::{Error, Result},
+    core::error::{Result, ValidationError},
     Value,
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +58,7 @@ impl ValType {
             0x6F => Ok(ValType::ExternRef),
             _ => {
                 warn!("Unsupported Value type {val:#04X}");
-                Err(Error::UnsupportedValueType)
+                Err(ValidationError::UnsupportedValueType)
             }
         }
     }

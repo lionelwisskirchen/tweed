@@ -1,4 +1,4 @@
-use crate::core::error::{Error, Result};
+use crate::core::error::Result;
 use crate::core::value_types::RefType;
 use crate::core::wasm_reader::WasmReader;
 use alloc::vec::Vec;
@@ -17,7 +17,7 @@ pub fn process_table_section(reader: &mut WasmReader) -> Result<Vec<Table>> {
     let number_of_tables = reader.next_leb128_u32()?;
     let mut tables = Vec::new();
     for _ in 0..number_of_tables {
-        let ref_type = *reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
+        let ref_type = reader.next_byte()?;
         let flags = reader.next_leb128_u32()?;
         let min = reader.next_leb128_u32()?;
         let mut max = None;

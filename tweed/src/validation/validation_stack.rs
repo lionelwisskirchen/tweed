@@ -1,4 +1,4 @@
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::value_types::ValType;
 use alloc::vec::Vec;
 
@@ -52,9 +52,9 @@ impl ValidationStack {
             return Ok(ValType::Unknown);
         };
         if self.stack.len() == self.top_height as usize {
-            return Err(Error::TypeMismatch);
+            return Err(ValidationError::TypeMismatch);
         }
-        self.stack.pop().ok_or(Error::TypeMismatch)
+        self.stack.pop().ok_or(ValidationError::TypeMismatch)
     }
 
     pub fn pop_expected_vec(&mut self, val_types: &[ValType]) -> Result<()> {
@@ -67,7 +67,7 @@ impl ValidationStack {
         let actual = self.pop_val()?;
 
         if expected != actual && actual != ValType::Unknown && expected != ValType::Unknown {
-            return Err(Error::TypeMismatch);
+            return Err(ValidationError::TypeMismatch);
         }
         Ok(())
     }
@@ -75,11 +75,11 @@ impl ValidationStack {
         if self.stack.len() == self.top_height as usize && !self.top_reachable {
             return Ok(());
         };
-        let val = self.stack.last().ok_or(Error::TypeMismatch)?;
+        let val = self.stack.last().ok_or(ValidationError::TypeMismatch)?;
         if val == expected {
             Ok(())
         } else {
-            Err(Error::TypeMismatch)
+            Err(ValidationError::TypeMismatch)
         }
     }
 }

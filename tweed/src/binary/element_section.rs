@@ -1,4 +1,4 @@
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::constant_expression_validator::validate_const_expr;
@@ -63,7 +63,7 @@ pub fn process_element_section(
                 for _ in 0..number_of_elements {
                     let function_idx = reader.next_leb128_u32()?;
                     if functions.get(function_idx as usize).is_none() {
-                        return Err(Error::UnknownFunction);
+                        return Err(ValidationError::UnknownFunction);
                     }
                     function_references.push(function_idx);
                 }
@@ -77,7 +77,7 @@ pub fn process_element_section(
 
             1 => {
                 let mode = Mode::Passive;
-                let elemkind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
+                let elemkind = reader.next_byte()?;
                 match elemkind {
                     0x00 => {
                         let number_of_elements = reader.next_leb128_u32()?;
@@ -93,7 +93,7 @@ pub fn process_element_section(
                             items: ElementItems::RefFuncs(function_references),
                         });
                     }
-                    _ => return Err(Error::InvalidSectionBytecode), // TODO add proper error
+                    _ => return Err(ValidationError::InvalidElementKind),
                 }
             }
             2 => {
@@ -106,7 +106,7 @@ pub fn process_element_section(
                     offset_start: start,
                     offset_end: end,
                 };
-                let elemkind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
+                let elemkind = reader.next_byte()?;
                 match elemkind {
                     0x00 => {
                         let number_of_elements = reader.next_leb128_u32()?;
@@ -115,7 +115,7 @@ pub fn process_element_section(
                             let function_idx = reader.next_leb128_u32()?;
 
                             if functions.get(function_idx as usize).is_none() {
-                                return Err(Error::UnknownFunction);
+                                return Err(ValidationError::UnknownFunction);
                             }
 
                             function_references.push(function_idx);
@@ -126,12 +126,12 @@ pub fn process_element_section(
                             items: ElementItems::RefFuncs(function_references),
                         });
                     }
-                    _ => return Err(Error::InvalidSectionBytecode), // TODO add proper error
+                    _ => return Err(ValidationError::InvalidElementKind),
                 }
             }
             3 => {
                 let mode = Mode::Declarative;
-                let elemkind = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
+                let elemkind = reader.next_byte()?;
                 match elemkind {
                     0x00 => {
                         let number_of_elements = reader.next_leb128_u32()?;
@@ -139,7 +139,7 @@ pub fn process_element_section(
                         for _ in 0..number_of_elements {
                             let function_idx = reader.next_leb128_u32()?;
                             if functions.get(function_idx as usize).is_none() {
-                                return Err(Error::UnknownFunction);
+                                return Err(ValidationError::UnknownFunction);
                             }
                             function_references.push(function_idx);
                         }
@@ -149,7 +149,7 @@ pub fn process_element_section(
                             items: ElementItems::RefFuncs(function_references),
                         });
                     }
-                    _ => return Err(Error::InvalidSectionBytecode), // TODO add proper error
+                    _ => return Err(ValidationError::InvalidElementKind),
                 }
             }
             4 => {
@@ -177,8 +177,8 @@ pub fn process_element_section(
             }
             5 => {
                 let mode = Mode::Passive;
-                let reftype_byte = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
-                let reftype = ValType::lookup(reftype_byte)?;
+                let reftype_byte = reader.next_byte()?;
+                let reftype = ValType::lookup(&reftype_byte)?;
                 let number_of_elements = reader.next_leb128_u32()?;
                 let mut function_references = vec![];
                 for _ in 0..number_of_elements {
@@ -203,8 +203,8 @@ pub fn process_element_section(
                     offset_start: start,
                     offset_end: end,
                 };
-                let reftype_byte = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
-                let reftype = ValType::lookup(reftype_byte)?;
+                let reftype_byte = reader.next_byte()?;
+                let reftype = ValType::lookup(&reftype_byte)?;
                 let number_of_elements = reader.next_leb128_u32()?;
                 let mut function_references = vec![];
                 for _ in 0..number_of_elements {
@@ -221,8 +221,8 @@ pub fn process_element_section(
             }
             7 => {
                 let mode = Mode::Declarative;
-                let reftype_byte = reader.next_byte().ok_or(Error::InvalidSectionBytecode)?;
-                let reftype = ValType::lookup(reftype_byte)?;
+                let reftype_byte = reader.next_byte()?;
+                let reftype = ValType::lookup(&reftype_byte)?;
                 let number_of_elements = reader.next_leb128_u32()?;
                 let mut function_references = vec![];
                 for _ in 0..number_of_elements {

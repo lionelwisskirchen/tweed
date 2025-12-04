@@ -38,7 +38,6 @@
             ))
             pkgs.wabt
             pkgs.pre-commit
-
           ];
         };
         shellHook = ''

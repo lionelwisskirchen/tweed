@@ -7,7 +7,7 @@ use crate::binary::type_section::FuncType;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::values::Value;
 use crate::core::{
-    error::{Error, Result},
+    error::{Result, ValidationError},
     value_types::ValType,
 };
 use crate::validation::module::Module;
@@ -117,7 +117,7 @@ impl Linker {
     ) -> Result<String> {
         let name = match instance_name {
             Some(n) if !store.instance_exists(n) => n.to_string(),
-            Some(_) => return Err(Error::InstanceNameTaken),
+            Some(_) => return Err(ValidationError::InstanceNameTaken),
             None => format!("{}#{}", DEFAULT_MODULE, store.get_instance_count()),
         };
 
@@ -130,7 +130,7 @@ impl Linker {
                     .data
                     .globals
                     .get(*addr)
-                    .ok_or(Error::UnknownGlobal)?
+                    .ok_or(ValidationError::UnknownGlobal)?
                     .clone(),
             );
         }
@@ -151,7 +151,7 @@ impl Linker {
                     .data
                     .functions
                     .get(*addr)
-                    .ok_or(Error::UnknownInstance)?
+                    .ok_or(ValidationError::UnknownInstance)?
                     .clone(),
             );
         }
@@ -221,12 +221,12 @@ impl Linker {
             let import_entity = self
                 .imported_funcs
                 .get(&key)
-                .ok_or(Error::MissingFunctionImport)?;
+                .ok_or(ValidationError::MissingFunctionImport)?;
 
             let sig = module
                 .typesec
                 .get(import.context.sig_index as usize)
-                .ok_or(Error::InvalidSignatureIndex)?;
+                .ok_or(ValidationError::InvalidSignatureIndex)?;
 
             match import_entity {
                 ImportSource::Extern(addr) => {
@@ -234,10 +234,10 @@ impl Linker {
                         .data
                         .functions
                         .get(*addr)
-                        .ok_or(Error::MissingFunctionImport)?;
+                        .ok_or(ValidationError::MissingFunctionImport)?;
 
                     if target_function.get_signature() != sig {
-                        return Err(Error::IncompatibleImportType);
+                        return Err(ValidationError::IncompatibleImportType);
                     };
                     funcaddr.push(*addr);
                 }
@@ -263,7 +263,7 @@ impl Linker {
             let import_entity = self
                 .imported_globals
                 .get(&key)
-                .ok_or(Error::MissingGlobalImport)?;
+                .ok_or(ValidationError::MissingGlobalImport)?;
 
             match import_entity {
                 ImportSource::Extern(addr) => {
@@ -271,9 +271,9 @@ impl Linker {
                         .data
                         .globals
                         .get(*addr)
-                        .ok_or(Error::MissingGlobalImport)?;
+                        .ok_or(ValidationError::MissingGlobalImport)?;
                     if target_global.global_type != import.context {
-                        return Err(Error::IncompatibleImportType);
+                        return Err(ValidationError::IncompatibleImportType);
                     }
                     globaladdr.push(*addr);
                 }
@@ -303,7 +303,7 @@ impl Linker {
                     &[global.global_type.value_type],
                     functions,
                 )?;
-                *return_value.first().ok_or(Error::TypeMismatch)?
+                *return_value.first().ok_or(ValidationError::TypeMismatch)?
             };
             globals.push(GlobalInstance {
                 global_type: global.global_type.clone(),
@@ -340,7 +340,7 @@ impl Linker {
             let signature_index = module
                 .funcsec
                 .get(index + offset)
-                .ok_or(Error::InvalidFunctionIndex)?
+                .ok_or(ValidationError::InvalidFunctionIndex)?
                 .sig_index;
             let signature = lookup_signature(signature_index, &module.typesec);
 
@@ -393,7 +393,7 @@ impl Linker {
                                 functions,
                             )?
                             .first()
-                            .ok_or(Error::TypeMismatch)?,
+                            .ok_or(ValidationError::TypeMismatch)?,
                         );
                     }
                     ElementInstance::new(&element.ref_type, resolved_refs)
@@ -413,11 +413,13 @@ impl Linker {
                         functions,
                     )?
                     .first()
-                    .ok_or(Error::TypeMismatch)?;
+                    .ok_or(ValidationError::TypeMismatch)?;
                     let Value::I32(offset) = result else {
-                        return Err(Error::TypeMismatch);
+                        return Err(ValidationError::TypeMismatch);
                     };
-                    let target_table = tables.get_mut(table as usize).ok_or(Error::TypeMismatch)?;
+                    let target_table = tables
+                        .get_mut(table as usize)
+                        .ok_or(ValidationError::TypeMismatch)?;
                     target_table.insert(offset as usize, &instance.references)?;
                     elements.push(instance)
                 }
@@ -459,16 +461,17 @@ impl Linker {
                         &[ValType::I32],
                         functions,
                     )?;
-                    let Value::I32(value) = return_values.first().ok_or(Error::TypeMismatch)?
+                    let Value::I32(value) =
+                        return_values.first().ok_or(ValidationError::TypeMismatch)?
                     else {
-                        return Err(Error::TypeMismatch);
+                        return Err(ValidationError::TypeMismatch);
                     };
                     *value
                 };
 
                 let mem_inst = memories
                     .get_mut(memory as usize)
-                    .ok_or(Error::InvalidMemoryIndex)?;
+                    .ok_or(ValidationError::InvalidMemoryIndex)?;
                 mem_inst.store(address as usize, 0, &data_segment.init)?;
             };
             data.push(DataInstance {

@@ -1,4 +1,4 @@
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use alloc::vec::Vec;
 
 use super::control_types::ControlType;
@@ -66,13 +66,13 @@ impl ControlStack {
     pub fn get_control_type(&mut self, depth: u32) -> Result<&mut ControlType> {
         let control_stack_size = self.stack.len();
         if depth as usize >= control_stack_size {
-            return Err(Error::UnknownLabel);
+            return Err(ValidationError::UnknownLabel);
         }
 
         let control_stack_index = control_stack_size - 1 - depth as usize;
         self.stack
             .get_mut(control_stack_index)
-            .ok_or(Error::UnknownLabel)
+            .ok_or(ValidationError::UnknownLabel)
     }
     pub fn push(&mut self, control_type: ControlType) {
         self.stack.push(control_type);

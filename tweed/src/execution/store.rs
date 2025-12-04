@@ -6,9 +6,9 @@ use super::instance::Instance;
 use super::linker::{MAX_MEM_PAGES, PAGE_SIZE};
 use crate::alloc::string::ToString;
 use crate::binary::table_section::Table;
-use crate::core::error::{Error, Result};
+use crate::core::error::{Result, ValidationError};
 use crate::core::value_types::ValType;
-use crate::core::wasm_reader::WasmReader;
+use crate::core::wasm_reader::ValidatedWasmReader;
 use crate::{
     binary::{global_section::GlobalType, type_section::FuncType},
     core::values::FromLeBytes,
@@ -34,7 +34,7 @@ pub struct StoreData {
 pub struct Store {
     pub data: StoreData,
     pub instances: BTreeMap<String, Instance>,
-    pub reader: BTreeMap<String, WasmReader>,
+    pub reader: BTreeMap<String, ValidatedWasmReader>,
 }
 
 #[derive(Debug)]
@@ -66,7 +66,7 @@ impl Store {
         &mut self,
         instance: Instance,
         name: &str,
-        reader: &WasmReader,
+        reader: &ValidatedWasmReader,
     ) -> Result<()> {
         self.instances.insert(name.to_string(), instance.clone());
         self.reader.insert(name.to_string(), reader.clone());
@@ -78,18 +78,27 @@ impl Store {
         self.data
             .functions
             .get_mut(func_addr)
-            .ok_or(Error::UnknownExportCall)
+            .ok_or(ValidationError::UnknownExportCall)
     }
     pub fn rename_instance(&mut self, name: &str, new_name: &str) -> Result<()> {
-        let mut instance = self.instances.remove(name).ok_or(Error::UnknownInstance)?;
-        let reader = self.reader.remove(name).ok_or(Error::UnknownInstance)?;
+        let mut instance = self
+            .instances
+            .remove(name)
+            .ok_or(ValidationError::UnknownInstance)?;
+        let reader = self
+            .reader
+            .remove(name)
+            .ok_or(ValidationError::UnknownInstance)?;
         instance.name = new_name.to_string();
         self.add_instance(instance, new_name, &reader)?;
         Ok(())
         // TODO refactor and move to linker?
     }
     pub fn get_instance(&self, name: &str) -> Result<&Instance> {
-        let instance = self.instances.get(name).ok_or(Error::UnknownInstance)?;
+        let instance = self
+            .instances
+            .get(name)
+            .ok_or(ValidationError::UnknownInstance)?;
         Ok(instance)
     }
     pub fn get_instance_count(&self) -> usize {
@@ -138,11 +147,11 @@ pub fn map_memory<'a>(
     let mem_addr = instance
         .memaddr
         .get(index) // only one memory allowed
-        .ok_or(Error::InvalidMemoryIndex)?;
+        .ok_or(ValidationError::InvalidMemoryIndex)?;
     store
         .memories
         .get_mut(*mem_addr)
-        .ok_or(Error::InvalidMemoryIndex)
+        .ok_or(ValidationError::InvalidMemoryIndex)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -158,7 +167,7 @@ impl MemoryInstance {
     pub fn load_slice(&mut self, address: usize, bytes: usize) -> Result<&[u8]> {
         self.data
             .get(address..address + bytes)
-            .ok_or(Error::MemoryAccessOutOfBounds)
+            .ok_or(ValidationError::MemoryAccessOutOfBounds)
     }
     pub fn size(&self) -> i32 {
         (self.data.len() as u32 / PAGE_SIZE) as i32
@@ -169,11 +178,11 @@ impl MemoryInstance {
     pub fn grow(&mut self, amount: u32) -> Result<()> {
         let new_len = amount + self.pages();
         if new_len > MAX_MEM_PAGES {
-            return Err(Error::MemoryAccessOutOfBounds);
+            return Err(ValidationError::MemoryAccessOutOfBounds);
         }
         if let Some(max) = self.max {
             if new_len > max {
-                return Err(Error::MemoryAccessOutOfBounds);
+                return Err(ValidationError::MemoryAccessOutOfBounds);
             }
         }
         self.data.resize((new_len * PAGE_SIZE) as usize, 0);
@@ -190,10 +199,10 @@ impl MemoryInstance {
     pub fn store(&mut self, address: usize, offset: usize, data: &[u8]) -> Result<()> {
         let abs_address = offset
             .checked_add(address)
-            .ok_or(Error::MemoryAccessOutOfBounds)?;
+            .ok_or(ValidationError::MemoryAccessOutOfBounds)?;
         let end = abs_address + data.len();
         if end > self.data.len() {
-            return Err(Error::MemoryAccessOutOfBounds);
+            return Err(ValidationError::MemoryAccessOutOfBounds);
         }
         self.data[abs_address..end].copy_from_slice(data);
         Ok(())
@@ -212,7 +221,7 @@ impl DataInstance {
     pub fn load_slice(&self, address: usize, bytes: usize) -> Result<Vec<u8>> {
         self.data
             .get(address..address + bytes)
-            .ok_or(Error::MemoryAccessOutOfBounds)
+            .ok_or(ValidationError::MemoryAccessOutOfBounds)
             .map(|s| s.to_vec())
     }
 }
@@ -279,15 +288,15 @@ impl TableInstance {
         let res = self
             .reference_values
             .get(index)
-            .ok_or(Error::TableAccessOutOfBounds)?;
+            .ok_or(ValidationError::TableAccessOutOfBounds)?;
         Ok(*res)
     }
     pub fn insert(&mut self, offset: usize, vals: &[Value]) -> Result<()> {
         let end = offset
             .checked_add(vals.len())
-            .ok_or(Error::TableAccessOutOfBounds)?;
+            .ok_or(ValidationError::TableAccessOutOfBounds)?;
         if end > self.reference_values.len() {
-            return Err(Error::TableAccessOutOfBounds);
+            return Err(ValidationError::TableAccessOutOfBounds);
         }
         for (i, val) in vals.iter().enumerate() {
             self.reference_values[offset + i] = *val;

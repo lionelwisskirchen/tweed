@@ -10,6 +10,7 @@ pub mod execution;
 pub mod validation;
 
 pub use core::values::Value;
+
 use execution::executor::Executor;
 pub use log::LevelFilter;
 
@@ -32,8 +33,9 @@ pub fn initialize(input: &[u8]) -> Result<Module> {
     trace!("Initialize module");
     let mut reader = WasmReader::new(input.to_vec());
     let module_environment = create_module_environment(&mut reader)?;
+
     Ok(Module {
-        reader,
+        reader: reader.to_validated(),
         typesec: module_environment.typesec,
         funcsec: module_environment.funcsec,
         codesec: module_environment.codesec,

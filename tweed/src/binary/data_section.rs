@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use crate::core::error::{Error, Result};
+use crate::core::error::Result;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::constant_expression_validator::validate_const_expr;
@@ -42,9 +42,7 @@ pub fn process_data_section(
             1 => {
                 // Mode passive
                 let data_size = reader.next_leb128_u32()?;
-                let data = reader
-                    .next_chunk(data_size as usize)
-                    .ok_or(Error::InvalidSectionBytecode)?;
+                let data = reader.next_chunk(data_size as usize)?;
                 let seg = DataSegment {
                     mode: SegmentMode::Passive,
                     init: data.to_vec(),
@@ -81,9 +79,7 @@ fn create_data_segment(
     validate_const_expr(reader, global_imports, &[ValType::I32], functions)?;
     let end = reader.current_index();
     let data_size = reader.next_leb128_u32()?;
-    let data = reader
-        .next_chunk(data_size as usize)
-        .ok_or(Error::InvalidSectionBytecode)?;
+    let data = reader.next_chunk(data_size as usize)?;
     Ok(DataSegment {
         mode: SegmentMode::Active {
             memory: memory_index,
