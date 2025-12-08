@@ -138,3 +138,40 @@ impl core::ops::Sub for Value {
         }
     }
 }
+
+/// A trait for checking the **payload** of a IEEE 754 NaN-values
+///
+/// With this trait it is possible to differentiate between a normal NaN (Payload = 0) and an arithmetic NaN (Payload != 0).
+///
+pub trait NaN {
+    /// Checks if the float value of the NaN has a payload
+    fn is_arithmetic_nan(&self) -> bool;
+    /// Returns the same NaN value but with the quiet bit set
+    ///
+    /// even though the quiet bit is ignored in wasm
+    /// to meet requirement from float_exprs.wast spectest here the quiet bit is set
+    fn with_quiet_nan_bit(&self) -> Self;
+}
+
+impl NaN for f32 {
+    fn is_arithmetic_nan(&self) -> bool {
+        self.is_nan() && self.to_bits() != f32::NAN.to_bits()
+    }
+    fn with_quiet_nan_bit(&self) -> Self {
+        let mut bytes = self.to_bits();
+        const QUIET_BIT_MASK: u32 = 0x00400000;
+        bytes |= QUIET_BIT_MASK;
+        f32::from_bits(bytes)
+    }
+}
+impl NaN for f64 {
+    fn is_arithmetic_nan(&self) -> bool {
+        self.is_nan() && self.to_bits() != f64::NAN.to_bits()
+    }
+    fn with_quiet_nan_bit(&self) -> Self {
+        let mut bytes = self.to_bits();
+        const QUIET_BIT_MASK: u64 = 0x0008000000000000;
+        bytes |= QUIET_BIT_MASK;
+        f64::from_bits(bytes)
+    }
+}

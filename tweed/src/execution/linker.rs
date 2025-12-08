@@ -35,6 +35,7 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 pub struct Linker {
     imported_globals: BTreeMap<ImportName, ImportSource<GlobalInstance>>,
     imported_funcs: BTreeMap<ImportName, ImportSource<HostFunc>>,
+    imported_tables: BTreeMap<ImportName, ImportSource<TableInstance>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -61,6 +62,12 @@ impl Linker {
                     self.imported_globals.insert(
                         key,
                         ImportSource::Extern(*instance.globaladdr.get(*idx as usize).unwrap()),
+                    );
+                }
+                ExportContext::TableExport(idx) => {
+                    self.imported_tables.insert(
+                        key,
+                        ImportSource::Extern(*instance.tableaddr.get(*idx as usize).unwrap()),
                     );
                 }
                 ExportContext::FunctionExport(idx) => {

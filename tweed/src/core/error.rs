@@ -9,11 +9,11 @@ pub type Result<T> = core::result::Result<T, WasmError>;
 ///
 /// # Variants
 ///
-/// - `ValidationError`  
+/// - `ValidationError`
 ///   Errors that occur during the *validation* phase, such as malformed
 ///   bytecode or violations of the WebAssembly specification.
 ///
-/// - `ExecutionError`  
+/// - `ExecutionError`
 ///   Errors that occur during the *execution* phase, after successful
 ///   validation, such as missing instances or runtime failures.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -64,6 +64,9 @@ pub enum ExecutionError {
     InvalidSidetableIndex,
     IndirectCallTypeMismatch,
     InvalidConversionToInt,
+    InvalidSignatureIndex,
+    FunctionNotFound,
+    MissingTableImport,
 }
 
 impl Display for ExecutionError {
@@ -98,6 +101,9 @@ impl Display for ExecutionError {
             Self::InvalidSidetableIndex => f.write_str("invalid sidetable entry index"),
             Self::IndirectCallTypeMismatch => f.write_str("indirect call type mismatch"),
             Self::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
+            Self::InvalidSignatureIndex => f.write_str("invalid signature index"),
+            Self::FunctionNotFound => f.write_str("function not found"),
+            Self::MissingTableImport => f.write_str("missing table import"),
         }
     }
 }
@@ -136,9 +142,12 @@ pub enum ValidationError {
     InvalidResultArity,
     GlobalIsImmutable,
     MalformedMemOpFlags,
+    SizeMinimumMustNotBeGreaterThanMaximum,
+    UnsupportedImportKind,
     InvalidStringRepresentation,
     UnequalChunkComparison,
     InvalidElementKind,
+    MissingValue
 }
 
 impl Display for ValidationError {
@@ -194,6 +203,11 @@ impl Display for ValidationError {
             Self::InvalidAlignment => f.write_str("alignment must not be larger than natural"),
 
             Self::InvalidElementKind => f.write_str("invalid element kind"),
+            Self::SizeMinimumMustNotBeGreaterThanMaximum => {
+                f.write_str("size minimum must not be greater than maximum")
+            }
+            Self::UnsupportedImportKind => f.write_str("unsupported import kind"),
+            Self::MissingValue => f.write_str("missing value")
         }
     }
 }

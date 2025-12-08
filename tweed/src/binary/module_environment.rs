@@ -105,8 +105,13 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             0x09 => {
                 info!("Process Element Section");
 
-                module.elementsec =
-                    process_element_section(reader, &module.importsec.globals, &module.funcsec)?;
+                module.elementsec = process_element_section(
+                    reader,
+                    &module.importsec.globals,
+                    &module.funcsec,
+                    &module.tablesec,
+                    &module.importsec.tables,
+                )?;
             }
             0x0A => {
                 info!("Process Code Section");

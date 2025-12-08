@@ -34,16 +34,6 @@ impl fmt::Display for WastReport {
             self.success.len() + self.failure.len()
         )?;
 
-        if !self.failure.is_empty() {
-            writeln!(f, "{}Failures:{}\n", red, reset)?;
-            for result in &self.failure {
-                match result {
-                    WastResult::AssertResult { name, line } => {
-                        writeln!(f, "- {}{}:{} {}", red, name, reset, line)?;
-                    }
-                };
-            }
-        }
         if !self.success.is_empty() {
             writeln!(f, "{}Successful Tests:{}\n", green, reset)?;
             for result in &self.success {
@@ -54,6 +44,18 @@ impl fmt::Display for WastReport {
                 };
             }
         }
+
+        if !self.failure.is_empty() {
+            writeln!(f, "{}Failures:{}\n", red, reset)?;
+            for result in &self.failure {
+                match result {
+                    WastResult::AssertResult { name, line } => {
+                        writeln!(f, "- {}{}:{} {}", red, name, reset, line)?;
+                    }
+                };
+            }
+        }
+
         Ok(())
     }
 }

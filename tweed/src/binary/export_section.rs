@@ -8,6 +8,7 @@ pub type Result<T> = core::result::Result<T, ValidationError>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExportContext {
     FunctionExport(u32),
+    TableExport(u32),
     MemoryExport(u32),
     GlobalExport(u32),
 }
@@ -32,6 +33,13 @@ pub fn process_export_section(reader: &mut WasmReader) -> Result<Vec<Export>> {
         match export_kind {
             0x00 => {
                 let context = ExportContext::FunctionExport(index);
+                aggregated_exports.push(Export {
+                    name: export_name,
+                    context,
+                });
+            }
+            0x01 => {
+                let context = ExportContext::TableExport(index);
                 aggregated_exports.push(Export {
                     name: export_name,
                     context,

@@ -7,6 +7,7 @@ use crate::core::error::ExecutionError;
 use crate::core::opcode::*;
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::value_types::ValType;
+use crate::core::values::NaN;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -1295,23 +1296,22 @@ impl<'store> Executor<'store> {
                 F64_REINTERPRET_I64 => {
                     let value = self.stack.pop_i64()?;
                     let bits = value as u64;
-                    let res = Value::F64(f64::from_bits(bits));
-                    trace!("Instruction: f64.reinterpret_i64 [{value:?}] -> [{res:?}]");
+                    let f_value = f64::from_bits(bits);
+                    let res = Value::F64(f_value);
+                    info!("Instruction: f64.reinterpret_i64 [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_REINTERPRET_I32 => {
                     let value = self.stack.pop_i32()?;
                     let bits = value as u32;
-                    let res = Value::F32(f32::from_bits(bits));
+                    let f_value = f32::from_bits(bits);
+                    let res = Value::F32(f_value);
                     trace!("Instruction: f32.reinterpret_i32 [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_DEMOTE_F64 => {
                     let value = self.stack.pop_f64()?;
-                    let mut result = value as f32;
-                    if value.is_nan() {
-                        result = f32::from_bits(0x7fc00000);
-                    }
+                    let result = value as f32;
                     trace!("Instruction: f32.demote_f64 [{value:?}] -> [{result:?}]");
                     self.stack.push(Value::F32(result))?;
                 }
@@ -1394,7 +1394,9 @@ impl<'store> Executor<'store> {
                 }
                 F64_NEG => {
                     let value = self.stack.pop_f64()?;
-                    let res = Value::F64(-value);
+                    let bits = value.to_bits();
+                    let neg = f64::from_bits(bits ^ 0x8000000000000000);
+                    let res = Value::F64(neg);
                     trace!("Instruction: f64_neg [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
@@ -1424,83 +1426,199 @@ impl<'store> Executor<'store> {
                 }
                 F64_SQRT => {
                     let value = self.stack.pop_f64()?;
-                    let libm_res = libm::sqrt(value);
-
-                    let res = if libm_res.is_nan() {
-                        Value::F64(f64::from_bits(0x7ff8000000000000))
-                    } else {
-                        Value::F64(libm_res)
-                    };
+                    let res = Value::F64(libm::sqrt(value));
                     trace!("Instruction: f64.sqrt [{value:?}] -> [{res:?}]");
-
                     self.stack.push(res)?;
                 }
                 F64_ADD => {
                     let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
                     trace!("F64_ADD({left}, {right})");
-                    let res = Value::F64(left + right);
+
+                    // if an arithmetic NaN is used, no add is done
+                    let res = match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                        (true, _) => Value::F64(left.with_quiet_nan_bit()),
+                        (_, true) => Value::F64(right.with_quiet_nan_bit()),
+                        _ => Value::F64(left + right),
+                    };
+
                     self.stack.push(res)?;
                 }
                 F64_SUB => {
                     let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
                     trace!("F64_SUB({left}, {right})");
-                    let res = Value::F64(left - right);
+
+                    // if an arithmetic NaN is used, no sub is done
+                    let res = match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                        (true, _) => Value::F64(left.with_quiet_nan_bit()),
+                        (_, true) => Value::F64(right.with_quiet_nan_bit()),
+                        _ => Value::F64(left - right),
+                    };
+
                     self.stack.push(res)?;
                 }
                 F64_MUL => {
                     let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
                     trace!("F64_MUL({left}, {right})");
-                    let res = Value::F64(left * right);
+
+                    // if an arithmetic NaN is used, no mul is done
+                    let res = match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                        (true, _) => Value::F64(left.with_quiet_nan_bit()),
+                        (_, true) => Value::F64(right.with_quiet_nan_bit()),
+                        _ => Value::F64(left * right),
+                    };
+
                     self.stack.push(res)?;
                 }
                 F64_DIV => {
                     let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
                     trace!("F64_DIV({left}, {right})");
-                    let res = Value::F64(left / right);
+
+                    // if an arithmetic NaN is used, no div is done
+                    let res = match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                        (true, _) => Value::F64(left.with_quiet_nan_bit()),
+                        (_, true) => Value::F64(right.with_quiet_nan_bit()),
+                        _ => Value::F64(left / right),
+                    };
+
                     self.stack.push(res)?;
                 }
                 F64_MIN => {
                     let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
                     trace!("F64_MIN({left}, {right})");
-                    let res = Value::F64(left.min(right));
-                    self.stack.push(res)?;
+
+                    // Handling the NaN Edge Cases so the right errors are returned
+                    // As soon as an arithmetic nan is used, its value is returned so an Value::ArithmeticNan is detected
+                    let res = if left.is_nan() || right.is_nan() {
+                        match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                            (true, _) => left,
+                            (_, true) => right,
+                            _ => f64::NAN,
+                        }
+                    } else if left == right {
+                        if left.is_sign_negative() {
+                            left
+                        } else {
+                            right
+                        }
+                    } else {
+                        left.min(right)
+                    };
+
+                    self.stack.push(Value::F64(res))?;
                 }
                 F64_MAX => {
                     let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
                     trace!("F64_MAX({left}, {right})");
-                    let res = Value::F64(left.max(right));
-                    self.stack.push(res)?;
+
+                    // Handling the NaN Edge Cases so the right errors are returned
+                    // As soon as an arithmetic nan is used, its value is returned so an Value::ArithmeticNan is detected
+                    let res = if left.is_nan() || right.is_nan() {
+                        match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                            (true, _) => left,
+                            (_, true) => right,
+                            _ => f64::NAN,
+                        }
+                    } else if left == right {
+                        if left.is_sign_negative() {
+                            right
+                        } else {
+                            left
+                        }
+                    } else {
+                        left.max(right)
+                    };
+
+                    // let res = Value::F64(left.max(right));
+                    self.stack.push(Value::F64(res))?;
                 }
 
                 F32_SUB => {
                     let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
                     trace!("F32_SUB({left}, {right})");
-                    let res = Value::F32(left - right);
+
+                    // if an arithmetic NaN is used, no sub is done
+                    let res = match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                        (true, _) => Value::F32(left.with_quiet_nan_bit()),
+                        (_, true) => Value::F32(right.with_quiet_nan_bit()),
+                        _ => Value::F32(left - right),
+                    };
+
+                    // let res = Value::F32(left - right);
                     self.stack.push(res)?;
                 }
                 F32_MUL => {
                     let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
                     trace!("F32_MUL({left}, {right})");
-                    let res = Value::F32(left * right);
+
+                    // if an arithmetic NaN is used, no mul is done
+                    let res = match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                        (true, _) => Value::F32(left.with_quiet_nan_bit()),
+                        (_, true) => Value::F32(right.with_quiet_nan_bit()),
+                        _ => Value::F32(left * right),
+                    };
+
                     self.stack.push(res)?;
                 }
                 F32_DIV => {
                     let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
                     trace!("F32_DIV({left}, {right})");
-                    let res = Value::F32(left / right);
+
+                    // if an arithmetic NaN is used, no div is done
+                    let res = match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                        (true, _) => Value::F32(left.with_quiet_nan_bit()),
+                        (_, true) => Value::F32(right.with_quiet_nan_bit()),
+                        _ => Value::F32(left / right),
+                    };
+
                     self.stack.push(res)?;
                 }
                 F32_MIN => {
                     let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
                     trace!("F32_MIN({left}, {right})");
-                    let res = Value::F32(left.min(right));
-                    self.stack.push(res)?;
+
+                    // Handling the NaN Edge Cases so the right errors are returned
+                    // As soon as an arithmetic nan is used, its value is returned so an Value::ArithmeticNan is detected
+                    let res = if left.is_nan() || right.is_nan() {
+                        match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                            (true, _) => left,
+                            (_, true) => right,
+                            _ => f32::NAN,
+                        }
+                    } else if left == right {
+                        if left.is_sign_negative() {
+                            left
+                        } else {
+                            right
+                        }
+                    } else {
+                        left.min(right)
+                    };
+
+                    self.stack.push(Value::F32(res))?;
                 }
                 F32_MAX => {
                     let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
                     trace!("F32_MAX({left}, {right})");
-                    let res = Value::F32(left.max(right));
-                    self.stack.push(res)?;
+
+                    // Handling the NaN Edge Cases so the right errors are returned
+                    // As soon as an arithmetic nan is used, its value is returned so an Value::ArithmeticNan is detected
+                    let res = if left.is_nan() || right.is_nan() {
+                        match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                            (true, _) => left,
+                            (_, true) => right,
+                            _ => f32::NAN,
+                        }
+                    } else if left == right {
+                        if left.is_sign_negative() {
+                            right
+                        } else {
+                            left
+                        }
+                    } else {
+                        left.max(right)
+                    };
+
+                    self.stack.push(Value::F32(res))?;
                 }
 
                 F32_ABS => {
@@ -1511,7 +1629,9 @@ impl<'store> Executor<'store> {
                 }
                 F32_NEG => {
                     let value = self.stack.pop_f32()?;
-                    let res = Value::F32(-value);
+                    let bits = value.to_bits();
+                    let neg = f32::from_bits(bits ^ 0x80000000);
+                    let res = Value::F32(neg);
                     trace!("Instruction: f32_neg [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
@@ -1548,7 +1668,14 @@ impl<'store> Executor<'store> {
                 F32_ADD => {
                     let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
                     trace!("F32_ADD({left}, {right})");
-                    let res = Value::F32(left + right);
+
+                    // if an arithmetic NaN is used, no add is done
+                    let res = match (left.is_arithmetic_nan(), right.is_arithmetic_nan()) {
+                        (true, _) => Value::F32(left.with_quiet_nan_bit()),
+                        (_, true) => Value::F32(right.with_quiet_nan_bit()),
+                        _ => Value::F32(left + right),
+                    };
+
                     self.stack.push(res)?;
                 }
 

@@ -1,4 +1,7 @@
+use crate::binary::memory_section::Limits;
+use crate::binary::table_section::Table;
 use crate::core::error::ValidationError;
+use crate::core::value_types::RefType;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
@@ -13,19 +16,43 @@ pub struct GlobalImport {
     pub name: String,
     pub context: GlobalType,
 }
+
 #[derive(Debug, Clone)]
 pub struct FunctionImport {
     pub module: String,
     pub name: String,
     pub context: FuncDecl,
 }
+
+#[derive(Debug, Clone)]
+pub struct TableImport {
+    pub module: String,
+    pub name: String,
+    pub context: Table,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Imports {
     pub globals: Vec<GlobalImport>,
+    pub tables: Vec<TableImport>,
     pub functions: Vec<FunctionImport>,
 }
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
+/// Processes the **import section** according to [WebAssembly specification: Import Section](https://webassembly.github.io/spec/core/binary/modules.html#import-section).
+///
+/// This function reads the imports and differs between Functions, Tables and Globals. The Imports are stored in a [Imports] Struct which is returned at the end.
+///
+/// # Arguments
+/// * `reader`: a mutable reference to the WasmReader to read more bytes.
+///
+/// # Return
+/// Ok(Imports) if everything is fine.
+///
+/// # Error
+/// * `Error::SizeMinimumMustNotBeGreaterThanMaximum`: The limits of the imported table are not correct. (Min > Max)
+/// * `Error::MalformedMutability` : The imported global is either declared as mutable or its mutability cannot be determined
+/// * `Error::UnsupportedImportKind` : The kind of the import cannot be parsed
 pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
     reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
@@ -39,6 +66,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
         let import_name = reader.next_chunk_as_string(length_of_import_name as usize)?;
         let import_kind = reader.next_byte()?;
         match import_kind {
+            // Function Import
             0x00 => {
                 let index = reader.next_leb128_u32()?;
                 imports.functions.push(FunctionImport {
@@ -47,6 +75,39 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                     context: FuncDecl { sig_index: index },
                 });
             }
+            // Table Import
+            0x01 => {
+                let reftype = RefType::from_byte(reader.next_leb128_u32()? as u8)
+                    .ok_or(ValidationError::MissingValue)?;
+                let mut limits = Limits::default();
+                let flags = reader.next_leb128_u32()?;
+                limits.min = reader.next_leb128_u32()?;
+                limits.max = if flags != 0 {
+                    let max_val = reader.next_leb128_u32()?;
+                    if max_val < limits.min {
+                        return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
+                    }
+                    Some(max_val)
+                } else {
+                    None
+                };
+
+                let table = Table {
+                    ref_type: reftype,
+                    limit: limits,
+                };
+                let table_import = TableImport {
+                    module: module_name,
+                    name: import_name,
+                    context: table,
+                };
+                imports.tables.push(table_import);
+            }
+            // Memory Import
+            0x04 => {
+                todo!("`Memory import not yet implemented")
+            }
+            // Global Import
             0x03 => {
                 let value_type = ValType::lookup(&reader.next_byte()?)?;
                 let is_mutable = match reader

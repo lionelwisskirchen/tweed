@@ -1,8 +1,9 @@
 use log::info;
 use std::collections::HashMap;
-use std::{self, fs};
+use std::{self, f32, fs};
 use tweed::binary::type_section::FuncType;
 use tweed::core::value_types::ValType;
+use tweed::core::values::NaN;
 use tweed::execution::linker::Linker;
 use tweed::execution::store::Store;
 use tweed::{initialize, invoke, Value};
@@ -434,20 +435,23 @@ fn compare_results(actual: Vec<Value>, expected: Vec<Value>) -> bool {
                 return xb == yb;
             }
             (Value::F64(x), Value::ArithmeticNan) => {
-                let xb = x.to_bits();
-                let quiet_bit_x = (xb >> 51) & 1;
-                return x.is_nan() && quiet_bit_x == 1;
+                return x.is_arithmetic_nan();
             }
             (Value::F64(x), Value::CanonicalNan) => {
                 return x.is_nan(); // TODO correct?
             }
             (Value::F32(x), Value::ArithmeticNan) => {
-                let xb = x.to_bits();
-                let quiet_bit_x = (xb >> 22) & 1;
-                return x.is_nan() && quiet_bit_x == 1;
+                return x.is_arithmetic_nan();
             }
             (Value::F32(x), Value::CanonicalNan) => {
                 return x.is_nan(); // TODO correct?
+            }
+            (Value::I32(x), Value::I32(y)) => {
+                return x.eq(y);
+            }
+            (Value::I64(x), Value::I64(y)) => {
+                println!("Actual: {:x} vs Exepected {:x}", x, y);
+                return x.eq(y);
             }
             _ => assert_eq!(a, e, "Mismatch at index {}", i),
         }

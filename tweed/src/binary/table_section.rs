@@ -21,10 +21,16 @@ pub fn process_table_section(reader: &mut WasmReader) -> Result<Vec<Table>> {
         let ref_type = reader.next_byte()?;
         let flags = reader.next_leb128_u32()?;
         let min = reader.next_leb128_u32()?;
-        let mut max = None;
-        if flags != 0 {
-            max = Some(reader.next_leb128_u32()?);
-        }
+        let max = if flags != 0 {
+            let max_val = reader.next_leb128_u32()?;
+            if max_val < min {
+                return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
+            }
+            Some(max_val)
+        } else {
+            None
+        };
+
         match ref_type {
             0x70 => tables.push(Table {
                 ref_type: RefType::FuncRef,

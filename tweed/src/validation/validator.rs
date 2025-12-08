@@ -604,13 +604,13 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         .module_environment
                         .funcsec
                         .get(func_index as usize)
-                        .ok_or(ValidationError::InvalidFunctionIndex)?
+                        .ok_or(ValidationError::UnknownFunction)?
                         .sig_index;
                     let sig = self
                         .module_environment
                         .typesec
                         .get(type_idx as usize)
-                        .ok_or(ValidationError::InvalidFunctionIndex)?;
+                        .ok_or(ValidationError::UnknownFunction)?;
                     self.abstract_value_stack.pop_expected_vec(&sig.parameter)?;
                     self.abstract_value_stack.push_vec(&sig.result);
                 }
