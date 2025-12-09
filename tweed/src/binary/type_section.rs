@@ -14,7 +14,10 @@ pub fn process_type_section(reader: &mut WasmReader) -> Result<Vec<FuncType>> {
     let number_of_types = reader.next_leb128_u32()?;
 
     for _ in 0..number_of_types {
-        reader.next_leb128_u32()?; // Can be ignored
+        match reader.next_byte().ok_or(Error::ReadingOutOfBounds)? {
+            0x60 => {} // https://www.w3.org/TR/2025/CRD-wasm-core-2-20250616/#types%E2%91%A6
+            _ => return Err(Error::InvalidIntegerRepresentation),
+        };
         let number_of_params = reader.next_leb128_u32()?;
         let params = reader
             .next_chunk(number_of_params as usize)

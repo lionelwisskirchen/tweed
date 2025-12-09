@@ -40,4 +40,5 @@ fn spec_tests() {
     run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/if.wast"));
     run_spec_test(Path::new("./tests/spec/testsuite/linking.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/binary-leb128.wast"));
 }

@@ -155,7 +155,7 @@ impl Linker {
                     .clone(),
             );
         }
-        info!("Module: {:?}", module);
+        trace!("Module: {:?}", module);
         let globals = self.instantiate_globals(module, &imported_globals, &functions)?;
         globaladdr.extend(store.add_globals(globals));
 
@@ -282,7 +282,7 @@ impl Linker {
                 }
             };
         }
-        info!("Global imports {:?}", globaladdr);
+        trace!("Global imports {:?}", globaladdr);
 
         Ok(globaladdr)
     }

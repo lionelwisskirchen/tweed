@@ -29,7 +29,7 @@ pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>>
     invoke(instance_name, name, params, &mut store)
 }
 pub fn initialize(input: &[u8]) -> Result<Module> {
-    info!("Initialize module");
+    trace!("Initialize module");
     let mut reader = WasmReader::new(input.to_vec());
     let module_environment = create_module_environment(&mut reader)?;
     Ok(Module {
@@ -54,7 +54,7 @@ pub fn instantiate(
     store: &mut Store,
     instance_name: Option<&str>,
 ) -> Result<String> {
-    info!("Instantiate module");
+    trace!("Instantiate module");
     let mut linker = Linker::default();
     linker.instantiate(module, store, instance_name)
 }
@@ -65,7 +65,7 @@ pub fn invoke(
     params: Vec<Value>,
     store: &mut Store,
 ) -> Result<Vec<Value>> {
-    info!("Invoke `{name}` with {params:?}");
+    trace!("Invoke `{name}` with {params:?}");
     let mut exec = Executor::new(store);
     exec.invoke(&instance_name, &name, &params)
 }

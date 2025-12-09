@@ -2,6 +2,9 @@ use crate::core::error::{Error, Result};
 use alloc::string::String;
 use alloc::vec::Vec;
 
+const CONT: u8 = 0x80;
+const MASK: u8 = 0x7F;
+
 #[derive(Debug, Default, Clone)]
 pub struct WasmReader {
     bytecode: Vec<u8>,
@@ -46,70 +49,85 @@ impl WasmReader {
         self.byte_pointer.saturating_sub(1)
     }
     pub fn next_leb128_u32(&mut self) -> Result<u32> {
-        if self.rest().is_empty() {
-            return Err(Error::ReadingOutOfBounds);
-        }
         let mut result: u32 = 0;
-        let mut shift = 0;
-        while let Some(byte) = self.next_byte() {
-            let low = (byte & 0x7f) as u32; // 0111 1111 Mask -> MSB signals next byte is also relevant
-
-            result |= low << shift;
-            if (byte & 0x80) == 0 {
-                // No next byte, Algorithm is finished
-                break;
-            }
-            shift += 7;
-            if shift > 32 {
-                return Err(Error::InvalidIntegerRepresentation);
+        for i in 0..=4 {
+            let byte = self.next_byte().ok_or(Error::ReadingOutOfBounds)?;
+            let low = (byte & MASK) as u32;
+            result |= low << (7 * i);
+            if (byte & CONT) == 0 {
+                if i == 4 {
+                    let padding = byte & 0b01110000;
+                    if padding != 0 {
+                        return Err(Error::IntegerTooLarge);
+                    }
+                }
+                return Ok(result);
             }
         }
-        Ok(result)
+        Err(Error::InvalidIntegerRepresentation)
     }
     pub fn next_leb128_i64(&mut self) -> Result<i64> {
-        let mut result = 0;
-        let mut shift = 0;
-        let mut byte;
+        let mut result: i64 = 0;
+        for i in 0..=9 {
+            let byte = self.next_byte().ok_or(Error::ReadingOutOfBounds)?;
+            let low = (byte & MASK) as i64;
+            result |= low << (7 * i);
+            if (byte & CONT) == 0 {
+                let mut sign = byte & 0b01000000;
+                if i == 9 {
+                    let padding = byte & 0b01111110;
+                    sign = byte & 0b00000001; // Last Byte has different sign position
+                    let padding_valid = if sign == 0 {
+                        padding == 0
+                    } else {
+                        padding == 0b01111110
+                    };
+                    if !padding_valid {
+                        return Err(Error::IntegerTooLarge);
+                    }
+                    return Ok(result); // No sign extend needed, as it's shifted by 63!
+                }
+                // sign-extend if needed
+                if (sign) != 0 {
+                    result |= !0 << ((i + 1) * 7);
+                }
 
-        loop {
-            byte = self.next_byte().ok_or(Error::ReadingOutOfBounds)?;
-            result |= ((byte & 0x7F) as i64) << shift;
-            shift += 7;
-            if byte & 0x80 == 0 {
-                break;
-            }
-
-            if shift >= 64 {
-                return Err(Error::InvalidIntegerRepresentation);
+                return Ok(result);
             }
         }
-
-        if shift < 64 && (byte & 0x40 != 0) {
-            result |= !0 << shift;
-        }
-
-        Ok(result)
+        Err(Error::IntegerTooLarge)
     }
     pub fn next_leb128_i32(&mut self) -> Result<i32> {
-        let mut result = 0;
-        let mut shift = 0;
-        let mut byte;
+        let mut result: i32 = 0;
+        for i in 0..=4 {
+            let byte = self.next_byte().ok_or(Error::ReadingOutOfBounds)?;
+            let low = (byte & MASK) as i32;
+            result |= low << (7 * i);
+            if (byte & CONT) == 0 {
+                let mut sign = byte & 0b01000000;
+                if i == 4 {
+                    let padding = byte & 0b01110000;
+                    sign = byte & 0b00001000; // Last Byte has different sign position
+                    let padding_valid = if sign == 0 {
+                        padding == 0
+                    } else {
+                        padding == 0b01110000
+                    };
 
-        loop {
-            byte = self.next_byte().ok_or(Error::ReadingOutOfBounds)?;
-            result |= ((byte & 0x7F) as i32) << shift;
-            shift += 7;
-            if byte & 0x80 == 0 {
-                break;
-            }
-            if shift >= 32 {
-                return Err(Error::InvalidIntegerRepresentation);
+                    if !padding_valid {
+                        return Err(Error::IntegerTooLarge);
+                    }
+                    return Ok(result); // No sign extend needed, as it's shifted by 28!
+                }
+                // sign-extend if needed
+                if (sign) != 0 {
+                    result |= !0 << ((i + 1) * 7);
+                }
+
+                return Ok(result);
             }
         }
-        if shift < 32 && (byte & 0x40 != 0) {
-            result |= !0 << shift;
-        }
-        Ok(result)
+        Err(Error::IntegerTooLarge)
     }
     pub fn next_f32(&mut self) -> Result<f32> {
         let bytes = self.next_chunk(4).ok_or(Error::ReadingOutOfBounds)?;

@@ -1164,7 +1164,7 @@ impl<'store> Executor<'store> {
                     if value.is_infinite() {
                         return Err(Error::IntegerOverflow);
                     }
-                    info!(
+                    trace!(
                         "Instruction: i32.trunc_f32_u [{value:?}] {}",
                         u32::MAX as f32
                     );
@@ -1173,7 +1173,7 @@ impl<'store> Executor<'store> {
                         return Err(Error::IntegerOverflow);
                     }
                     let res = Value::I32(value as u32 as i32);
-                    info!("Instruction: i32.trunc_f32_u [{value:?}] -> [{res:?}]");
+                    trace!("Instruction: i32.trunc_f32_u [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 I32_TRUNC_F64_S => {
@@ -1373,7 +1373,7 @@ impl<'store> Executor<'store> {
                     let res = value as f64;
                     trace!("Instruction: f64.promote_f32 [{value:?}] -> [{res:?}]");
                     let quiet_bit = (res.to_bits() >> 51) & 0x1;
-                    info!("is arith? {}", res.is_nan() && quiet_bit == 1);
+                    trace!("is arith? {}", res.is_nan() && quiet_bit == 1);
                     self.stack.push(Value::F64(res))?;
                 }
 

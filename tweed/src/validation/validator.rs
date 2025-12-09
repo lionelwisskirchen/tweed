@@ -119,7 +119,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
 
         loop {
             let byte = *self.reader.next_byte().ok_or(Error::InvalidControlFlow)?;
-            info!("Validating Byte: {byte:#04X}");
+            trace!("Validating Byte: {byte:#04X}");
             trace!("Stack: {:?}", self.abstract_value_stack);
             match byte {
                 I32_CONST => {
