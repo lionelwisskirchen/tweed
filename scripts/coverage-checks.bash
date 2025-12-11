@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 
-
 set -eu
 
-dir=$(pwd)
-
 pushd "$(dirname "$0")/../tweed" > /dev/null
-cargo +nightly llvm-cov --branch --open 
+cargo llvm-cov test
+cargo llvm-cov report --cobertura --output-path target/llvm-cov-target/cobertura.xml
 popd > /dev/null
 

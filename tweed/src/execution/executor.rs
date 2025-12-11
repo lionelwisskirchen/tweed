@@ -867,7 +867,7 @@ impl<'store> Executor<'store> {
                     };
                     let function_addr = instance
                         .funcaddr
-                        .get(index as usize)
+                        .get(index)
                         .ok_or(ExecutionError::InvalidFunctionIndex)?;
 
                     let function = self

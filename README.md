@@ -2,6 +2,8 @@
 # Tweed
 **In-Place WebAssembly (WASM) Interpreter**
 
+[![pipeline status](https://gitlab.lrz.de/aemy/tweed/inplace-wasm-interpreter-prototype/badges/develop/pipeline.svg)](https://gitlab.lrz.de/aemy/tweed/inplace-wasm-interpreter-prototype/-/commits/develop) [![coverage report](https://gitlab.lrz.de/aemy/tweed/inplace-wasm-interpreter-prototype/badges/develop/coverage.svg)](https://gitlab.lrz.de/aemy/tweed/inplace-wasm-interpreter-prototype/-/commits/develop) 
+
 A modular Rust project offering an in-place WASM interpreter and a minimal CLI. 
 
 ---

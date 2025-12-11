@@ -147,7 +147,7 @@ pub enum ValidationError {
     InvalidStringRepresentation,
     UnequalChunkComparison,
     InvalidElementKind,
-    MissingValue
+    MissingValue,
 }
 
 impl Display for ValidationError {
@@ -207,7 +207,7 @@ impl Display for ValidationError {
                 f.write_str("size minimum must not be greater than maximum")
             }
             Self::UnsupportedImportKind => f.write_str("unsupported import kind"),
-            Self::MissingValue => f.write_str("missing value")
+            Self::MissingValue => f.write_str("missing value"),
         }
     }
 }

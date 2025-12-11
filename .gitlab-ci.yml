@@ -1,0 +1,38 @@
+stages:
+  - test
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always # The pipeline cares about MR updates
+    - if: '$CI_COMMIT_TAG =~ /^v\d+.\d+.\d+$/'
+      when: always # The pipeline should run for tagged releases
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: never # The pipeline does not care about non-MR-related pushes
+    - when: always # The pipeline cares about everything else
+
+default:
+  tags:
+    - pi-runner
+    
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+style-test-job: 
+  stage: test 
+  script: nix develop --command style-checks
+
+format-test-job: 
+  stage: test 
+  script: nix develop --command format-checks
+
+unit-test-job:
+  stage: test 
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: tweed/target/llvm-cov-target/cobertura.xml
+  # this uses region for coverage summary
+  coverage: '/TOTAL\s+(\d+\s+)+(\d+\.\d+\%)/'
+  script: nix develop --command coverage-checks
