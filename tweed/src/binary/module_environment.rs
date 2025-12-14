@@ -3,10 +3,7 @@ use crate::{
         data_count_section::process_data_count_section, element_section::process_element_section,
         start_section::process_start_section,
     },
-    core::{
-        error::{Result, ValidationError},
-        wasm_reader::WasmReader,
-    },
+    core::{error::ValidationError, wasm_reader::WasmReader},
     validation::side_table::SideTable,
 };
 use alloc::vec::Vec;
@@ -23,6 +20,7 @@ use super::{
     table_section::{process_table_section, Table},
     type_section::{process_type_section, FuncType},
 };
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug, Default)]
 pub struct ModuleEnvironment {
@@ -58,9 +56,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 let size = reader.next_leb128_u32()?;
                 let end = reader.current_index() + size as usize + 1;
                 let length_name = reader.next_leb128_u32()?;
-                reader
-                    .next_chunk_as_string(length_name as usize)
-                    .map_err(|_| ValidationError::InvalidSectionBytecode)?;
+                reader.next_chunk_as_string(length_name as usize)?;
                 reader.seek(end);
             }
             0x01 => {

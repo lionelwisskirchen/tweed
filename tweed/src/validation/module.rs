@@ -5,7 +5,7 @@ use crate::{
         import_section::Imports, memory_section::Limits, table_section::Table,
         type_section::FuncType,
     },
-    core::wasm_reader::ValidatedWasmReader,
+    core::validated_wasm_reader::ValidatedWasmReader,
 };
 
 use super::side_table::SideTable;

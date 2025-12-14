@@ -1,67 +1,140 @@
 use core::fmt::{Display, Formatter};
 
-pub type Result<T> = core::result::Result<T, ValidationError>;
+pub type Result<T> = core::result::Result<T, WasmError>;
+
+/// A unified error type for the WebAssembly Runtime.
+///
+/// `WasmError` represents all errors that can occur while interpreting
+/// WebAssembly modules.
+///
+/// # Variants
+///
+/// - `ValidationError`  
+///   Errors that occur during the *validation* phase, such as malformed
+///   bytecode or violations of the WebAssembly specification.
+///
+/// - `ExecutionError`  
+///   Errors that occur during the *execution* phase, after successful
+///   validation, such as missing instances or runtime failures.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum WasmError {
+    Validation(ValidationError),
+    Execution(ExecutionError),
+}
+impl From<ValidationError> for WasmError {
+    fn from(e: ValidationError) -> Self {
+        WasmError::Validation(e)
+    }
+}
+
+impl From<ExecutionError> for WasmError {
+    fn from(e: ExecutionError) -> Self {
+        WasmError::Execution(e)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ExecutionError {
+    InstanceNameTaken,
+    UnknownReader,
+    UnknownInstance,
+    UnknownImport,
+    DivisionByZero,
+    IntegerOverflow,
+    MissingFunctionImport,
+    IncompatibleImportType,
+    MissingGlobalImport,
+    TypeMismatch,
+    InvalidFunctionIndex,
+    InvalidMemoryIndex,
+    UndefinedContantExpression,
+    TrapUnreachable,
+    StackExhaustion,
+    CallStackExhaustion,
+    ExpectedAValueOnTheStack,
+    UnexpectedValueType,
+    UnknownExportCall,
+    MemoryAccessOutOfBounds,
+    TableAccessOutOfBounds,
+    InvalidLocalIndex,
+    UnknownGlobal,
+    UnknownTable,
+    UndefinedElement,
+    UninitializedReference,
+    InvalidSidetableIndex,
+    IndirectCallTypeMismatch,
+    InvalidConversionToInt,
+}
+
+impl Display for ExecutionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InstanceNameTaken => f.write_str("instance name taken"),
+            Self::UnknownReader => f.write_str("no reader found for instance"),
+            Self::UnknownInstance => f.write_str("unknown instance"),
+            Self::UnknownImport => f.write_str("unknown import"),
+            Self::MissingFunctionImport => f.write_str("missing function import"),
+            Self::IncompatibleImportType => f.write_str("incompatible import type"),
+            Self::MissingGlobalImport => f.write_str("missing global import"),
+            Self::TypeMismatch => f.write_str("type mismatch"),
+            Self::InvalidFunctionIndex => f.write_str("invalid function index"),
+            Self::InvalidMemoryIndex => f.write_str("invalid memory index"),
+            Self::UndefinedContantExpression => f.write_str("constant expression required"),
+            Self::TrapUnreachable => f.write_str("unreachable"),
+            Self::StackExhaustion => f.write_str("operand stack exhausted"),
+            Self::CallStackExhaustion => f.write_str("call stack exhausted"),
+            Self::ExpectedAValueOnTheStack => f.write_str("No value on stack"),
+            Self::UnexpectedValueType => f.write_str("unexpected value type"),
+            Self::UnknownExportCall => f.write_str("unexpected export call"),
+            Self::MemoryAccessOutOfBounds => f.write_str("out of bounds memory access"),
+            Self::TableAccessOutOfBounds => f.write_str("out of bounds table access"),
+            Self::InvalidLocalIndex => f.write_str("unknown local"),
+            Self::UnknownGlobal => f.write_str("unknown global"),
+            Self::UnknownTable => f.write_str("unknown table"),
+            Self::DivisionByZero => f.write_str("integer divide by zero"),
+            Self::IntegerOverflow => f.write_str("integer overflow"),
+            Self::UndefinedElement => f.write_str("undefined element"),
+            Self::UninitializedReference => f.write_str("uninitialized element"),
+            Self::InvalidSidetableIndex => f.write_str("invalid sidetable entry index"),
+            Self::IndirectCallTypeMismatch => f.write_str("indirect call type mismatch"),
+            Self::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValidationError {
     ReadingOutOfBounds,
     IntegerTooLarge,
     InvalidIntegerRepresentation,
-    TrapUnreachable,
     InvalidStartFunctionSignature,
     NoDataSegmentFound(Option<usize>),
     UnknownMemory(usize),
-    StackExhaustion,
-    CallStackExhaustion,
     UnknownFunction,
     UnknownType,
-    UndefinedElement,
-    InvalidConversionToInt,
-    UninitializedReference,
-    IndirectCallTypeMismatch,
     UnknownTable,
     MultipleMemoriesNotImplemented,
     MalformedMutability,
-    FunctionNotFound,
     InvalidMagic,
     InvalidVersion,
-    InvalidSectionBytecode,
     TypeMismatch,
-    IncompatibleImportType,
     InvalidSignatureIndex,
     InvalidControlFlow,
-    MissingValue,
     InvalidLocalIndex,
     InvalidFunctionIndex,
-    InvalidMemoryIndex,
-    UnknownInstance,
     UndefinedOpCode(u8),
     UndefinedContantExpression,
     UnknownLabel,
     UnknownGlobal,
-    MissingGlobalImport,
-    MissingFunctionImport,
     UnknownSectionCode(u8),
     UnsupportedExportKind,
     UnsupportedValueType,
-    ExpectedAValueOnTheStack,
-    UnexpectedValueType,
-    UnknownExportCall,
-    InvalidSidetableIndex,
-    UndefinedInstruction(u8),
     IllegalSelectType,
     UndefinedMemory,
     UndefinedTable,
-    TableAccessOutOfBounds,
     InvalidAlignment,
-    MemoryAccessOutOfBounds,
-    DivisionByZero,
-    UnrepresentableResult,
     InvalidResultArity,
     GlobalIsImmutable,
-    IntegerOverflow,
-    InstanceNameTaken,
-    ConstIsMutable,
     MalformedMemOpFlags,
     InvalidStringRepresentation,
     UnequalChunkComparison,
@@ -71,11 +144,10 @@ pub enum ValidationError {
 impl Display for ValidationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::InvalidStringRepresentation => f.write_str("InvalidStringRepresentation"),
-            Self::UnequalChunkComparison => f.write_str("UnequalChunkComparison"),
-            Self::ReadingOutOfBounds => f.write_str("Reader out of bounds"),
+            Self::InvalidStringRepresentation => f.write_str("invalid string representation"),
+            Self::UnequalChunkComparison => f.write_str("unequal chunk comparison"),
+            Self::ReadingOutOfBounds => f.write_str("reading out of bounds"),
             Self::MalformedMemOpFlags => f.write_str("malformed memop flags"),
-            Self::TrapUnreachable => f.write_str("unreachable"),
             Self::InvalidStartFunctionSignature => f.write_str("start function"),
             Self::InvalidResultArity => f.write_str("invalid result arity"),
             Self::IntegerTooLarge => f.write_str("integer too large"),
@@ -86,71 +158,42 @@ impl Display for ValidationError {
                     f.write_str("unknown data segment")
                 }
             }
-            Self::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
-            Self::StackExhaustion => f.write_str("operand stack exhausted"),
-            Self::CallStackExhaustion => f.write_str("call stack exhausted"),
             Self::MalformedMutability => f.write_str("malformed mutability"),
-            Self::InvalidMagic => {
-                f.write_str("The magic number of the given Wasm file is invalid.")
-            }
-            Self::InstanceNameTaken => f.write_str("instance name is taken"),
-            Self::IndirectCallTypeMismatch => f.write_str("indirect call type mismatch"),
-            Self::FunctionNotFound => f.write_str("function not found"),
+            Self::InvalidMagic => f.write_str("invalid magic number"),
             Self::GlobalIsImmutable => f.write_str("global is immutable"),
-            Self::ConstIsMutable => f.write_str("global const is mutable"),
-
-            Self::DivisionByZero => f.write_str("integer divide by zero"),
             Self::InvalidIntegerRepresentation => f.write_str("integer representation too long"),
-            Self::IntegerOverflow => f.write_str("integer overflow"),
-            Self::UnrepresentableResult => f.write_str("Result is not representable."),
-            Self::InvalidVersion => f.write_str("The version in the Wasm file is invalid"),
-            Self::InvalidSectionBytecode => f.write_str("The section in the Wasm file is invalid"),
+            Self::InvalidVersion => f.write_str("invalid wasm version"),
             Self::TypeMismatch | Self::InvalidSignatureIndex => f.write_str("type mismatch"),
-            Self::InvalidControlFlow => f.write_str("Control flow mismatch"),
-            Self::MissingValue => f.write_str("Missing value on stack."),
+            Self::InvalidControlFlow => f.write_str("invalid control flow"),
             Self::InvalidLocalIndex => f.write_str("unknown local"),
             Self::UnknownFunction => f.write_str("unknown function"),
 
-            Self::UndefinedElement => f.write_str("undefined element"),
-            Self::InvalidFunctionIndex => f.write_str("Invalid function index"),
-            Self::InvalidMemoryIndex => f.write_str("Invalid memory index"),
+            Self::InvalidFunctionIndex => f.write_str("invalid function index"),
             Self::UndefinedContantExpression => f.write_str("constant expression required"),
             Self::MultipleMemoriesNotImplemented => {
-                f.write_str("Multiple Memory proposal is not implemented")
+                f.write_str("multiple Memory proposal is not implemented")
             }
             Self::UndefinedOpCode(opcode) => {
-                f.write_fmt(format_args!("Invalid opcode {opcode:#04X}"))
-            }
-            Self::UndefinedInstruction(instruction) => {
-                f.write_fmt(format_args!("Invalid instruction {instruction:#04X}"))
+                f.write_fmt(format_args!("invalid opcode {opcode:#04X}"))
             }
             Self::UnknownSectionCode(seccode) => {
-                f.write_fmt(format_args!("Invalid sectioncode {seccode:#04X}"))
+                f.write_fmt(format_args!("unknown sectioncode {seccode:#04X}"))
             }
             Self::UnknownType => f.write_str("unknown type"),
 
             Self::UnknownGlobal => f.write_str("unknown global"),
             Self::UnknownTable => f.write_str("unknown table"),
-            Self::UninitializedReference => f.write_str("uninitialized element"),
             Self::UnsupportedExportKind => f.write_str("unsupported export kind"),
             Self::UnknownLabel => f.write_str("unknown label"),
             Self::UnsupportedValueType => f.write_str("unknown value type"),
-            Self::ExpectedAValueOnTheStack => f.write_str("No value on stack"),
-            Self::UnexpectedValueType => f.write_str("Unexpected value type"),
-            Self::UnknownExportCall => f.write_str("Unexpected export call"),
-            Self::InvalidSidetableIndex => f.write_str("Invalid sidetable entry index"),
             Self::IllegalSelectType => f.write_str("type mismatch"),
-            Self::MissingGlobalImport => f.write_str("missing global import"),
-            Self::MissingFunctionImport => f.write_str("missing function import"),
+
             Self::UndefinedMemory => f.write_str("undefined memory"),
             Self::UndefinedTable => f.write_str("undefined table"),
             Self::UnknownMemory(idx) => f.write_fmt(format_args!("unknown memory {idx}")),
             Self::InvalidAlignment => f.write_str("alignment must not be larger than natural"),
-            Self::MemoryAccessOutOfBounds => f.write_str("out of bounds memory access"),
-            Self::TableAccessOutOfBounds => f.write_str("out of bounds table access"),
-            Self::UnknownInstance => f.write_str("unknown instance"),
-            Self::IncompatibleImportType => f.write_str("incompatible import type"),
-            Self::InvalidElementKind => f.write_str("InvalidElementKind"),
+
+            Self::InvalidElementKind => f.write_str("invalid element kind"),
         }
     }
 }

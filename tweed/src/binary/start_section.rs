@@ -1,9 +1,9 @@
-use crate::core::error::Result;
 use crate::core::error::ValidationError;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::wasm_reader::WasmReader;
 
 use super::module_environment::ModuleEnvironment;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 pub fn process_start_section(
     reader: &mut WasmReader,

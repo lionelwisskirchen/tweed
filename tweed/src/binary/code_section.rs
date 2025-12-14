@@ -1,11 +1,12 @@
 extern crate alloc;
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ValidationError;
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use crate::validation::side_table::SideTable;
 use crate::validation::validator::CodeValidator;
 use alloc::vec::Vec;
 
 use super::module_environment::ModuleEnvironment;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FuncCode {

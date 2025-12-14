@@ -1,6 +1,8 @@
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ValidationError;
 use crate::core::value_types::ValType;
 use alloc::vec::Vec;
+
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug)]
 pub struct ValidationStack {

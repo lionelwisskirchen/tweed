@@ -9,12 +9,12 @@ pub mod core;
 pub mod execution;
 pub mod validation;
 
+use core::error::{ExecutionError, ValidationError, WasmError};
 pub use core::values::Value;
 
 use execution::executor::Executor;
 pub use log::LevelFilter;
 
-use crate::core::error::Result;
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -23,19 +23,20 @@ use execution::linker::Linker;
 use execution::store::Store;
 use validation::module::Module;
 
-pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>> {
+pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>, WasmError> {
     let mut module = initialize(input)?;
     let mut store = Store::default();
     let instance_name = instantiate(&mut module, &mut store, None)?;
-    invoke(instance_name, name, params, &mut store)
+    let result = invoke(instance_name, name, params, &mut store)?;
+    Ok(result)
 }
-pub fn initialize(input: &[u8]) -> Result<Module> {
+pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
     trace!("Initialize module");
     let mut reader = WasmReader::new(input.to_vec());
     let module_environment = create_module_environment(&mut reader)?;
 
     Ok(Module {
-        reader: reader.to_validated(),
+        reader: reader.assume_valid(),
         typesec: module_environment.typesec,
         funcsec: module_environment.funcsec,
         codesec: module_environment.codesec,
@@ -55,7 +56,7 @@ pub fn instantiate(
     module: &mut Module,
     store: &mut Store,
     instance_name: Option<&str>,
-) -> Result<String> {
+) -> Result<String, ExecutionError> {
     trace!("Instantiate module");
     let mut linker = Linker::default();
     linker.instantiate(module, store, instance_name)
@@ -66,7 +67,7 @@ pub fn invoke(
     name: String,
     params: Vec<Value>,
     store: &mut Store,
-) -> Result<Vec<Value>> {
+) -> Result<Vec<Value>, ExecutionError> {
     trace!("Invoke `{name}` with {params:?}");
     let mut exec = Executor::new(store);
     exec.invoke(&instance_name, &name, &params)

@@ -1,7 +1,7 @@
 use crate::alloc::borrow::ToOwned;
 use crate::binary::global_section::GlobalType;
 use crate::binary::module_environment::ModuleEnvironment;
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ValidationError;
 use crate::core::value_types::{RefType, ValType};
 
 use crate::core::signature_lookup::lookup_signature;
@@ -18,6 +18,7 @@ use alloc::vec::Vec;
 use extensions::*;
 
 use super::side_table::SideTable;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 pub struct CodeValidator<'a, 'b> {
     reader: &'a mut WasmReader,

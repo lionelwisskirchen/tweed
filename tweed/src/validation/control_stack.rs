@@ -1,7 +1,8 @@
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ValidationError;
 use alloc::vec::Vec;
 
 use super::control_types::ControlType;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug)]
 pub struct ControlStack {

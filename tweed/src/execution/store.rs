@@ -6,9 +6,10 @@ use super::instance::Instance;
 use super::linker::{MAX_MEM_PAGES, PAGE_SIZE};
 use crate::alloc::string::ToString;
 use crate::binary::table_section::Table;
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ExecutionError;
+use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::value_types::ValType;
-use crate::core::wasm_reader::ValidatedWasmReader;
+
 use crate::{
     binary::{global_section::GlobalType, type_section::FuncType},
     core::values::FromLeBytes,
@@ -19,7 +20,7 @@ use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::cell::RefCell;
-
+pub type Result<T> = core::result::Result<T, ExecutionError>;
 #[derive(Debug, Default)]
 pub struct StoreData {
     pub functions: Vec<FuncInstance>,
@@ -78,17 +79,17 @@ impl Store {
         self.data
             .functions
             .get_mut(func_addr)
-            .ok_or(ValidationError::UnknownExportCall)
+            .ok_or(ExecutionError::UnknownExportCall)
     }
     pub fn rename_instance(&mut self, name: &str, new_name: &str) -> Result<()> {
         let mut instance = self
             .instances
             .remove(name)
-            .ok_or(ValidationError::UnknownInstance)?;
+            .ok_or(ExecutionError::UnknownInstance)?;
         let reader = self
             .reader
             .remove(name)
-            .ok_or(ValidationError::UnknownInstance)?;
+            .ok_or(ExecutionError::UnknownInstance)?;
         instance.name = new_name.to_string();
         self.add_instance(instance, new_name, &reader)?;
         Ok(())
@@ -98,7 +99,7 @@ impl Store {
         let instance = self
             .instances
             .get(name)
-            .ok_or(ValidationError::UnknownInstance)?;
+            .ok_or(ExecutionError::UnknownInstance)?;
         Ok(instance)
     }
     pub fn get_instance_count(&self) -> usize {
@@ -147,11 +148,11 @@ pub fn map_memory<'a>(
     let mem_addr = instance
         .memaddr
         .get(index) // only one memory allowed
-        .ok_or(ValidationError::InvalidMemoryIndex)?;
+        .ok_or(ExecutionError::InvalidMemoryIndex)?;
     store
         .memories
         .get_mut(*mem_addr)
-        .ok_or(ValidationError::InvalidMemoryIndex)
+        .ok_or(ExecutionError::InvalidMemoryIndex)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -167,7 +168,7 @@ impl MemoryInstance {
     pub fn load_slice(&mut self, address: usize, bytes: usize) -> Result<&[u8]> {
         self.data
             .get(address..address + bytes)
-            .ok_or(ValidationError::MemoryAccessOutOfBounds)
+            .ok_or(ExecutionError::MemoryAccessOutOfBounds)
     }
     pub fn size(&self) -> i32 {
         (self.data.len() as u32 / PAGE_SIZE) as i32
@@ -178,11 +179,11 @@ impl MemoryInstance {
     pub fn grow(&mut self, amount: u32) -> Result<()> {
         let new_len = amount + self.pages();
         if new_len > MAX_MEM_PAGES {
-            return Err(ValidationError::MemoryAccessOutOfBounds);
+            return Err(ExecutionError::MemoryAccessOutOfBounds);
         }
         if let Some(max) = self.max {
             if new_len > max {
-                return Err(ValidationError::MemoryAccessOutOfBounds);
+                return Err(ExecutionError::MemoryAccessOutOfBounds);
             }
         }
         self.data.resize((new_len * PAGE_SIZE) as usize, 0);
@@ -199,10 +200,10 @@ impl MemoryInstance {
     pub fn store(&mut self, address: usize, offset: usize, data: &[u8]) -> Result<()> {
         let abs_address = offset
             .checked_add(address)
-            .ok_or(ValidationError::MemoryAccessOutOfBounds)?;
+            .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
         let end = abs_address + data.len();
         if end > self.data.len() {
-            return Err(ValidationError::MemoryAccessOutOfBounds);
+            return Err(ExecutionError::MemoryAccessOutOfBounds);
         }
         self.data[abs_address..end].copy_from_slice(data);
         Ok(())
@@ -221,7 +222,7 @@ impl DataInstance {
     pub fn load_slice(&self, address: usize, bytes: usize) -> Result<Vec<u8>> {
         self.data
             .get(address..address + bytes)
-            .ok_or(ValidationError::MemoryAccessOutOfBounds)
+            .ok_or(ExecutionError::MemoryAccessOutOfBounds)
             .map(|s| s.to_vec())
     }
 }
@@ -288,15 +289,15 @@ impl TableInstance {
         let res = self
             .reference_values
             .get(index)
-            .ok_or(ValidationError::TableAccessOutOfBounds)?;
+            .ok_or(ExecutionError::TableAccessOutOfBounds)?;
         Ok(*res)
     }
     pub fn insert(&mut self, offset: usize, vals: &[Value]) -> Result<()> {
         let end = offset
             .checked_add(vals.len())
-            .ok_or(ValidationError::TableAccessOutOfBounds)?;
+            .ok_or(ExecutionError::TableAccessOutOfBounds)?;
         if end > self.reference_values.len() {
-            return Err(ValidationError::TableAccessOutOfBounds);
+            return Err(ExecutionError::TableAccessOutOfBounds);
         }
         for (i, val) in vals.iter().enumerate() {
             self.reference_values[offset + i] = *val;

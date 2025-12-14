@@ -2,11 +2,12 @@ use crate::binary::function_section::FuncDecl;
 use crate::binary::import_section::GlobalImport;
 use crate::core::opcode::*;
 
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ValidationError;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 
 use super::validation_stack::ValidationStack;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 pub fn validate_const_expr(
     reader: &mut WasmReader,

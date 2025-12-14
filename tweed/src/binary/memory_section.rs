@@ -1,6 +1,6 @@
-use crate::core::error::Result;
-use crate::core::wasm_reader::WasmReader;
+use crate::core::{error::ValidationError, wasm_reader::WasmReader};
 use alloc::vec::Vec;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Limits {

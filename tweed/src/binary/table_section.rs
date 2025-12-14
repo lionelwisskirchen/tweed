@@ -1,9 +1,10 @@
-use crate::core::error::Result;
+use crate::core::error::ValidationError;
 use crate::core::value_types::RefType;
 use crate::core::wasm_reader::WasmReader;
 use alloc::vec::Vec;
 
 use super::memory_section::Limits;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Table {

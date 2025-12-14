@@ -3,15 +3,16 @@ extern crate alloc;
 use super::execution_stack::{CallStack, ExecutionStack};
 use super::store::{map_memory, FuncInstance, HostEnv, Internal, MemoryInstance, Store};
 use crate::alloc::string::ToString;
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ExecutionError;
 use crate::core::opcode::*;
+use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::value_types::ValType;
-use crate::core::wasm_reader::ValidatedWasmReader;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
 use alloc::string::String;
 use alloc::vec::Vec;
 use extensions::*;
 use libm;
+pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Default, Debug, Clone)]
 pub struct Frame {
@@ -34,6 +35,7 @@ fn build_frame(function: &Internal, stack: &mut ExecutionStack) -> Result<Frame>
         stack_pointer: stack.len(),
         start: function.start,
         end: function.end,
+
         return_value: function.signature.result.clone(),
         locals,
         side_table: function.side_table.clone(),
@@ -138,23 +140,24 @@ impl<'store> Executor<'store> {
     }
 
     fn execute_frame(&mut self, current_frame: &mut Frame) -> Result<()> {
+        let instance_name = &current_frame.instance_name;
         let reader = self
             .store
             .reader
-            .get_mut(&current_frame.instance_name)
-            .ok_or(ValidationError::InvalidSectionBytecode)?;
+            .get_mut(instance_name)
+            .ok_or(ExecutionError::UnknownReader)?;
         let instance = self
             .store
             .instances
-            .get_mut(&current_frame.instance_name)
-            .ok_or(ValidationError::InvalidSectionBytecode)?;
+            .get_mut(instance_name)
+            .ok_or(ExecutionError::UnknownInstance)?;
 
         reader.seek(current_frame.start + current_frame.program_counter);
-        while reader.current_index() < current_frame.end {
+        loop {
             let instruction = reader.next_byte();
             match instruction {
                 UNREACHABLE => {
-                    return Err(ValidationError::TrapUnreachable);
+                    return Err(ExecutionError::TrapUnreachable);
                 }
                 I32_CONST => {
                     let value = reader.next_leb128_i32();
@@ -178,11 +181,11 @@ impl<'store> Executor<'store> {
                 }
                 BLOCK => {
                     trace!("BLOCK");
-                    reader.skip_block_type();
+                    reader.next_leb128_u32(); // Skip Block type
                 }
                 LOOP => {
                     trace!("LOOP");
-                    reader.skip_block_type();
+                    reader.next_leb128_u32(); // Skip Block type
                 }
                 IF => {
                     let bool_val = self.stack.pop()?;
@@ -190,7 +193,7 @@ impl<'store> Executor<'store> {
                     if bool_val == Value::I32(0) {
                         Self::do_goto(&mut self.stack, current_frame, reader)?;
                     } else {
-                        reader.skip_block_type();
+                        reader.next_leb128_u32(); // Skip Block type
                         current_frame.side_table_pointer += 1;
                     }
                 }
@@ -204,7 +207,7 @@ impl<'store> Executor<'store> {
                     let local = current_frame
                         .locals
                         .get(idx)
-                        .ok_or(ValidationError::InvalidLocalIndex)?;
+                        .ok_or(ExecutionError::InvalidLocalIndex)?;
                     self.stack.push(*local)?;
                 }
                 I32_POPCNT => {
@@ -218,7 +221,7 @@ impl<'store> Executor<'store> {
                     let local = current_frame
                         .locals
                         .get_mut(idx)
-                        .ok_or(ValidationError::InvalidLocalIndex)?;
+                        .ok_or(ExecutionError::InvalidLocalIndex)?;
                     let new_value = self.stack.pop()?;
                     trace!("LOCAL_SET({}) TO {:?}", idx, new_value);
                     *local = new_value;
@@ -229,13 +232,13 @@ impl<'store> Executor<'store> {
                     let global_addr = instance
                         .globaladdr
                         .get(idx)
-                        .ok_or(ValidationError::UnknownGlobal)?;
+                        .ok_or(ExecutionError::UnknownGlobal)?;
                     let global = self
                         .store
                         .data
                         .globals
                         .get_mut(*global_addr)
-                        .ok_or(ValidationError::UnknownGlobal)?;
+                        .ok_or(ExecutionError::UnknownGlobal)?;
                     self.stack.push(global.value)?;
                 }
                 GLOBAL_SET => {
@@ -243,13 +246,13 @@ impl<'store> Executor<'store> {
                     let global_addr = instance
                         .globaladdr
                         .get(idx)
-                        .ok_or(ValidationError::UnknownGlobal)?;
+                        .ok_or(ExecutionError::UnknownGlobal)?;
                     let global = self
                         .store
                         .data
                         .globals
                         .get_mut(*global_addr)
-                        .ok_or(ValidationError::UnknownGlobal)?;
+                        .ok_or(ExecutionError::UnknownGlobal)?;
                     let new_value = self.stack.pop()?;
                     trace!("GLOBAL_SET({}) TO {:?}", idx, new_value);
                     global.value = new_value;
@@ -259,7 +262,7 @@ impl<'store> Executor<'store> {
                     let local = current_frame
                         .locals
                         .get_mut(idx)
-                        .ok_or(ValidationError::InvalidLocalIndex)?;
+                        .ok_or(ExecutionError::InvalidLocalIndex)?;
                     let new_value = self.stack.pop()?;
                     trace!("LOCAL_TEE({}) TO {:?}", idx, new_value);
                     *local = new_value;
@@ -313,10 +316,10 @@ impl<'store> Executor<'store> {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
                     trace!("I64_DIV_S({left}, {right})");
                     if right == 0 {
-                        return Err(ValidationError::DivisionByZero);
+                        return Err(ExecutionError::DivisionByZero);
                     }
                     if left == i64::MIN && right == -1 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     self.stack.push((left / right).into())?;
                 }
@@ -324,7 +327,7 @@ impl<'store> Executor<'store> {
                     let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
                     trace!("I64_DIV_U({left}, {right})");
                     if right == 0 {
-                        return Err(ValidationError::DivisionByZero);
+                        return Err(ExecutionError::DivisionByZero);
                     }
                     self.stack.push(((left as u64) / (right as u64)).into())?;
                 }
@@ -333,7 +336,7 @@ impl<'store> Executor<'store> {
                     trace!("I64_REM_S({left}, {right})");
 
                     if right == 0 {
-                        return Err(ValidationError::DivisionByZero);
+                        return Err(ExecutionError::DivisionByZero);
                     }
                     let result = left.checked_rem(right);
                     self.stack.push(result.unwrap_or_default().into())?;
@@ -343,7 +346,7 @@ impl<'store> Executor<'store> {
                     trace!("I64_REM_U({left}, {right})");
 
                     if right == 0 {
-                        return Err(ValidationError::DivisionByZero);
+                        return Err(ExecutionError::DivisionByZero);
                     }
                     let result = (left as u64).checked_rem(right as u64);
                     self.stack.push(result.unwrap_or_default().into())?;
@@ -423,10 +426,10 @@ impl<'store> Executor<'store> {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
                     trace!("I32_DIV_S({left}, {right})");
                     if right == 0 {
-                        return Err(ValidationError::DivisionByZero);
+                        return Err(ExecutionError::DivisionByZero);
                     }
                     if left == i32::MIN && right == -1 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     self.stack.push((left / right).into())?;
                 }
@@ -434,7 +437,7 @@ impl<'store> Executor<'store> {
                     let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
                     trace!("I32_DIV_U({left}, {right})");
                     if right == 0 {
-                        return Err(ValidationError::DivisionByZero);
+                        return Err(ExecutionError::DivisionByZero);
                     }
                     self.stack.push(((left as u32) / (right as u32)).into())?;
                 }
@@ -443,7 +446,7 @@ impl<'store> Executor<'store> {
                     trace!("I32_REM_S({left}, {right})");
 
                     if right == 0 {
-                        return Err(ValidationError::DivisionByZero);
+                        return Err(ExecutionError::DivisionByZero);
                     }
                     let result = left.checked_rem(right);
                     self.stack.push(result.unwrap_or_default().into())?;
@@ -453,7 +456,7 @@ impl<'store> Executor<'store> {
                     trace!("I32_REM_U({left}, {right})");
 
                     if right == 0 {
-                        return Err(ValidationError::DivisionByZero);
+                        return Err(ExecutionError::DivisionByZero);
                     }
                     let result = (left as u32).checked_rem(right as u32);
                     self.stack.push(result.unwrap_or_default().into())?;
@@ -837,45 +840,45 @@ impl<'store> Executor<'store> {
                     let table_addr = instance
                         .tableaddr
                         .get(table_index as usize)
-                        .ok_or(ValidationError::UnknownTable)?;
+                        .ok_or(ExecutionError::UnknownTable)?;
 
                     let table = self
                         .store
                         .data
                         .tables
                         .get(*table_addr)
-                        .ok_or(ValidationError::UnknownTable)?;
+                        .ok_or(ExecutionError::UnknownTable)?;
 
                     let func_type = instance
                         .types
                         .get(type_index as usize)
-                        .ok_or(ValidationError::InvalidFunctionIndex)?;
+                        .ok_or(ExecutionError::InvalidFunctionIndex)?;
 
                     let entry_index = self.stack.pop_i32()? as usize;
                     let Ok(entry) = table.get(entry_index) else {
-                        return Err(ValidationError::UndefinedElement);
+                        return Err(ExecutionError::UndefinedElement);
                     };
                     let index = match entry {
-                        Value::RefNull(_) => return Err(ValidationError::UninitializedReference),
+                        Value::RefNull(_) => return Err(ExecutionError::UninitializedReference),
                         Value::FuncRef(idx) => idx,
-                        Value::ExternRef(_) => return Err(ValidationError::TypeMismatch),
+                        Value::ExternRef(_) => return Err(ExecutionError::TypeMismatch),
                         _ => unreachable!(),
                     };
                     let function_addr = instance
                         .funcaddr
                         .get(index as usize)
-                        .ok_or(ValidationError::InvalidFunctionIndex)?;
+                        .ok_or(ExecutionError::InvalidFunctionIndex)?;
 
                     let function = self
                         .store
                         .data
                         .functions
                         .get_mut(*function_addr)
-                        .ok_or(ValidationError::InvalidFunctionIndex)?
+                        .ok_or(ExecutionError::InvalidFunctionIndex)?
                         .clone();
 
                     if function.get_signature() != func_type {
-                        return Err(ValidationError::IndirectCallTypeMismatch);
+                        return Err(ExecutionError::IndirectCallTypeMismatch);
                     };
 
                     match function {
@@ -903,14 +906,14 @@ impl<'store> Executor<'store> {
                     let function_addr = instance
                         .funcaddr
                         .get(index as usize)
-                        .ok_or(ValidationError::InvalidFunctionIndex)?;
+                        .ok_or(ExecutionError::InvalidFunctionIndex)?;
 
                     let function = self
                         .store
                         .data
                         .functions
                         .get_mut(*function_addr)
-                        .ok_or(ValidationError::InvalidFunctionIndex)?
+                        .ok_or(ExecutionError::InvalidFunctionIndex)?
                         .clone();
                     match function {
                         FuncInstance::Internal(instance) => {
@@ -1126,7 +1129,7 @@ impl<'store> Executor<'store> {
                     let table_addr = instance
                         .tableaddr
                         .get(table_idx)
-                        .ok_or(ValidationError::TableAccessOutOfBounds)?;
+                        .ok_or(ExecutionError::TableAccessOutOfBounds)?;
                     let offset = self.stack.pop_i32()? as usize;
                     let table = self.store.data.tables.get_mut(*table_addr).unwrap(); // validated
                     let value = table.get(offset)?;
@@ -1138,7 +1141,7 @@ impl<'store> Executor<'store> {
                     let table_addr = instance
                         .tableaddr
                         .get(table_idx)
-                        .ok_or(ValidationError::TableAccessOutOfBounds)?;
+                        .ok_or(ExecutionError::TableAccessOutOfBounds)?;
                     let table = self.store.data.tables.get_mut(*table_addr).unwrap(); // validated
                     let val = self.stack.pop()?;
                     let index = self.stack.pop_i32()? as usize;
@@ -1149,14 +1152,14 @@ impl<'store> Executor<'store> {
                 I32_TRUNC_F32_S => {
                     let value = self.stack.pop_f32()?;
                     if value.is_nan() {
-                        return Err(ValidationError::InvalidConversionToInt);
+                        return Err(ExecutionError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     // -2147483904.0 Because -2147483647.0 is not representable as f32
                     if value >= 2147483648.0 || value <= -2147483904.0 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     let res = Value::I32(value as i32);
                     trace!("Instruction: i32.trunc_f32_s [{value:?}] -> [{res:?}]");
@@ -1165,10 +1168,10 @@ impl<'store> Executor<'store> {
                 I32_TRUNC_F32_U => {
                     let value = self.stack.pop_f32()?;
                     if value.is_nan() {
-                        return Err(ValidationError::InvalidConversionToInt);
+                        return Err(ExecutionError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     trace!(
                         "Instruction: i32.trunc_f32_u [{value:?}] {}",
@@ -1176,7 +1179,7 @@ impl<'store> Executor<'store> {
                     );
 
                     if value >= 4294967296.0 || value <= -1.0 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     let res = Value::I32(value as u32 as i32);
                     trace!("Instruction: i32.trunc_f32_u [{value:?}] -> [{res:?}]");
@@ -1185,14 +1188,14 @@ impl<'store> Executor<'store> {
                 I32_TRUNC_F64_S => {
                     let value = self.stack.pop_f64()?;
                     if value.is_nan() {
-                        return Err(ValidationError::InvalidConversionToInt);
+                        return Err(ExecutionError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
 
                     if value >= 2147483648.0 || value <= -2147483649.0 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     let res = Value::I32(value as i32);
                     trace!("Instruction: i32.trunc_f64_s [{value:?}] -> [{res:?}]");
@@ -1201,13 +1204,13 @@ impl<'store> Executor<'store> {
                 I32_TRUNC_F64_U => {
                     let value = self.stack.pop_f64()?;
                     if value.is_nan() {
-                        return Err(ValidationError::InvalidConversionToInt);
+                        return Err(ExecutionError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     if value >= 4294967296.0 || value <= -1.0 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     let res = Value::I32(value as u32 as i32);
                     trace!("Instruction: i32.trunc_f64_u [{value:?}] -> [{res:?}]");
@@ -1216,13 +1219,13 @@ impl<'store> Executor<'store> {
                 I64_TRUNC_F32_S => {
                     let value = self.stack.pop_f32()?;
                     if value.is_nan() {
-                        return Err(ValidationError::InvalidConversionToInt);
+                        return Err(ExecutionError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     if value >= 9223372036854775808.0 || value <= -9223373136366403584.0 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     let res = Value::I64(value as i64);
                     trace!("Instruction: i64.trunc_f32_s  [{value:?}] -> [{res:?}]");
@@ -1231,14 +1234,14 @@ impl<'store> Executor<'store> {
                 I64_TRUNC_F32_U => {
                     let value = self.stack.pop_f32()?;
                     if value.is_nan() {
-                        return Err(ValidationError::InvalidConversionToInt);
+                        return Err(ExecutionError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     // 2^64
                     if value >= 18446744073709551616.0 || value <= -1.0 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     let res = Value::I64(value as u64 as i64);
                     trace!("Instruction: i64.trunc_f32_u  [{value:?}] -> [{res:?}]");
@@ -1248,13 +1251,13 @@ impl<'store> Executor<'store> {
                 I64_TRUNC_F64_S => {
                     let value = self.stack.pop_f64()?;
                     if value.is_nan() {
-                        return Err(ValidationError::InvalidConversionToInt);
+                        return Err(ExecutionError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     if value >= 9223372036854775808.0 || value <= -9223372036854777856.0 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     let res = Value::I64(value as i64);
                     trace!("Instruction: i64.trunc_f64_s  [{value:?}] -> [{res:?}]");
@@ -1263,13 +1266,13 @@ impl<'store> Executor<'store> {
                 I64_TRUNC_F64_U => {
                     let value = self.stack.pop_f64()?;
                     if value.is_nan() {
-                        return Err(ValidationError::InvalidConversionToInt);
+                        return Err(ExecutionError::InvalidConversionToInt);
                     }
                     if value.is_infinite() {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     if value >= 18446744073709551616.0 || value <= -1.0 {
-                        return Err(ValidationError::IntegerOverflow);
+                        return Err(ExecutionError::IntegerOverflow);
                     }
                     let res = Value::I64(value as u64 as i64);
                     trace!("Instruction: i64.trunc_f64_u  [{value:?}] -> [{res:?}]");
@@ -1379,7 +1382,7 @@ impl<'store> Executor<'store> {
                     let res = value as f64;
                     trace!("Instruction: f64.promote_f32 [{value:?}] -> [{res:?}]");
                     let quiet_bit = (res.to_bits() >> 51) & 0x1;
-                    trace!("is arith? {}", res.is_nan() && quiet_bit == 1);
+                    info!("is arith? {}", res.is_nan() && quiet_bit == 1);
                     self.stack.push(Value::F64(res))?;
                 }
 
@@ -1625,7 +1628,7 @@ impl<'store> Executor<'store> {
 
                 REF_NULL => {
                     let ref_type = crate::core::value_types::RefType::from_byte(reader.next_byte())
-                        .ok_or(ValidationError::UnexpectedValueType)?;
+                        .ok_or(ExecutionError::UnexpectedValueType)?;
                     self.stack.push(Value::RefNull(ref_type))?;
                 }
                 REF_IS_NULL => {
@@ -1786,7 +1789,7 @@ impl<'store> Executor<'store> {
                             let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
                             let data_inst = self.store.data.datas.get(*data_addr).unwrap(); // validated
                             if start_in_data_segment + number_of_bytes > data_inst.data.len() {
-                                return Err(ValidationError::MemoryAccessOutOfBounds);
+                                return Err(ExecutionError::MemoryAccessOutOfBounds);
                             }
                             let data =
                                 data_inst.load_slice(start_in_data_segment, number_of_bytes)?;
@@ -1827,10 +1830,10 @@ impl<'store> Executor<'store> {
                             mem.store(address, 0, &data)?;
                             trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");
                         }
-                        _ => return Err(ValidationError::UndefinedOpCode(byte as u8)),
+                        _ => unreachable!("Unreachable due to validation"),
                     }
                 }
-                _ => return Err(ValidationError::UndefinedInstruction(instruction)),
+                _ => unreachable!("Unreachable due to validation"),
             };
         }
         current_frame.program_counter = reader.current_index() - current_frame.start + 1;
@@ -1846,7 +1849,7 @@ impl<'store> Executor<'store> {
             .side_table
             .entries
             .get(current_frame.side_table_pointer)
-            .ok_or(ValidationError::InvalidSidetableIndex)?;
+            .ok_or(ExecutionError::InvalidSidetableIndex)?;
         let pos = reader.current_index() as i32 + side_table_entry.ip;
         current_frame.side_table_pointer = current_frame
             .side_table_pointer
@@ -1864,7 +1867,7 @@ impl<'store> Executor<'store> {
     {
         let address = offset
             .checked_add(address)
-            .ok_or(ValidationError::MemoryAccessOutOfBounds)? as usize;
+            .ok_or(ExecutionError::MemoryAccessOutOfBounds)? as usize;
         memory.load(address, bytes)
     }
 }

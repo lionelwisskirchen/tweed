@@ -1,7 +1,7 @@
-use crate::{
-    core::error::{Result, ValidationError},
-    Value,
-};
+use crate::{core::error::ValidationError, Value};
+
+pub type Result<T> = core::result::Result<T, ValidationError>;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefType {
     FuncRef,

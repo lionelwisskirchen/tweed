@@ -1,14 +1,16 @@
 use alloc::vec::Vec;
 
+use crate::core::error::ExecutionError;
 use crate::core::value_types::RefType;
 use crate::core::{opcode::*, value_types::ValType};
 
+use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::values::Value;
-use crate::core::wasm_reader::ValidatedWasmReader;
 
 use super::execution_stack::ExecutionStack;
 use super::store::{FuncInstance, GlobalInstance};
-use crate::core::error::{Result, ValidationError};
+
+pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 pub fn execute_const_expr(
     reader: &mut ValidatedWasmReader,
@@ -49,12 +51,12 @@ pub fn execute_const_expr(
             }
             GLOBAL_GET => {
                 let idx = reader.next_leb128_u32();
-                let global = globals
-                    .get(idx as usize)
-                    .ok_or(ValidationError::UnknownGlobal)?;
-                if global.global_type.is_mutable {
-                    return Err(ValidationError::ConstIsMutable);
-                }
+                let global = globals.get(idx as usize).unwrap(); // Validated?
+
+                // Validated:
+                // if global.global_type.is_mutable {
+                //     return Err(ValidationError::GlobalIsMutable);
+                // }
                 value_stack.push(global.value)?;
             }
             I32_ADD => {
@@ -68,16 +70,13 @@ pub fn execute_const_expr(
                 value_stack.push(left - right)?;
             }
             REF_NULL => {
-                let ref_type = RefType::from_byte(reader.next_byte())
-                    .ok_or(ValidationError::UnexpectedValueType)?;
+                let ref_type = RefType::from_byte(reader.next_byte()).unwrap(); // Validated?
                 value_stack.push(Value::RefNull(ref_type))?;
             }
             REF_FUNC => {
                 let func_idx = reader.next_leb128_u32() as usize;
 
-                functions
-                    .get(func_idx)
-                    .ok_or(ValidationError::InvalidFunctionIndex)?;
+                functions.get(func_idx).unwrap(); // Validated
                 value_stack.push(Value::FuncRef(func_idx))?;
             }
             END => {
@@ -86,12 +85,12 @@ pub fn execute_const_expr(
                     let val = value_stack.pop()?;
                     unpacked_result.push(val);
                     if !ty.is_type(val) {
-                        return Err(ValidationError::TypeMismatch);
+                        return Err(ExecutionError::TypeMismatch);
                     };
                 }
                 return Ok(unpacked_result);
             }
-            _ => return Err(ValidationError::UndefinedContantExpression),
+            _ => return Err(ExecutionError::UndefinedContantExpression),
         }
     }
 }

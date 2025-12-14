@@ -1,4 +1,4 @@
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ValidationError;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
@@ -24,6 +24,7 @@ pub struct Imports {
     pub globals: Vec<GlobalImport>,
     pub functions: Vec<FunctionImport>,
 }
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
     reader.next_leb128_u32()?;

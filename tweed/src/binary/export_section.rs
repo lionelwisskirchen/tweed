@@ -1,8 +1,9 @@
 extern crate alloc;
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ValidationError;
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExportContext {

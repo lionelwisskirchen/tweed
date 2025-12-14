@@ -1,13 +1,13 @@
 use alloc::vec::Vec;
 
-use crate::core::error::Result;
+use crate::core::error::ValidationError;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::constant_expression_validator::validate_const_expr;
 
 use super::function_section::FuncDecl;
 use super::import_section::GlobalImport;
-
+pub type Result<T> = core::result::Result<T, ValidationError>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SegmentMode {
     Active {

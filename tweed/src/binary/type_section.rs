@@ -1,6 +1,9 @@
-use crate::core::error::{Result, ValidationError};
+use crate::core::error::ValidationError;
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use alloc::vec::Vec;
+
+pub type Result<T> = core::result::Result<T, ValidationError>;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FuncType {
     pub parameter: Vec<ValType>,
@@ -20,15 +23,13 @@ pub fn process_type_section(reader: &mut WasmReader) -> Result<Vec<FuncType>> {
         };
         let number_of_params = reader.next_leb128_u32()?;
         let params = reader
-            .next_chunk(number_of_params as usize)
-            .map_err(|_| ValidationError::InvalidSectionBytecode)?
+            .next_chunk(number_of_params as usize)?
             .iter()
             .map(ValType::lookup)
             .collect::<Result<Vec<_>>>()?;
         let number_of_results = reader.next_leb128_u32()?;
         let results = reader
-            .next_chunk(number_of_results as usize)
-            .map_err(|_| ValidationError::InvalidSectionBytecode)?
+            .next_chunk(number_of_results as usize)?
             .iter()
             .map(ValType::lookup)
             .collect::<Result<Vec<_>>>()?;

@@ -1,12 +1,12 @@
 use alloc::vec::Vec;
 
-use crate::core::error::{Result, ValidationError};
-use crate::core::values::Value;
+use crate::core::{error::ExecutionError, values::Value};
 
 use super::executor::Frame;
 
 pub const MAX_VALUE_STACK_SIZE: usize = 0xf1000;
 pub const MAX_CALL_STACK_SIZE: usize = 0xf1000;
+pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Debug)]
 pub struct CallStack {
@@ -25,7 +25,7 @@ impl CallStack {
     }
     pub fn push(&mut self, value: Frame) -> Result<()> {
         if self.stack.len() > MAX_CALL_STACK_SIZE {
-            return Err(ValidationError::CallStackExhaustion);
+            return Err(ExecutionError::CallStackExhaustion);
         }
         self.stack.push(value);
         Ok(())
@@ -55,7 +55,7 @@ impl ExecutionStack {
     }
     pub fn push(&mut self, value: Value) -> Result<()> {
         if self.stack.len() > MAX_VALUE_STACK_SIZE {
-            return Err(ValidationError::StackExhaustion);
+            return Err(ExecutionError::StackExhaustion);
         }
         self.stack.push(value);
         Ok(())
@@ -75,7 +75,7 @@ impl ExecutionStack {
     pub fn pop(&mut self) -> Result<Value> {
         self.stack
             .pop()
-            .ok_or(ValidationError::ExpectedAValueOnTheStack)
+            .ok_or(ExecutionError::ExpectedAValueOnTheStack)
     }
     pub fn len(&self) -> usize {
         self.stack.len()
@@ -88,37 +88,37 @@ impl ExecutionStack {
     }
     pub fn pop_i32(&mut self) -> Result<i32> {
         let Value::I32(value) = self.pop()? else {
-            return Err(ValidationError::UnexpectedValueType);
+            return Err(ExecutionError::UnexpectedValueType);
         };
         Ok(value)
     }
     pub fn pop_i64(&mut self) -> Result<i64> {
         let Value::I64(value) = self.pop()? else {
-            return Err(ValidationError::UnexpectedValueType);
+            return Err(ExecutionError::UnexpectedValueType);
         };
         Ok(value)
     }
     pub fn pop_f64(&mut self) -> Result<f64> {
         let Value::F64(value) = self.pop()? else {
-            return Err(ValidationError::UnexpectedValueType);
+            return Err(ExecutionError::UnexpectedValueType);
         };
         Ok(value)
     }
     pub fn pop_f32(&mut self) -> Result<f32> {
         let Value::F32(value) = self.pop()? else {
-            return Err(ValidationError::UnexpectedValueType);
+            return Err(ExecutionError::UnexpectedValueType);
         };
         Ok(value)
     }
     pub fn pop_func_ref(&mut self) -> Result<usize> {
         let Value::FuncRef(value) = self.pop()? else {
-            return Err(ValidationError::UnexpectedValueType);
+            return Err(ExecutionError::UnexpectedValueType);
         };
         Ok(value)
     }
     pub fn pop_n(&mut self, count: usize) -> Result<Vec<Value>> {
         if count > self.stack.len() {
-            return Err(ValidationError::ExpectedAValueOnTheStack);
+            return Err(ExecutionError::ExpectedAValueOnTheStack);
         }
         Ok(self.stack.split_off(self.stack.len() - count))
     }
