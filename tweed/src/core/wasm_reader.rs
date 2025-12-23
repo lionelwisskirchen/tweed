@@ -106,7 +106,7 @@ impl WasmReader {
                 return Ok(result);
             }
         }
-        Err(ValidationError::IntegerTooLarge)
+        Err(ValidationError::InvalidIntegerRepresentation)
     }
     pub fn next_leb128_i32(&mut self) -> Result<i32> {
         let mut result: i32 = 0;
@@ -138,7 +138,7 @@ impl WasmReader {
                 return Ok(result);
             }
         }
-        Err(ValidationError::IntegerTooLarge)
+        Err(ValidationError::InvalidIntegerRepresentation)
     }
     pub fn next_f32(&mut self) -> Result<f32> {
         let bytes = self.next_chunk(4)?;

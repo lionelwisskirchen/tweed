@@ -179,3 +179,8 @@ fn spec_tests_table() {
 fn spec_tests_table_get() {
     run_spec_test(Path::new("./tests/spec/testsuite/table_get.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_binary_leb128() {
+    run_spec_test(Path::new("./tests/spec/testsuite/binary-leb128.wast"));
+}
