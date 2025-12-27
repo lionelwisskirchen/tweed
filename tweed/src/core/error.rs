@@ -1,10 +1,10 @@
+use core::fmt;
 use core::fmt::{Display, Formatter};
+pub type Result<T> = core::result::Result<T, TweedError>;
 
-pub type Result<T> = core::result::Result<T, WasmError>;
-
-/// A unified error type for the WebAssembly Runtime.
+/// A unified error type for the `Tweed` WebAssembly Runtime.
 ///
-/// `WasmError` represents all errors that can occur while interpreting
+/// `TweedError` represents all errors that can occur while interpreting
 /// WebAssembly modules.
 ///
 /// # Variants
@@ -17,19 +17,29 @@ pub type Result<T> = core::result::Result<T, WasmError>;
 ///   Errors that occur during the *execution* phase, after successful
 ///   validation, such as missing instances or runtime failures.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum WasmError {
+pub enum TweedError {
     Validation(ValidationError),
     Execution(ExecutionError),
 }
-impl From<ValidationError> for WasmError {
-    fn from(e: ValidationError) -> Self {
-        WasmError::Validation(e)
+
+impl fmt::Display for TweedError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TweedError::Validation(e) => write!(f, "{}", e),
+            TweedError::Execution(e) => write!(f, "{}", e),
+        }
     }
 }
 
-impl From<ExecutionError> for WasmError {
+impl From<ValidationError> for TweedError {
+    fn from(e: ValidationError) -> Self {
+        TweedError::Validation(e)
+    }
+}
+
+impl From<ExecutionError> for TweedError {
     fn from(e: ExecutionError) -> Self {
-        WasmError::Execution(e)
+        TweedError::Execution(e)
     }
 }
 

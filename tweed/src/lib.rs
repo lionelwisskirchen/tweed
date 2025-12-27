@@ -9,7 +9,7 @@ pub mod core;
 pub mod execution;
 pub mod validation;
 
-use core::error::{ExecutionError, ValidationError, WasmError};
+use core::error::{ExecutionError, TweedError, ValidationError};
 pub use core::values::Value;
 
 use execution::executor::Executor;
@@ -23,7 +23,7 @@ use execution::linker::Linker;
 use execution::store::Store;
 use validation::module::Module;
 
-pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>, WasmError> {
+pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>, TweedError> {
     let mut module = initialize(input)?;
     let mut store = Store::default();
     let instance_name = instantiate(&mut module, &mut store, None)?;

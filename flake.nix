@@ -37,6 +37,8 @@
               (pkgs.rust-bin.fromRustupToolchainFile ./tweed/rust-toolchain.toml)
               pkgs.wabt
               pkgs.pre-commit
+              pkgs.hotspot
+              pkgs.perf
             ];
             env = [
               {
