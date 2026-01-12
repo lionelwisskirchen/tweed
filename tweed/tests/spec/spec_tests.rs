@@ -151,6 +151,12 @@ fn spec_tests_load() {
 fn spec_tests_memory_init() {
     run_spec_test(Path::new("./tests/spec/testsuite/memory_init.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_names() {
+    run_spec_test(Path::new("./tests/spec/testsuite/names.wast"));
+}
+
 #[test_log::test]
 fn spec_tests_nop() {
     run_spec_test(Path::new("./tests/spec/testsuite/nop.wast"));

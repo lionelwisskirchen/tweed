@@ -44,9 +44,34 @@ pub fn convert_name<'a>(name: Option<wast::token::Id<'_>>) -> Option<String> {
         None => None,
     }
 }
+
+/// Clean the input from confusing unicode
+///
+/// This is needed to protect against a problem where unicode characters can cause editors to
+/// render source code differently for humans than the compiler itself sees. The detection of
+/// confusing uincode characters is inspired by the [wast::lexer::LexError].
+///
+/// To mitigate this issue, and because it's relatively rare in practice,
+/// this values are simply overwritten by the "_" character.
+pub fn clean_input(input: &String) -> String {
+    let result = input
+        .replace('\u{202a}', "_")
+        .replace('\u{202b}', "_")
+        .replace('\u{202d}', "_")
+        .replace('\u{202e}', "_")
+        .replace('\u{2066}', "_")
+        .replace('\u{2067}', "_")
+        .replace('\u{2068}', "_")
+        .replace('\u{206c}', "_")
+        .replace('\u{2069}', "_");
+
+    result
+}
+
 pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::Error>> {
     let input = fs::read_to_string(path).unwrap();
-    let buf = wast::parser::ParseBuffer::new(&input)?;
+    let clean_input = clean_input(&input);
+    let buf = wast::parser::ParseBuffer::new(&clean_input)?;
     let wast = wast::parser::parse::<wast::Wast>(&buf)?;
     let mut report = WastReport {
         file: path.to_string(),
