@@ -248,6 +248,36 @@ fn spec_tests_table() {
 }
 
 #[test_log::test]
+fn spec_tests_simd_const() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_const.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_i8x16_arith() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_i8x16_arith.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_i8x16_arith2() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_i8x16_arith2.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_i16x8_arith() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_i16x8_arith.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_i32x4_arith() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_i32x4_arith.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_i64x2_arith() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_i64x2_arith.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_table_get() {
     run_spec_test(Path::new("./tests/spec/testsuite/table_get.wast"));
 }

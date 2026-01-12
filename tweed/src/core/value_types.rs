@@ -23,6 +23,7 @@ pub enum ValType {
     F64,
     FuncRef,
     ExternRef,
+    V128Type,
     Unknown,
 }
 impl From<Value> for ValType {
@@ -34,6 +35,7 @@ impl From<Value> for ValType {
             Value::F64(_) => ValType::F64,
             Value::ExternRef(_) => ValType::ExternRef,
             Value::FuncRef(_) => ValType::FuncRef,
+            Value::V128(_) => ValType::V128Type,
             _ => panic!("Value not implemented yet"),
         }
     }
@@ -63,6 +65,7 @@ impl ValType {
             0x7C => Ok(ValType::F64),
             0x70 => Ok(ValType::FuncRef),
             0x6F => Ok(ValType::ExternRef),
+            0x7B => Ok(ValType::V128Type),
             _ => {
                 warn!("Unsupported Value type {val:#04X}");
                 Err(ValidationError::UnsupportedValueType)
@@ -89,6 +92,7 @@ impl ValType {
                 | (ValType::ExternRef, Value::ExternRef(_))
                 | (ValType::FuncRef, Value::RefNull(RefType::FuncRef))
                 | (ValType::ExternRef, Value::RefNull(RefType::ExternRef))
+                | (ValType::V128Type, Value::V128(_))
         )
     }
 }

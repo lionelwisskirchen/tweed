@@ -1,11 +1,13 @@
 use alloc::vec::Vec;
 
 use crate::core::error::ExecutionError;
+use crate::core::opcode::vector_extensions::*;
 use crate::core::value_types::RefType;
 use crate::core::{opcode::*, value_types::ValType};
 
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::values::Value;
+use crate::execution::simd::simd_execute;
 
 use super::adresses::{FuncAddr, GlobalAddr};
 use super::execution_stack::ExecutionStack;
@@ -92,6 +94,15 @@ pub fn execute_const_expr(
                     };
                 }
                 return Ok(unpacked_result);
+            }
+            VECTOR_EXTENSION_PREFIX => {
+                let byte = reader.next_leb128_u32();
+                match byte {
+                    V128_CONST => {
+                        simd_execute::v128_const(reader, &mut value_stack)?;
+                    }
+                    _ => return Err(ExecutionError::UndefinedContantExpression),
+                }
             }
             _ => return Err(ExecutionError::UndefinedContantExpression),
         }

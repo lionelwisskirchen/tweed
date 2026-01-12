@@ -1,5 +1,185 @@
 use super::value_types::{RefType, ValType};
 
+/// Value type for uniform handle of vector shapes
+///
+/// The shape of a v128 describes how the internal 128-bit are divided.
+/// The lane is a single data slot within that shape.
+///
+/// Example for a shape: i32x4: 4 lanes of 32-bit integers.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum V128Shape {
+    I8x16([i8; 16]),
+    I16x8([i16; 8]),
+    I32x4([i32; 4]),
+    I64x2([i64; 2]),
+    F32x4([f32; 4]),
+    F64x2([f64; 2]),
+    Bytes([u8; 16]),
+}
+
+impl V128Shape {
+    /// Converts the SIMD value into its underlying 16-byte representation.
+    ///
+    /// This method uses the native byte order of the target platform.
+    pub fn to_bytes(&self) -> [u8; 16] {
+        match self {
+            V128Shape::I8x16(int_array) => {
+                let mut bytes = [0u8; 16];
+                for (i, &val) in int_array.iter().enumerate() {
+                    bytes[i] = val as u8;
+                }
+                bytes
+            }
+            V128Shape::I16x8(int_array) => {
+                let result: [u8; 16] = int_array
+                    .iter()
+                    .flat_map(|&x| x.to_ne_bytes())
+                    .collect::<Vec<u8>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+            V128Shape::I32x4(int_array) => {
+                let result: [u8; 16] = int_array
+                    .iter()
+                    .flat_map(|&x| x.to_ne_bytes())
+                    .collect::<Vec<u8>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+            V128Shape::I64x2(int_array) => {
+                let result: [u8; 16] = int_array
+                    .iter()
+                    .flat_map(|&x| x.to_ne_bytes())
+                    .collect::<Vec<u8>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+            V128Shape::F32x4(float_array) => {
+                let result: [u8; 16] = float_array
+                    .iter()
+                    .flat_map(|&x| x.to_ne_bytes())
+                    .collect::<Vec<u8>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+            V128Shape::F64x2(float_array) => {
+                let result: [u8; 16] = float_array
+                    .iter()
+                    .flat_map(|&x| x.to_ne_bytes())
+                    .collect::<Vec<u8>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+            V128Shape::Bytes(b) => *b,
+        }
+    }
+
+    pub fn to_i8x16(&self) -> [i8; 16] {
+        match self {
+            V128Shape::I8x16(int_array) => *int_array,
+            _ => {
+                let bytes = self.to_bytes();
+                bytes.map(|bytes| bytes as i8)
+            }
+        }
+    }
+
+    pub fn to_i16x8(&self) -> [i16; 8] {
+        match self {
+            V128Shape::I16x8(int_array) => *int_array,
+            _ => {
+                let bytes = self.to_bytes();
+                let result = bytes
+                    .chunks_exact(2)
+                    .map(|bytes| i16::from_ne_bytes([bytes[0], bytes[1]]))
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+        }
+    }
+
+    pub fn to_i32x4(&self) -> [i32; 4] {
+        match self {
+            V128Shape::I32x4(int_array) => *int_array,
+            _ => {
+                let bytes = self.to_bytes();
+                let result = bytes
+                    .chunks_exact(4)
+                    .map(|bytes| i32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+        }
+    }
+
+    pub fn to_i64x2(&self) -> [i64; 2] {
+        match self {
+            V128Shape::I64x2(int_array) => *int_array,
+            _ => {
+                let bytes = self.to_bytes();
+                let result = bytes
+                    .chunks_exact(8)
+                    .map(|bytes| {
+                        i64::from_ne_bytes([
+                            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[4], bytes[6],
+                            bytes[7],
+                        ])
+                    })
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+        }
+    }
+
+    pub fn to_f32x4(&self) -> [f32; 4] {
+        match self {
+            V128Shape::F32x4(float_array) => *float_array,
+            _ => {
+                let bytes = self.to_bytes();
+                let result = bytes
+                    .chunks_exact(8)
+                    .map(|bytes| f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+        }
+    }
+
+    pub fn to_f64x2(&self) -> [f64; 2] {
+        match self {
+            V128Shape::F64x2(float_array) => *float_array,
+            _ => {
+                let bytes = self.to_bytes();
+                let result = bytes
+                    .chunks_exact(8)
+                    .map(|bytes| {
+                        f64::from_ne_bytes([
+                            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[4], bytes[6],
+                            bytes[7],
+                        ])
+                    })
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap();
+                result
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
     I32(i32),
@@ -11,6 +191,7 @@ pub enum Value {
     RefNull(RefType),
     CanonicalNan,
     ArithmeticNan,
+    V128(V128Shape),
 }
 
 impl From<i32> for Value {
@@ -46,6 +227,7 @@ impl From<ValType> for Value {
             ValType::F64 => Value::F64(0.0),
             ValType::ExternRef => Value::RefNull(RefType::ExternRef),
             ValType::FuncRef => Value::RefNull(RefType::FuncRef),
+            ValType::V128Type => Value::V128(V128Shape::Bytes([0; 16])),
             ValType::Unknown => panic!("Unknown value type cant be converted to value."),
         }
     }

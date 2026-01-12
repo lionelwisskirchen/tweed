@@ -7,10 +7,13 @@ use super::store::{map_memory, HostEnv, Store};
 use crate::execution::adresses::{FuncAddr, InstanceAddr};
 
 use crate::core::error::ExecutionError;
+use crate::core::opcode::vector_extensions::*;
 use crate::core::opcode::*;
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::value_types::ValType;
 use crate::core::values::NaN;
+use crate::execution::simd;
+use crate::execution::simd::simd_execute;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
 use alloc::vec::Vec;
 use extensions::*;
@@ -1889,6 +1892,34 @@ impl Executor {
                             mem.store(address, 0, &data)?;
                             trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");
                         }
+                        _ => unreachable!("Unreachable due to validation"),
+                    }
+                }
+                VECTOR_EXTENSION_PREFIX => {
+                    let byte = reader.next_leb128_u32();
+                    match byte {
+                        V128_CONST => simd_execute::v128_const(reader, &mut self.stack)?,
+                        I8X16_ADD => simd::i8x16_add(&mut self.stack)?,
+                        I8X16_SUB => simd::i8x16_sub(&mut self.stack)?,
+                        I8X16_NEG => simd::i8x16_neg(&mut self.stack)?,
+                        I8X16_MIN_S => simd::i8x16_min_s(&mut self.stack)?,
+                        I8X16_MIN_U => simd::i8x16_min_u(&mut self.stack)?,
+
+                        I16X8_ADD => simd::i16x8_add(&mut self.stack)?,
+                        I16X8_SUB => simd::i16x8_sub(&mut self.stack)?,
+                        I16X8_NEG => simd::i16x8_neg(&mut self.stack)?,
+                        I16X8_MUL => simd::i16x8_mul(&mut self.stack)?,
+
+                        I32X4_ADD => simd::i32x4_add(&mut self.stack)?,
+                        I32X4_SUB => simd::i32x4_sub(&mut self.stack)?,
+                        I32X4_NEG => simd::i32x4_neg(&mut self.stack)?,
+                        I32X4_MUL => simd::i32x4_mul(&mut self.stack)?,
+
+                        I64X2_ADD => simd::i64x2_add(&mut self.stack)?,
+                        I64X2_SUB => simd::i64x2_sub(&mut self.stack)?,
+                        I64X2_NEG => simd::i64x2_neg(&mut self.stack)?,
+                        I64X2_MUL => simd::i64x2_mul(&mut self.stack)?,
+
                         _ => unreachable!("Unreachable due to validation"),
                     }
                 }

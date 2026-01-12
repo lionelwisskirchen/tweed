@@ -1,0 +1,73 @@
+use crate::{
+    core::{error::ExecutionError, values::V128Shape},
+    execution::execution_stack::ExecutionStack,
+    Value,
+};
+
+pub type Result<T> = core::result::Result<T, ExecutionError>;
+
+/// Generates a unary SIMD operation function for i8x16 vectors.
+///
+/// This macro creates a function that applies a unary operation to each lane
+/// of an i8x16 vector. The operation should be a method that returns a tuple
+/// where the first element is the result (e.g., `overflowing_*` methods).
+///
+/// # Arguments
+/// * `$func_name` - Name of the generated function
+/// * `$method` - Unary method to call on each lane (e.g., `abs`, `overflowing_neg`)
+macro_rules! define_i8x16_simd_unary_op {
+    ($func_name:ident => $op:expr) => {
+        #[doc = concat!("Computes `", stringify!($method), "` on each lane of an i8x16 vector.")]
+        ///
+        /// This Method poppes one v128 of the given [ExecutionStack]. After executing
+        /// the operation, the result is pushed back to the stack.
+        ///
+        /// # Arguments
+        /// * `stack` - a mutable reference to the [ExecutionStack] to work with
+        pub fn $func_name(stack: &mut ExecutionStack) -> Result<()> {
+            let value = stack.pop_v128()?.to_i8x16();
+
+            let result = std::array::from_fn(|i| $op(value[i]));
+
+            stack.push(Value::V128(V128Shape::I8x16(result)))?;
+            Ok(())
+        }
+    };
+}
+
+/// Generates a binary SIMD operation function for i8x16 vectors.
+///
+/// This macro creates a function that applies a binary operation to each lane
+/// of an i8x16 vector. The given operation should be a method that returns a tuple where the
+/// first element is the result (e.g., `overflowing_*` methods).
+///
+/// # Arguments
+/// * `$func_name` - Name of the generated function
+/// * `$method` - Binary method to call on each lane (e.g., `overflowing_add`, `overflowing_sub`)
+macro_rules! define_i8x16_simd_binary_op {
+    ($func_name:ident => $op:expr) => {
+        #[doc = concat!("Computes `", stringify!($method), "` on each lane of an i8x16 vector.")]
+        ///
+        /// This Method poppes two v128 of the given [ExecutionStack]. After executing
+        /// the operation, the result is pushed back to the stack.
+        ///
+        /// # Arguments
+        /// * `stack` - a mutable reference to the [ExecutionStack] to work with
+        pub fn $func_name(stack: &mut ExecutionStack) -> Result<()> {
+            let (right, left) = (stack.pop_v128()?.to_i8x16(), stack.pop_v128()?.to_i8x16());
+
+            let result = std::array::from_fn(|i| $op(left[i], right[i]));
+
+            stack.push(Value::V128(V128Shape::I8x16(result)))?;
+            Ok(())
+        }
+    };
+}
+
+define_i8x16_simd_binary_op!(i8x16_add => |a: i8, b| a.overflowing_add(b).0);
+define_i8x16_simd_binary_op!(i8x16_sub => |a: i8, b| a.overflowing_sub(b).0);
+define_i8x16_simd_binary_op!(i8x16_mul => |a: i8, b| a.overflowing_mul(b).0);
+define_i8x16_simd_binary_op!(i8x16_min_s => |a: i8, b| a.min(b));
+define_i8x16_simd_binary_op!(i8x16_min_u => |a: i8, b:i8| (a as u8).min(b as u8) as i8);
+
+define_i8x16_simd_unary_op!(i8x16_neg => |a: i8| a.overflowing_neg().0 );

@@ -553,6 +553,41 @@ fn result_to_runtime_value(expr: &WastRet) -> Value {
                 None => unreachable!("Expected a non-null extern reference"),
             }
         }
+        WastRet::Core(WastRetCore::V128(x)) => {
+            return match *x {
+                wast::core::V128Pattern::I8x16(val) => Value::V128(V128Shape::I8x16(val)),
+                wast::core::V128Pattern::I16x8(val) => Value::V128(V128Shape::I16x8(val)),
+                wast::core::V128Pattern::I32x4(val) => Value::V128(V128Shape::I32x4(val)),
+                wast::core::V128Pattern::I64x2(val) => Value::V128(V128Shape::I64x2(val)),
+                wast::core::V128Pattern::F32x4(val) => {
+                    let mut f_arr = [0.0; 4];
+                    for (idx, item) in val.iter().enumerate() {
+                        match item {
+                            NanPattern::Value(value) => {
+                                f_arr[idx] = f32::from_bits(value.bits);
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    Value::V128(V128Shape::F32x4(f_arr))
+                }
+
+                wast::core::V128Pattern::F64x2(val) => {
+                    let mut f_arr = [0.0; 2];
+                    for (idx, item) in val.iter().enumerate() {
+                        match item {
+                            NanPattern::Value(value) => {
+                                f_arr[idx] = f64::from_bits(value.bits);
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    Value::V128(V128Shape::F64x2(f_arr))
+                }
+            };
+        }
         _ => todo!(),
     }
 }
@@ -590,6 +625,11 @@ fn compare_results(actual: Vec<Value>, expected: Vec<Value>) -> bool {
                 println!("Actual: {:x} vs Expected {:x}", x, y);
                 return x.eq(y);
             }
+            (Value::V128(x), Value::V128(y)) => {
+                let x_bytes = x.to_bytes();
+                let y_bytes = y.to_bytes();
+                return x_bytes.eq(&y_bytes);
+            }
             _ => assert_eq!(a, e, "Mismatch at index {}", i),
         }
     }
@@ -621,6 +661,21 @@ fn args_to_runtime_value(expr: &WastArg) -> Value {
                 _ => todo!("`GC` proposal not yet implemented"),
             },
         },
+        WastArg::Core(WastArgCore::V128(x)) => match x {
+            wast::core::V128Const::I8x16(int_array) => Value::V128(V128Shape::I8x16(*int_array)),
+            wast::core::V128Const::I16x8(int_array) => Value::V128(V128Shape::I16x8(*int_array)),
+            wast::core::V128Const::I32x4(int_array) => Value::V128(V128Shape::I32x4(*int_array)),
+            wast::core::V128Const::I64x2(int_array) => Value::V128(V128Shape::I64x2(*int_array)),
+            wast::core::V128Const::F32x4(float_array) => {
+                let f = float_array.map(|v| f32::from_bits(v.bits));
+                Value::V128(V128Shape::F32x4(f))
+            }
+            wast::core::V128Const::F64x2(float_array) => {
+                let f = float_array.map(|v| f64::from_bits(v.bits));
+                Value::V128(V128Shape::F64x2(f))
+            }
+        },
+
         _ => unreachable!("{:?}", expr),
     }
 }

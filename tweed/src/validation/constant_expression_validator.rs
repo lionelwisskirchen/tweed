@@ -1,10 +1,12 @@
 use crate::binary::function_section::FuncDecl;
 use crate::binary::import_section::GlobalImport;
+use crate::core::opcode::vector_extensions::*;
 use crate::core::opcode::*;
 
 use crate::core::error::ValidationError;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
+use crate::validation::simd::simd_validate;
 
 use super::validation_stack::ValidationStack;
 pub type Result<T> = core::result::Result<T, ValidationError>;
@@ -75,6 +77,15 @@ pub fn validate_const_expr(
                     return Err(ValidationError::TypeMismatch);
                 }
                 return Ok(());
+            }
+            VECTOR_EXTENSION_PREFIX => {
+                let byte = reader.next_leb128_u32()?;
+                match byte {
+                    V128_CONST => {
+                        simd_validate::v128_const(reader, &mut abstract_value_stack)?;
+                    }
+                    _ => return Err(ValidationError::UndefinedContantExpression),
+                }
             }
             _ => return Err(ValidationError::UndefinedContantExpression),
         }

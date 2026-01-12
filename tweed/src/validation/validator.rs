@@ -3,6 +3,7 @@ use crate::binary::global_section::GlobalType;
 use crate::binary::memory_section::Limits;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::ValidationError;
+use crate::core::opcode::vector_extensions::*;
 use crate::core::value_types::{RefType, ValType};
 
 use crate::core::signature_lookup::lookup_signature;
@@ -14,6 +15,7 @@ use crate::binary::type_section::FuncType;
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::control_stack::ControlStack;
 use crate::validation::control_types::ControlType;
+use crate::validation::simd::simd_validate;
 use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
 use extensions::*;
@@ -945,6 +947,33 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                         }
                         _ => return Err(ValidationError::UndefinedOpCode(byte as u8)),
+                    }
+                }
+                VECTOR_EXTENSION_PREFIX => {
+                    let byte = self.reader.next_leb128_u32()?;
+                    match byte {
+                        V128_CONST => {
+                            simd_validate::v128_const(self.reader, &mut self.abstract_value_stack)?;
+                        }
+                        I8X16_ADD | I16X8_ADD | I32X4_ADD | I64X2_ADD => {
+                            simd_validate::v128_add(&mut self.abstract_value_stack)?;
+                        }
+                        I8X16_SUB | I16X8_SUB | I32X4_SUB | I64X2_SUB => {
+                            simd_validate::v128_sub(&mut self.abstract_value_stack)?;
+                        }
+                        I16X8_MUL | I32X4_MUL | I64X2_MUL => {
+                            simd_validate::v128_mul(&mut self.abstract_value_stack)?;
+                        }
+                        I8X16_NEG | I16X8_NEG | I32X4_NEG | I64X2_NEG => {
+                            simd_validate::v128_neg(&mut self.abstract_value_stack)?;
+                        }
+                        I8X16_MIN_S | I8X16_MIN_U => {
+                            simd_validate::v128_min_s(&mut self.abstract_value_stack)?;
+                        }
+                        _ => {
+                            println!("Undefined Vector Code");
+                            return Err(ValidationError::UndefinedOpCode(byte as u8));
+                        }
                     }
                 }
 

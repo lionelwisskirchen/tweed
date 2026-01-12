@@ -182,6 +182,7 @@ pub const REF_NULL: u8 = 0xD0;
 pub const REF_IS_NULL: u8 = 0xD1;
 pub const REF_FUNC: u8 = 0xD2;
 pub const EXTENSION_PREFIX: u8 = 0xFC;
+pub const VECTOR_EXTENSION_PREFIX: u8 = 0xFD;
 
 pub mod extensions {
     pub const I32_TRUNC_SAT_F32_S: u32 = 0x00;
@@ -202,4 +203,29 @@ pub mod extensions {
     // pub const TABLE_GROW: u32 = 0x0F;
     // pub const TABLE_SIZE: u32 = 0x10;
     // pub const TABLE_FILL: u32 = 0x11;
+}
+
+pub mod vector_extensions {
+    pub const V128_CONST: u32 = 0x0C;
+
+    pub const I8X16_NEG: u32 = 0x61;
+    pub const I8X16_ADD: u32 = 0x6E;
+    pub const I8X16_SUB: u32 = 0x71;
+    pub const I8X16_MIN_S: u32 = 0x76;
+    pub const I8X16_MIN_U: u32 = 0x77;
+
+    pub const I16X8_ADD: u32 = 0x8E;
+    pub const I16X8_SUB: u32 = 0x91;
+    pub const I16X8_MUL: u32 = 0x95;
+    pub const I16X8_NEG: u32 = 0x81;
+
+    pub const I32X4_ADD: u32 = 0xAE;
+    pub const I32X4_SUB: u32 = 0xB1;
+    pub const I32X4_MUL: u32 = 0xB5;
+    pub const I32X4_NEG: u32 = 0xA1;
+
+    pub const I64X2_ADD: u32 = 0xCE;
+    pub const I64X2_SUB: u32 = 0xD1;
+    pub const I64X2_MUL: u32 = 0xD5;
+    pub const I64X2_NEG: u32 = 0xC1;
 }
