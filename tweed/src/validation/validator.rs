@@ -108,11 +108,11 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             .ok_or(ValidationError::InvalidSignatureIndex)?
             .sig_index;
 
-        let signature = lookup_signature(signature_index, &self.module_environment.typesec);
-        let locals = self.initialize_locals(locals, &signature);
+        let func_signature = lookup_signature(signature_index, &self.module_environment.typesec);
+        let locals = self.initialize_locals(locals, &func_signature);
         let globals = self.initialize_globals();
         self.push_ctrl(ControlType::Func {
-            func_type: signature.clone(),
+            func_type: func_signature.clone(),
             sidetable_idxs: Vec::new(),
             height_of_value_stack: self.abstract_value_stack.height(),
             reachable: true,
@@ -452,16 +452,9 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.abstract_value_stack.push(val1);
                 }
                 RETURN => {
-                    let control_type = self.abstract_control_stack.top();
-                    match control_type {
-                        ControlType::For { func_type, .. }
-                        | ControlType::Block { func_type, .. }
-                        | ControlType::If { func_type, .. }
-                        | ControlType::Func { func_type, .. } => {
-                            self.abstract_value_stack
-                                .pop_expected_vec(&func_type.result)?;
-                        }
-                    }
+                    self.abstract_value_stack
+                        .pop_expected_vec(&func_signature.result)?;
+
                     self.unreachable();
                 }
                 BLOCK => {

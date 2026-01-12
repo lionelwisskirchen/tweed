@@ -12,7 +12,7 @@ const PADDING_BIT_MASK_64: u8 = 0b01111110;
 /// A **safe** bytecode reader for WebAssembly modules.
 ///
 /// `WasmReader` provides sequential read access to a byte vector
-/// containing WebAssembly binary data.  
+/// containing WebAssembly binary data.
 ///
 /// This reader is intended for the *validation* phase and performs
 /// strict error handling to ensure that malformed or truncated input

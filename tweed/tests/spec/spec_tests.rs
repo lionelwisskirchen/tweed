@@ -157,6 +157,11 @@ fn spec_tests_nop() {
 }
 
 #[test_log::test]
+fn spec_tests_return() {
+    run_spec_test(Path::new("./tests/spec/testsuite/return.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_start() {
     run_spec_test(Path::new("./tests/spec/testsuite/start.wast"));
 }
