@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use alloc::vec::Vec;
 
 use crate::core::error::ExecutionError;
@@ -6,9 +8,10 @@ use crate::core::{opcode::*, value_types::ValType};
 
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::values::Value;
+use crate::execution::linker::function_registry_entry::FunctionRegistryEntry;
 
 use super::execution_stack::ExecutionStack;
-use super::store::{FuncInstance, GlobalInstance};
+use super::store::GlobalInstance;
 
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
@@ -16,7 +19,7 @@ pub fn execute_const_expr(
     reader: &mut ValidatedWasmReader,
     globals: &[GlobalInstance],
     result: &[ValType],
-    functions: &[FuncInstance],
+    function_registry: &HashMap<usize, FunctionRegistryEntry>,
 ) -> Result<Vec<Value>> {
     let mut value_stack: ExecutionStack = ExecutionStack::default();
     loop {
@@ -75,8 +78,9 @@ pub fn execute_const_expr(
             }
             REF_FUNC => {
                 let func_idx = reader.next_leb128_u32() as usize;
-
-                functions.get(func_idx).unwrap(); // Validated
+                let _func = function_registry
+                    .get(&func_idx)
+                    .ok_or(ExecutionError::FunctionNotFound)?;
                 value_stack.push(Value::FuncRef(func_idx))?;
             }
             END => {

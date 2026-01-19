@@ -16,7 +16,7 @@ use super::{
     function_section::{process_function_section, FuncDecl},
     global_section::{process_global_section, Global},
     import_section::{process_import_section, Imports},
-    memory_section::{process_memory_section, Limits},
+    memory_section::{process_memory_section, Memory},
     table_section::{process_table_section, Table},
     type_section::{process_type_section, FuncType},
 };
@@ -28,7 +28,7 @@ pub struct ModuleEnvironment {
     pub funcsec: Vec<FuncDecl>,
     pub codesec: Vec<FuncCode>,
     pub exportsec: Vec<Export>,
-    pub memorysec: Vec<Limits>,
+    pub memorysec: Vec<Memory>,
     pub datasec: Vec<DataSegment>,
     pub globalsec: Vec<Global>,
     pub tablesec: Vec<Table>,
@@ -43,9 +43,11 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
     let mut module = ModuleEnvironment {
         ..Default::default()
     };
+
     reader
         .compare_chunk(&[0x00, 0x61, 0x73, 0x6D])
         .map_err(|_| ValidationError::InvalidMagic)?;
+
     reader
         .compare_chunk(&[0x01, 0x00, 0x00, 0x00])
         .map_err(|_| ValidationError::InvalidVersion)?;
@@ -73,6 +75,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                     .into_iter()
                     .map(|f| f.context)
                     .collect();
+
                 module.funcsec = signatures;
                 module.importsec = imports;
             }
@@ -86,6 +89,11 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             0x05 => {
                 info!("Process Memory Section");
+
+                // currently (WebAssembly V2) there is only one memory allowed at once
+                if !module.importsec.memories.is_empty() {
+                    return Err(ValidationError::MultipleMemories);
+                }
                 module.memorysec = process_memory_section(reader)?;
             }
 
@@ -121,15 +129,19 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             0x0B => {
                 info!("Process Data Section");
-                module.datasec =
-                    process_data_section(reader, &module.importsec.globals, &module.funcsec)?;
+                module.datasec = process_data_section(
+                    reader,
+                    &module.importsec.globals,
+                    &module.funcsec,
+                    module.memorysec.len() + module.importsec.memories.len(),
+                )?;
             }
             0x0C => {
                 info!("Process Data Count Section");
                 module.datacountsec = process_data_count_section(reader)?;
             }
             _ => {
-                return Err(ValidationError::UnknownSectionCode(section_code));
+                return Err(ValidationError::MalformedSectionId);
             }
         }
     }

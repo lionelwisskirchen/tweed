@@ -12,6 +12,21 @@ pub struct Table {
     pub limit: Limits,
 }
 
+/// Processes the **table section** according to
+/// [WebAssembly specification: Table Section](https://webassembly.github.io/spec/core/binary/modules.html#table-section).
+///
+/// This function parses the table section into the [`Table`] structure. For this it determines the
+/// size (limits) and the ref_type of the table.
+///
+/// # Arguments
+/// * `reader`: a mutable reference to the WasmReader to read more bytes.
+///
+/// # Return
+/// Ok(Vec<Table>) if everything is fine.
+///
+/// # Error
+/// * `ValidationError::SizeMinimumMustNotBeGreaterThanMaximum`: The min value of the table size
+///   is larger than the max value.
 pub fn process_table_section(reader: &mut WasmReader) -> Result<Vec<Table>> {
     reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
@@ -40,7 +55,7 @@ pub fn process_table_section(reader: &mut WasmReader) -> Result<Vec<Table>> {
                 ref_type: RefType::ExternRef,
                 limit: Limits { min, max },
             }),
-            _ => unreachable!(),
+            _ => return Err(ValidationError::UnknownTable),
         }
     }
     Ok(tables)

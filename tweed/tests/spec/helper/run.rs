@@ -1,6 +1,7 @@
-use log::info;
+use log::{error, info};
 use std::collections::HashMap;
 use std::{self, f32, fs};
+use tweed::binary::table_section::Table;
 use tweed::binary::type_section::FuncType;
 use tweed::core::value_types::ValType;
 use tweed::core::values::NaN;
@@ -98,7 +99,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         .unwrap();
 
     linker
-        .add_function(
+        .add_function_import(
             "spectest".to_string(),
             "print_i32".to_string(),
             FuncType {
@@ -112,7 +113,80 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         )
         .unwrap();
     linker
-        .add_function(
+        .add_function_import(
+            "spectest".to_string(),
+            "print_i64".to_string(),
+            FuncType {
+                parameter: vec![ValType::I64],
+                result: vec![],
+            },
+            |_, args| {
+                println!("{:?}", args);
+                Ok(vec![])
+            },
+        )
+        .unwrap();
+    linker
+        .add_function_import(
+            "spectest".to_string(),
+            "print_f32".to_string(),
+            FuncType {
+                parameter: vec![ValType::F32],
+                result: vec![],
+            },
+            |_, args| {
+                println!("{:?}", args);
+                Ok(vec![])
+            },
+        )
+        .unwrap();
+    linker
+        .add_function_import(
+            "spectest".to_string(),
+            "print_f64".to_string(),
+            FuncType {
+                parameter: vec![ValType::F64],
+                result: vec![],
+            },
+            |_, args| {
+                println!("{:?}", args);
+                Ok(vec![])
+            },
+        )
+        .unwrap();
+
+    linker
+        .add_function_import(
+            "spectest".to_string(),
+            "print_i32_f32".to_string(),
+            FuncType {
+                parameter: vec![ValType::I32, ValType::F32],
+                result: vec![],
+            },
+            |_, args| {
+                println!("{:?}", args);
+                Ok(vec![])
+            },
+        )
+        .unwrap();
+
+    linker
+        .add_function_import(
+            "spectest".to_string(),
+            "print_f64_f64".to_string(),
+            FuncType {
+                parameter: vec![ValType::F64, ValType::F64],
+                result: vec![],
+            },
+            |_, args| {
+                println!("{:?}", args);
+                Ok(vec![])
+            },
+        )
+        .unwrap();
+
+    linker
+        .add_function_import(
             "spectest".to_string(),
             "print".to_string(),
             FuncType {
@@ -123,11 +197,27 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         )
         .unwrap();
 
+    linker
+        .add_table_import(
+            "spectest".to_string(),
+            "table".to_string(),
+            Table {
+                ref_type: tweed::core::value_types::RefType::FuncRef,
+                limit: tweed::binary::memory_section::Limits { min: 10, max: None },
+            },
+        )
+        .unwrap();
+
     for directive in wast.directives {
         use wast::WastDirective::{
             AssertExhaustion, AssertInvalid, AssertMalformed, AssertReturn, AssertTrap,
             AssertUnlinkable, Invoke, Module, Register,
         };
+
+        println!(
+            "Running Directive: {}",
+            directive.span().linecol_in(&input).0 + 1
+        );
 
         match directive {
             Register { name, module, .. } => match module {
@@ -207,7 +297,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         if format!("{e}") == message {
                             report.success.push(result);
                         } else {
-                            info!("Error msg doesn't match: {e} == {message}");
+                            error!("Error msg doesn't match: {e} == {message}");
                             report.failure.push(result);
                         }
                     } else {

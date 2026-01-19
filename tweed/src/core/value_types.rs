@@ -3,8 +3,15 @@ use crate::{core::error::ValidationError, Value};
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Reference Types for function and external references
+///
+/// According to [WebAssembly specification §2.3.5](https://webassembly.github.io/spec/core/syntax/types.html#reference-types):
+/// "Reference types classify first-class references to objects in the runtime store."
+/// Therefore all Instances referenced using this Type must be located on the store!
 pub enum RefType {
+    /// Reference to any WebAssembly function (`funcref`).
     FuncRef,
+    /// Reference to host-defined objects outside WebAssembly (`externref`).
     ExternRef,
 }
 

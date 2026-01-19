@@ -33,6 +33,11 @@ fn spec_tests_br() {
 }
 
 #[test_log::test]
+fn spec_tests_br_if() {
+    run_spec_test(Path::new("./tests/spec/testsuite/br_if.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_block() {
     run_spec_test(Path::new("./tests/spec/testsuite/block.wast"));
 }
@@ -53,23 +58,18 @@ fn spec_tests_comments() {
 }
 
 #[test_log::test]
-fn spec_tests_conversions() {
-    run_spec_test(Path::new("./tests/spec/testsuite/conversions.wast"));
-}
-
-#[test_log::test]
 fn spec_tests_const() {
     run_spec_test(Path::new("./tests/spec/testsuite/const.wast"));
 }
 
 #[test_log::test]
-fn spec_tests_i32() {
-    run_spec_test(Path::new("./tests/spec/testsuite/i32.wast"));
+fn spec_tests_conversions() {
+    run_spec_test(Path::new("./tests/spec/testsuite/conversions.wast"));
 }
 
 #[test_log::test]
-fn spec_tests_i64() {
-    run_spec_test(Path::new("./tests/spec/testsuite/i64.wast"));
+fn spec_tests_endianess() {
+    run_spec_test(Path::new("./tests/spec/testsuite/endianness.wast"));
 }
 
 #[test_log::test]
@@ -123,8 +123,23 @@ fn spec_tests_float_misc() {
 }
 
 #[test_log::test]
+fn spec_tests_forward() {
+    run_spec_test(Path::new("./tests/spec/testsuite/forward.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_global() {
     run_spec_test(Path::new("./tests/spec/testsuite/global.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_i32() {
+    run_spec_test(Path::new("./tests/spec/testsuite/i32.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_i64() {
+    run_spec_test(Path::new("./tests/spec/testsuite/i64.wast"));
 }
 
 #[test_log::test]
@@ -138,13 +153,58 @@ fn spec_tests_inline_module() {
 }
 
 #[test_log::test]
-fn spec_tests_local_tee() {
-    run_spec_test(Path::new("./tests/spec/testsuite/local_tee.wast"));
+fn spec_tests_binary_leb128() {
+    run_spec_test(Path::new("./tests/spec/testsuite/binary-leb128.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_int_exprs() {
+    run_spec_test(Path::new("./tests/spec/testsuite/int_exprs.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_int_literals() {
+    run_spec_test(Path::new("./tests/spec/testsuite/int_literals.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_left_to_right() {
+    run_spec_test(Path::new("./tests/spec/testsuite/left-to-right.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_linker() {
+    run_spec_test(Path::new("./tests/spec/testsuite/linking.wast"));
 }
 
 #[test_log::test]
 fn spec_tests_load() {
     run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_local_get() {
+    run_spec_test(Path::new("./tests/spec/testsuite/local_get.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_local_set() {
+    run_spec_test(Path::new("./tests/spec/testsuite/local_set.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_local_tee() {
+    run_spec_test(Path::new("./tests/spec/testsuite/local_tee.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_loop() {
+    run_spec_test(Path::new("./tests/spec/testsuite/loop.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_memory() {
+    run_spec_test(Path::new("./tests/spec/testsuite/memory.wast"));
 }
 
 #[test_log::test]
@@ -173,12 +233,13 @@ fn spec_tests_start() {
 }
 
 #[test_log::test]
-fn spec_tests_select() {
-    run_spec_test(Path::new("./tests/spec/testsuite/select.wast"));
-}
-#[test_log::test]
 fn spec_tests_store() {
     run_spec_test(Path::new("./tests/spec/testsuite/store.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_switch() {
+    run_spec_test(Path::new("./tests/spec/testsuite/switch.wast"));
 }
 
 #[test_log::test]
@@ -192,6 +253,38 @@ fn spec_tests_table_get() {
 }
 
 #[test_log::test]
-fn spec_tests_binary_leb128() {
-    run_spec_test(Path::new("./tests/spec/testsuite/binary-leb128.wast"));
+fn spec_tests_table_set() {
+    run_spec_test(Path::new("./tests/spec/testsuite/table_set.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_token() {
+    run_spec_test(Path::new("./tests/spec/testsuite/token.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_traps() {
+    run_spec_test(Path::new("./tests/spec/testsuite/traps.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_type() {
+    run_spec_test(Path::new("./tests/spec/testsuite/type.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_unreachable() {
+    run_spec_test(Path::new("./tests/spec/testsuite/unreachable.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_unwind() {
+    run_spec_test(Path::new("./tests/spec/testsuite/unwind.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_utf8_invalid_encoding() {
+    run_spec_test(Path::new(
+        "./tests/spec/testsuite/utf8-invalid-encoding.wast",
+    ));
 }

@@ -77,6 +77,7 @@ impl<'store> Executor<'store> {
             .get_mut(*funcaddr)
             .unwrap()
             .clone();
+
         let mut env: HostEnv = (&self.store.data).into();
         match func_inst {
             FuncInstance::Internal(instance) => {
@@ -835,7 +836,6 @@ impl<'store> Executor<'store> {
                 }
                 CALL_INDIRECT => {
                     let type_index = reader.next_leb128_u32();
-
                     let table_index = reader.next_leb128_u32();
 
                     let table_addr = instance
@@ -865,16 +865,12 @@ impl<'store> Executor<'store> {
                         Value::ExternRef(_) => return Err(ExecutionError::TypeMismatch),
                         _ => unreachable!(),
                     };
-                    let function_addr = instance
-                        .funcaddr
-                        .get(index)
-                        .ok_or(ExecutionError::InvalidFunctionIndex)?;
 
                     let function = self
                         .store
                         .data
                         .functions
-                        .get_mut(*function_addr)
+                        .get_mut(index)
                         .ok_or(ExecutionError::InvalidFunctionIndex)?
                         .clone();
 
@@ -904,6 +900,10 @@ impl<'store> Executor<'store> {
                     let index = reader.next_leb128_u32();
                     trace!("CALL({index})");
 
+                    // funcaddr contains the indices of the functions on the store
+                    // | [0] StoreIdx = 2 | [1] StoreIdx = 3 | [2] StoreIdx = 6 | [3] StoreIdx = x |
+                    // so if want to call the function with index 0 we actually call the second
+                    // function in the store
                     let function_addr = instance
                         .funcaddr
                         .get(index as usize)
@@ -916,6 +916,7 @@ impl<'store> Executor<'store> {
                         .get_mut(*function_addr)
                         .ok_or(ExecutionError::InvalidFunctionIndex)?
                         .clone();
+
                     match function {
                         FuncInstance::Internal(instance) => {
                             let frame = build_frame(&instance, &mut self.stack)?;

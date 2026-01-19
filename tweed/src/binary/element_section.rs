@@ -75,7 +75,6 @@ pub struct ElementSegment {
 /// # Error
 /// * `Error::UnknownTable`: The elem references an unknown table
 /// * `Error::UnknownFunction`: The elem references an unknown function
-///
 pub fn process_element_section(
     reader: &mut WasmReader,
     global_imports: &[GlobalImport],

@@ -76,7 +76,7 @@ pub enum ExecutionError {
     InvalidConversionToInt,
     InvalidSignatureIndex,
     FunctionNotFound,
-    MissingTableImport,
+    MultipleMemories,
 }
 
 impl Display for ExecutionError {
@@ -113,7 +113,7 @@ impl Display for ExecutionError {
             Self::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
             Self::InvalidSignatureIndex => f.write_str("invalid signature index"),
             Self::FunctionNotFound => f.write_str("function not found"),
-            Self::MissingTableImport => f.write_str("missing table import"),
+            Self::MultipleMemories => f.write_str("multiple memories"),
         }
     }
 }
@@ -125,11 +125,13 @@ pub enum ValidationError {
     InvalidIntegerRepresentation,
     InvalidStartFunctionSignature,
     NoDataSegmentFound(Option<usize>),
-    UnknownMemory(usize),
+    UnknownMemoryIdx(usize),
+    UnknownMemory,
     UnknownFunction,
     UnknownType,
     UnknownTable,
     MultipleMemoriesNotImplemented,
+    MultipleMemories,
     MalformedMutability,
     InvalidMagic,
     InvalidVersion,
@@ -142,7 +144,7 @@ pub enum ValidationError {
     UndefinedContantExpression,
     UnknownLabel,
     UnknownGlobal,
-    UnknownSectionCode(u8),
+    MalformedSectionId,
     UnsupportedExportKind,
     UnsupportedValueType,
     IllegalSelectType,
@@ -153,11 +155,14 @@ pub enum ValidationError {
     GlobalIsImmutable,
     MalformedMemOpFlags,
     SizeMinimumMustNotBeGreaterThanMaximum,
+    MemorySizeExceeded,
     UnsupportedImportKind,
     InvalidStringRepresentation,
     UnequalChunkComparison,
     InvalidElementKind,
     MissingValue,
+    UnexpectedEnd,
+    EndOpCodeExpected,
 }
 
 impl Display for ValidationError {
@@ -178,10 +183,10 @@ impl Display for ValidationError {
                 }
             }
             Self::MalformedMutability => f.write_str("malformed mutability"),
-            Self::InvalidMagic => f.write_str("invalid magic number"),
+            Self::InvalidMagic => f.write_str("magic header not detected"),
             Self::GlobalIsImmutable => f.write_str("global is immutable"),
             Self::InvalidIntegerRepresentation => f.write_str("integer representation too long"),
-            Self::InvalidVersion => f.write_str("invalid wasm version"),
+            Self::InvalidVersion => f.write_str("unknown binary version"),
             Self::TypeMismatch | Self::InvalidSignatureIndex => f.write_str("type mismatch"),
             Self::InvalidControlFlow => f.write_str("invalid control flow"),
             Self::InvalidLocalIndex => f.write_str("unknown local"),
@@ -192,12 +197,11 @@ impl Display for ValidationError {
             Self::MultipleMemoriesNotImplemented => {
                 f.write_str("multiple Memory proposal is not implemented")
             }
+            Self::MultipleMemories => f.write_str("multiple memories"),
             Self::UndefinedOpCode(opcode) => {
                 f.write_fmt(format_args!("invalid opcode {opcode:#04X}"))
             }
-            Self::UnknownSectionCode(seccode) => {
-                f.write_fmt(format_args!("unknown sectioncode {seccode:#04X}"))
-            }
+            Self::MalformedSectionId => f.write_str("malformed section id"),
             Self::UnknownType => f.write_str("unknown type"),
 
             Self::UnknownGlobal => f.write_str("unknown global"),
@@ -209,7 +213,8 @@ impl Display for ValidationError {
 
             Self::UndefinedMemory => f.write_str("undefined memory"),
             Self::UndefinedTable => f.write_str("undefined table"),
-            Self::UnknownMemory(idx) => f.write_fmt(format_args!("unknown memory {idx}")),
+            Self::UnknownMemoryIdx(idx) => f.write_fmt(format_args!("unknown memory {idx}")),
+            Self::UnknownMemory => f.write_fmt(format_args!("unknown memory")),
             Self::InvalidAlignment => f.write_str("alignment must not be larger than natural"),
 
             Self::InvalidElementKind => f.write_str("invalid element kind"),
@@ -218,6 +223,11 @@ impl Display for ValidationError {
             }
             Self::UnsupportedImportKind => f.write_str("unsupported import kind"),
             Self::MissingValue => f.write_str("missing value"),
+            Self::MemorySizeExceeded => {
+                f.write_str("memory size must be at most 65536 pages (4GiB)")
+            }
+            Self::UnexpectedEnd => f.write_str("unexpected end"),
+            Self::EndOpCodeExpected => f.write_str("END opcode expected"),
         }
     }
 }

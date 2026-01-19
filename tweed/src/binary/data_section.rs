@@ -8,13 +8,17 @@ use crate::validation::constant_expression_validator::validate_const_expr;
 use super::function_section::FuncDecl;
 use super::import_section::GlobalImport;
 pub type Result<T> = core::result::Result<T, ValidationError>;
+
+/// Structure to differentiate between active and passive data segments
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SegmentMode {
+    /// Contents of active data segments are copied during instantiation
     Active {
         memory: u32,
         offset_start: usize,
         offset_end: usize,
     },
+    /// Contents of passive data segments can be copied using explicit instructions during runtime.
     Passive,
 }
 
@@ -24,10 +28,29 @@ pub struct DataSegment {
     pub init: Vec<u8>,
 }
 
+/// Processes the **data section** according to
+/// [WebAssembly specification: Data Section](https://webassembly.github.io/spec/core/binary/modules.html#data-section).
+///
+/// This function differs between active and passive data segments. Active data segments have
+/// mode 0 (implicit memory index) or 2 (explicit memory index). Passive data segments have mode 1.
+/// This function creates a [`DataSegment`] for every entry.
+///
+/// # Arguments
+/// * `reader`: a mutable reference to the WasmReader to read more bytes.
+/// * `global_imports`: a reference to an array of global imported ValTypes.
+/// * `functions`: a reference to all registered functions
+/// * `number_of_memories`: number of all available memories (imported + local)
+///
+/// # Return
+/// Ok(Vec<DataSegment>) if everything is fine.
+///
+/// # Error
+/// * `ValidationError::UnknownMemory`: The memory index does not point to a valid memory
 pub fn process_data_section(
     reader: &mut WasmReader,
     global_imports: &[GlobalImport],
     functions: &[FuncDecl],
+    number_of_memories: usize,
 ) -> Result<Vec<DataSegment>> {
     reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
@@ -37,6 +60,15 @@ pub fn process_data_section(
         let mode = reader.next_leb128_u32()?;
         match mode {
             0 => {
+                // mode active
+                // memory index is implicit 0
+                let memory_index = 0;
+
+                // currently (WebAssembly V2) there is only one memory allowed at once
+                if memory_index as usize >= number_of_memories {
+                    return Err(ValidationError::UnknownMemory);
+                }
+
                 data_segments.push(create_data_segment(reader, global_imports, functions, 0)?);
             }
             1 => {
@@ -50,7 +82,14 @@ pub fn process_data_section(
                 data_segments.push(seg);
             }
             2 => {
+                // mode active
+                // memory index is explicit given
                 let memory_index = reader.next_leb128_u32()?;
+
+                if memory_index as usize > number_of_memories {
+                    return Err(ValidationError::UnknownMemory);
+                }
+
                 data_segments.push(create_data_segment(
                     reader,
                     global_imports,

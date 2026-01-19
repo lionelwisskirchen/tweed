@@ -59,6 +59,10 @@ impl WasmReader {
         self.byte_pointer.saturating_sub(1)
     }
 
+    pub fn get_bytecode_size(&self) -> usize {
+        self.bytecode.len()
+    }
+
     pub fn next_leb128_u32(&mut self) -> Result<u32> {
         let mut result: u32 = 0;
         for i in 0..=4 {

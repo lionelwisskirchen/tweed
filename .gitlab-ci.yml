@@ -14,20 +14,20 @@ workflow:
 default:
   tags:
     - pi-runner
-    
+
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
-style-test-job: 
-  stage: test 
+style-test-job:
+  stage: test
   script: nix develop --command style-checks
 
-format-test-job: 
-  stage: test 
+format-test-job:
+  stage: test
   script: nix develop --command format-checks
 
 unit-test-job:
-  stage: test 
+  stage: test
   artifacts:
     reports:
       coverage_report:

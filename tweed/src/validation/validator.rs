@@ -1,5 +1,6 @@
 use crate::alloc::borrow::ToOwned;
 use crate::binary::global_section::GlobalType;
+use crate::binary::memory_section::Limits;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::ValidationError;
 use crate::core::value_types::{RefType, ValType};
@@ -100,6 +101,68 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         imported_globals.extend(globals);
         imported_globals
     }
+
+    /// Initialize the tables for the validation process
+    ///
+    /// In this function, the tables are concatenated as follows:
+    /// | Tables            |
+    /// |-------------------|
+    /// | imported table 0  |
+    /// | imported table 1  |
+    /// | imported table x  |
+    /// | local table 0     |
+    /// | local table 1     |
+    ///
+    /// This is needed to be able to validate the module that use imported tables
+    ///
+    /// # Returns
+    /// Returns a list of [`RefType`]s where imported tables appear first, in their original order,
+    /// followed by locally defined tables in module order.
+    fn initialize_tables(&mut self) -> Vec<RefType> {
+        let mut imported_tables: Vec<RefType> = self
+            .module_environment
+            .importsec
+            .tables
+            .iter()
+            .map(|t| t.context.ref_type)
+            .collect();
+
+        let local_tables: Vec<RefType> = self
+            .module_environment
+            .tablesec
+            .iter()
+            .map(|g| g.ref_type)
+            .collect();
+        imported_tables.extend(local_tables);
+        imported_tables
+    }
+
+    /// Initialize the tables for the validation process
+    ///
+    /// This is needed to be able to validate the module that use imported tables
+    ///
+    /// # Returns
+    /// Returns a list of [`Limits`]s where imported memories appear first, in their original order,
+    /// followed by locally defined memories in module order.
+    fn initialize_memories(&mut self) -> Vec<Limits> {
+        let mut imported_memories: Vec<Limits> = self
+            .module_environment
+            .importsec
+            .memories
+            .iter()
+            .map(|t| t.context.limits.clone())
+            .collect();
+
+        let local_memories: Vec<Limits> = self
+            .module_environment
+            .memorysec
+            .iter()
+            .map(|g| g.limits.clone())
+            .collect();
+        imported_memories.extend(local_memories);
+        imported_memories
+    }
+
     pub fn validate_code(&mut self, locals: &[ValType], index: usize) -> Result<SideTable> {
         let signature_index = self
             .module_environment
@@ -109,14 +172,17 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             .sig_index;
 
         let func_signature = lookup_signature(signature_index, &self.module_environment.typesec);
-        let locals = self.initialize_locals(locals, &func_signature);
-        let globals = self.initialize_globals();
         self.push_ctrl(ControlType::Func {
             func_type: func_signature.clone(),
             sidetable_idxs: Vec::new(),
             height_of_value_stack: self.abstract_value_stack.height(),
             reachable: true,
         });
+
+        let locals = self.initialize_locals(locals, &func_signature);
+        let globals = self.initialize_globals();
+        let tables = self.initialize_tables();
+        let memories = self.initialize_memories();
 
         loop {
             let byte = self.reader.next_byte()?;
@@ -403,12 +469,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     if self.module_environment.tablesec.len() <= table_idx {
                         return Err(ValidationError::UndefinedTable);
                     }
-                    let ref_type = self
-                        .module_environment
-                        .tablesec
-                        .get(table_idx)
-                        .unwrap()
-                        .ref_type;
+                    let ref_type = tables.get(table_idx).unwrap();
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ref_type.to_val_type());
                 }
@@ -419,12 +480,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         return Err(ValidationError::UndefinedTable);
                     }
 
-                    let ref_type = self
-                        .module_environment
-                        .tablesec
-                        .get(table_idx)
-                        .unwrap()
-                        .ref_type;
+                    let ref_type = tables.get(table_idx).unwrap();
 
                     self.abstract_value_stack
                         .pop_expected(ref_type.to_val_type())?;
@@ -568,17 +624,21 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 CALL_INDIRECT => {
                     let type_index = self.reader.next_leb128_u32()?;
-
                     let table_index = self.reader.next_leb128_u32()?;
 
-                    let table = self
-                        .module_environment
-                        .tablesec
+                    let table = tables
                         .get(table_index as usize)
                         .ok_or(ValidationError::UnknownTable)?;
-                    if table.ref_type != RefType::FuncRef {
-                        return Err(ValidationError::TypeMismatch);
+
+                    // ensure the referenced table contains FuncRefs
+                    match table {
+                        RefType::FuncRef => (),
+                        _ => {
+                            error!("wrong type: {:?}", table);
+                            return Err(ValidationError::TypeMismatch);
+                        }
                     }
+
                     let func_type = self
                         .module_environment
                         .typesec
@@ -608,72 +668,72 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.abstract_value_stack.push_vec(&sig.result);
                 }
                 I32_STORE => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 I32_STORE8 => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 I32_STORE16 => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 I64_STORE => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 I64_STORE8 => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 I64_STORE16 => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 I64_STORE32 => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I64)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 F32_STORE => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::F32)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                 }
                 F64_STORE => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::F64)?;
@@ -681,24 +741,24 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
 
                 I32_LOAD => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 F32_LOAD => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::F32);
                 }
                 F64_LOAD => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
 
                     self.check_align(3)?;
@@ -706,40 +766,40 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::F64);
                 }
                 I32_LOAD8_U => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I64_LOAD8_S | I64_LOAD8_U => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(0)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
                 I64_LOAD16_U | I64_LOAD16_S => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
                 I64_LOAD32_U | I64_LOAD32_S => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(2)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I64);
                 }
                 I32_LOAD8_S => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
 
                     self.check_align(0)?;
@@ -747,8 +807,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I32_LOAD16_U | I32_LOAD16_S => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(1)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -759,8 +819,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.abstract_value_stack.push(ValType::I32);
                 }
                 I64_LOAD => {
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.check_align(3)?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -783,8 +843,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         return Err(ValidationError::MultipleMemoriesNotImplemented);
                     }
 
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
                     self.abstract_value_stack.push(ValType::I32);
@@ -795,8 +855,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         return Err(ValidationError::MultipleMemoriesNotImplemented);
                     }
 
-                    if self.module_environment.memorysec.is_empty() {
-                        return Err(ValidationError::UndefinedMemory)?;
+                    if memories.is_empty() {
+                        return Err(ValidationError::UnknownMemory)?;
                     }
                     self.abstract_value_stack.push(ValType::I32);
                 }
@@ -843,8 +903,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             if idx != 0 {
                                 return Err(ValidationError::MultipleMemoriesNotImplemented);
                             }
-                            if self.module_environment.memorysec.is_empty() {
-                                return Err(ValidationError::UnknownMemory(idx as usize))?;
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemoryIdx(idx as usize))?;
                             }
                             if self.module_environment.datacountsec == 0
                                 || self.module_environment.datacountsec <= data_index
@@ -863,7 +923,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                                 return Err(ValidationError::MultipleMemoriesNotImplemented);
                             }
 
-                            if self.module_environment.memorysec.is_empty() {
+                            if memories.is_empty() {
                                 return Err(ValidationError::UndefinedMemory)?;
                             }
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -876,7 +936,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                                 return Err(ValidationError::MultipleMemoriesNotImplemented);
                             }
 
-                            if self.module_environment.memorysec.is_empty() {
+                            if memories.is_empty() {
                                 return Err(ValidationError::UndefinedMemory)?;
                             }
 

@@ -1,4 +1,5 @@
 use crate::binary::memory_section::Limits;
+use crate::binary::memory_section::Memory;
 use crate::binary::table_section::Table;
 use crate::core::error::ValidationError;
 use crate::core::value_types::RefType;
@@ -31,17 +32,27 @@ pub struct TableImport {
     pub context: Table,
 }
 
+#[derive(Debug, Clone)]
+pub struct MemoryImport {
+    pub module: String,
+    pub name: String,
+    pub context: Memory,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Imports {
     pub globals: Vec<GlobalImport>,
     pub tables: Vec<TableImport>,
     pub functions: Vec<FunctionImport>,
+    pub memories: Vec<MemoryImport>,
 }
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
-/// Processes the **import section** according to [WebAssembly specification: Import Section](https://webassembly.github.io/spec/core/binary/modules.html#import-section).
+/// Processes the **import section** according to
+/// [WebAssembly specification: Import Section](https://webassembly.github.io/spec/core/binary/modules.html#import-section).
 ///
-/// This function reads the imports and differs between Functions, Tables and Globals. The Imports are stored in a [Imports] Struct which is returned at the end.
+/// This function reads the imports and differs between Functions, Tables, Memories and Globals.
+/// The Imports are stored in a [`Imports`] Struct which is returned at the end.
 ///
 /// # Arguments
 /// * `reader`: a mutable reference to the WasmReader to read more bytes.
@@ -50,9 +61,10 @@ pub type Result<T> = core::result::Result<T, ValidationError>;
 /// Ok(Imports) if everything is fine.
 ///
 /// # Error
-/// * `Error::SizeMinimumMustNotBeGreaterThanMaximum`: The limits of the imported table are not correct. (Min > Max)
-/// * `Error::MalformedMutability` : The imported global is either declared as mutable or its mutability cannot be determined
-/// * `Error::UnsupportedImportKind` : The kind of the import cannot be parsed
+/// * `ValidationError::MissingValue`: The reftype can't be determined correctly
+/// * `ValidationError::MalformedMutability`: The imported global is either declared as mutable or
+///   its mutability cannot be determined
+/// * `ValidationError::UnsupportedImportKind`: The kind of the import cannot be parsed
 pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
     reader.next_leb128_u32()?;
     // Size is not required for decoding, so just check if size is present
@@ -84,9 +96,6 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                 limits.min = reader.next_leb128_u32()?;
                 limits.max = if flags != 0 {
                     let max_val = reader.next_leb128_u32()?;
-                    if max_val < limits.min {
-                        return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
-                    }
                     Some(max_val)
                 } else {
                     None
@@ -104,8 +113,26 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                 imports.tables.push(table_import);
             }
             // Memory Import
-            0x04 => {
-                todo!("`Memory import not yet implemented")
+            0x02 => {
+                let flags = reader.next_leb128_u32()?;
+                let min = reader.next_leb128_u32()?;
+                let max = if flags != 0 {
+                    let max_val = reader.next_leb128_u32()?;
+                    Some(max_val)
+                } else {
+                    None
+                };
+
+                let limits = Limits { min, max };
+                let memory = Memory { limits };
+
+                let memory_import = MemoryImport {
+                    module: module_name,
+                    name: import_name,
+                    context: memory,
+                };
+
+                imports.memories.push(memory_import);
             }
             // Global Import
             0x03 => {
@@ -128,7 +155,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                     },
                 });
             }
-            _ => return Err(ValidationError::UnsupportedExportKind),
+            _ => return Err(ValidationError::UnsupportedImportKind),
         }
     }
     Ok(imports)
