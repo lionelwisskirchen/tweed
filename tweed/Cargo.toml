@@ -26,4 +26,4 @@ debug = true
 [features]
 default = ["std"]
 std = []
- 
+unsafe = []

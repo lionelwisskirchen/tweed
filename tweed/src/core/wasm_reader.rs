@@ -63,85 +63,220 @@ impl WasmReader {
         self.bytecode.len()
     }
 
+    /// Decodes the next unsigned LEB128-encoded `u32`.
+    ///
+    /// Benchmarks indicate that this implementation is currently the
+    /// fastest available decoding variant.
     pub fn next_leb128_u32(&mut self) -> Result<u32> {
-        let mut result: u32 = 0;
-        for i in 0..=4 {
-            let byte = self.next_byte()?;
-            let low = (byte & VALUE_BIT_MASK) as u32;
-            result |= low << (7 * i);
-            if (byte & CONTINUATION_BIT_MASK) == 0 {
-                if i == 4 {
-                    let padding = byte & PADDING_BIT_MASK_32;
-                    if padding != 0 {
-                        return Err(ValidationError::IntegerTooLarge);
-                    }
-                }
-                return Ok(result);
-            }
+        let mut byte = self.next_byte()?;
+        let mut result: u32 = (byte & VALUE_BIT_MASK) as u32;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            return Ok(result);
         }
-        Err(ValidationError::InvalidIntegerRepresentation)
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as u32) << 7;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as u32) << 14;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as u32) << 21;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as u32) << 28;
+
+        let padding = byte & PADDING_BIT_MASK_32;
+        if padding != 0 {
+            return Err(ValidationError::IntegerTooLarge);
+        }
+        if (byte & CONTINUATION_BIT_MASK) != 0 {
+            return Err(ValidationError::InvalidIntegerRepresentation);
+        }
+        Ok(result)
     }
+    /// Decodes the next signed LEB128-encoded `i64`.
+    ///
+    /// Benchmarks indicate that this implementation is currently the
+    /// fastest available decoding variant.
     pub fn next_leb128_i64(&mut self) -> Result<i64> {
-        let mut result: i64 = 0;
-        for i in 0..=9 {
-            let byte = self.next_byte()?;
-            let low = (byte & VALUE_BIT_MASK) as i64;
-            result |= low << (7 * i);
-            if (byte & CONTINUATION_BIT_MASK) == 0 {
-                let mut sign = byte & 0b01000000;
-                if i == 9 {
-                    let padding = byte & PADDING_BIT_MASK_64;
-                    sign = byte & 0b00000001; // Last Byte has different sign position
-                    let padding_valid = if sign == 0 {
-                        padding == 0
-                    } else {
-                        padding == PADDING_BIT_MASK_64
-                    };
-                    if !padding_valid {
-                        return Err(ValidationError::IntegerTooLarge);
-                    }
-                    return Ok(result); // No sign extend needed, as it's shifted by 63!
-                }
-                // sign-extend if needed
-                if (sign) != 0 {
-                    result |= !0 << ((i + 1) * 7);
-                }
-
-                return Ok(result);
-            }
+        let mut byte = self.next_byte()?;
+        let mut result: i64 = (byte & VALUE_BIT_MASK) as i64;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 7;
+            };
+            return Ok(result);
         }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 7;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 14;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 14;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 21;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 21;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 28;
+            };
+            return Ok(result);
+        }
+
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 28;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 35;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 35;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 42;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 42;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 49;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 49;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 56;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 56;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 63;
+            };
+            return Ok(result);
+        }
+
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i64) << 63;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b00000001; // Last Byte has different sign position
+            let padding = byte & PADDING_BIT_MASK_64;
+            let padding_valid = if sign == 0 {
+                padding == 0
+            } else {
+                padding == PADDING_BIT_MASK_64
+            };
+            if !padding_valid {
+                return Err(ValidationError::IntegerTooLarge);
+            }
+            return Ok(result); // No sign extend needed, as it's shifted by 28!
+        }
+
         Err(ValidationError::InvalidIntegerRepresentation)
     }
+
+    /// Decodes the next signed LEB128-encoded `i32`.
+    ///
+    /// Benchmarks indicate that this implementation is currently the
+    /// fastest available decoding variant.
     pub fn next_leb128_i32(&mut self) -> Result<i32> {
-        let mut result: i32 = 0;
-        for i in 0..=4 {
-            let byte = self.next_byte()?;
-            let low = (byte & VALUE_BIT_MASK) as i32;
-            result |= low << (7 * i);
-            if (byte & CONTINUATION_BIT_MASK) == 0 {
-                let mut sign = byte & 0b01000000;
-                if i == 4 {
-                    let padding = byte & PADDING_BIT_MASK_32;
-                    sign = byte & 0b00001000; // Last Byte has different sign position
-                    let padding_valid = if sign == 0 {
-                        padding == 0
-                    } else {
-                        padding == PADDING_BIT_MASK_32
-                    };
-
-                    if !padding_valid {
-                        return Err(ValidationError::IntegerTooLarge);
-                    }
-                    return Ok(result); // No sign extend needed, as it's shifted by 28!
-                }
-                // sign-extend if needed
-                if (sign) != 0 {
-                    result |= !0 << ((i + 1) * 7);
-                }
-
-                return Ok(result);
-            }
+        let mut byte = self.next_byte()?;
+        let mut result: i32 = (byte & VALUE_BIT_MASK) as i32;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 7;
+            };
+            return Ok(result);
         }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i32) << 7;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 14;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i32) << 14;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 21;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i32) << 21;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b01000000;
+            // sign-extend if needed
+            if (sign) != 0 {
+                result |= !0 << 28;
+            };
+            return Ok(result);
+        }
+        byte = self.next_byte()?;
+        result |= ((byte & VALUE_BIT_MASK) as i32) << 28;
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            let sign = byte & 0b00001000; // Last Byte has different sign position
+            let padding = byte & PADDING_BIT_MASK_32;
+            let padding_valid = if sign == 0 {
+                padding == 0
+            } else {
+                padding == PADDING_BIT_MASK_32
+            };
+            if !padding_valid {
+                return Err(ValidationError::IntegerTooLarge);
+            }
+            return Ok(result); // No sign extend needed, as it's shifted by 28!
+        }
+
         Err(ValidationError::InvalidIntegerRepresentation)
     }
     pub fn next_f32(&mut self) -> Result<f32> {

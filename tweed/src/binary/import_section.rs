@@ -13,6 +13,7 @@ use super::global_section::GlobalType;
 
 #[derive(Debug, Clone)]
 pub struct GlobalImport {
+    pub idx: usize,
     pub module: String,
     pub name: String,
     pub context: GlobalType,
@@ -20,6 +21,7 @@ pub struct GlobalImport {
 
 #[derive(Debug, Clone)]
 pub struct FunctionImport {
+    pub idx: usize,
     pub module: String,
     pub name: String,
     pub context: FuncDecl,
@@ -27,6 +29,7 @@ pub struct FunctionImport {
 
 #[derive(Debug, Clone)]
 pub struct TableImport {
+    pub idx: usize,
     pub module: String,
     pub name: String,
     pub context: Table,
@@ -34,9 +37,17 @@ pub struct TableImport {
 
 #[derive(Debug, Clone)]
 pub struct MemoryImport {
+    pub idx: usize,
     pub module: String,
     pub name: String,
     pub context: Memory,
+}
+#[derive(Debug, Clone)]
+pub enum Import {
+    Global(GlobalImport),
+    Function(FunctionImport),
+    Table(TableImport),
+    Memory(MemoryImport),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -45,6 +56,38 @@ pub struct Imports {
     pub tables: Vec<TableImport>,
     pub functions: Vec<FunctionImport>,
     pub memories: Vec<MemoryImport>,
+}
+impl Imports {
+    /// Returns the imports in the original order.
+    /// This is important for a proper Module instantiation.
+    pub fn imports(&self) -> Vec<Import> {
+        let mut imports = Vec::new();
+
+        for g in &self.globals {
+            imports.push(Import::Global(g.clone()));
+        }
+
+        for f in &self.functions {
+            imports.push(Import::Function(f.clone()));
+        }
+
+        for t in &self.tables {
+            imports.push(Import::Table(t.clone()));
+        }
+
+        for m in &self.memories {
+            imports.push(Import::Memory(m.clone()));
+        }
+
+        imports.sort_by_key(|import| match import {
+            Import::Global(i) => i.idx,
+            Import::Function(i) => i.idx,
+            Import::Table(i) => i.idx,
+            Import::Memory(i) => i.idx,
+        });
+
+        imports
+    }
 }
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
@@ -71,7 +114,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
     let number_of_imports = reader.next_leb128_u32()?;
 
     let mut imports = Imports::default();
-    for _ in 0..number_of_imports {
+    for idx in 0..number_of_imports {
         let length_of_module_name = reader.next_leb128_u32()?;
         let module_name = reader.next_chunk_as_string(length_of_module_name as usize)?;
         let length_of_import_name = reader.next_leb128_u32()?;
@@ -82,6 +125,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
             0x00 => {
                 let index = reader.next_leb128_u32()?;
                 imports.functions.push(FunctionImport {
+                    idx: idx as usize,
                     module: module_name,
                     name: import_name,
                     context: FuncDecl { sig_index: index },
@@ -106,6 +150,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                     limit: limits,
                 };
                 let table_import = TableImport {
+                    idx: idx as usize,
                     module: module_name,
                     name: import_name,
                     context: table,
@@ -127,6 +172,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                 let memory = Memory { limits };
 
                 let memory_import = MemoryImport {
+                    idx: idx as usize,
                     module: module_name,
                     name: import_name,
                     context: memory,
@@ -147,6 +193,7 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                 };
 
                 imports.globals.push(GlobalImport {
+                    idx: idx as usize,
                     module: module_name,
                     name: import_name,
                     context: GlobalType {

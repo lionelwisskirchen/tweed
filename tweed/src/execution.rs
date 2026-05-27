@@ -1,6 +1,9 @@
+pub mod adresses;
 pub mod constant_expression_executor;
+pub mod engine;
 pub mod execution_stack;
 pub mod executor;
-pub mod instance;
+pub mod instances;
+pub mod instantiator;
 pub mod linker;
 pub mod store;

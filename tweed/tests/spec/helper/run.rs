@@ -5,16 +5,16 @@ use tweed::binary::table_section::Table;
 use tweed::binary::type_section::FuncType;
 use tweed::core::value_types::ValType;
 use tweed::core::values::NaN;
-use tweed::execution::linker::Linker;
-use tweed::execution::store::Store;
-use tweed::{initialize, invoke, Value};
+use tweed::execution::engine::Engine;
+
+use tweed::{initialize, Value};
 use wast::core::{HeapType, WastArgCore, WastRetCore};
 use wast::token::Index;
 use wast::{WastArg, WastRet, Wat};
 
 use super::wast_report::{WastReport, WastResult};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Environment {
     modules: HashMap<String, String>,
     last_module: Option<String>,
@@ -37,12 +37,8 @@ impl Environment {
     fn update_last(&mut self, name: &str) {
         self.last_module = Some(name.to_string());
     }
-}
-
-pub fn convert_name<'a>(name: Option<wast::token::Id<'_>>) -> Option<String> {
-    match name {
-        Some(n) => Some(n.name().to_string()),
-        None => None,
+    fn count(&self) -> usize {
+        self.modules.len()
     }
 }
 
@@ -79,9 +75,8 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         ..Default::default()
     };
     let mut module_registry = Environment::default();
-    let mut store: Store = Default::default();
-    let mut linker: Linker = Linker::default();
-    linker
+    let mut engine: Engine = Default::default();
+    engine
         .add_global_import(
             "spectest".to_string(),
             "global_i32".to_string(),
@@ -89,7 +84,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
             false,
         )
         .unwrap();
-    linker
+    engine
         .add_global_import(
             "spectest".to_string(),
             "global_i64".to_string(),
@@ -98,7 +93,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         )
         .unwrap();
 
-    linker
+    engine
         .add_function_import(
             "spectest".to_string(),
             "print_i32".to_string(),
@@ -112,7 +107,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
             },
         )
         .unwrap();
-    linker
+    engine
         .add_function_import(
             "spectest".to_string(),
             "print_i64".to_string(),
@@ -126,7 +121,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
             },
         )
         .unwrap();
-    linker
+    engine
         .add_function_import(
             "spectest".to_string(),
             "print_f32".to_string(),
@@ -140,7 +135,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
             },
         )
         .unwrap();
-    linker
+    engine
         .add_function_import(
             "spectest".to_string(),
             "print_f64".to_string(),
@@ -155,7 +150,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         )
         .unwrap();
 
-    linker
+    engine
         .add_function_import(
             "spectest".to_string(),
             "print_i32_f32".to_string(),
@@ -170,7 +165,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         )
         .unwrap();
 
-    linker
+    engine
         .add_function_import(
             "spectest".to_string(),
             "print_f64_f64".to_string(),
@@ -185,7 +180,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         )
         .unwrap();
 
-    linker
+    engine
         .add_function_import(
             "spectest".to_string(),
             "print".to_string(),
@@ -197,7 +192,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
         )
         .unwrap();
 
-    linker
+    engine
         .add_table_import(
             "spectest".to_string(),
             "table".to_string(),
@@ -226,28 +221,41 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         unreachable!("No Module registered");
                     };
                     module_registry.register(name, &last);
-                    store.rename_instance(&last, name).unwrap();
-                    let instance = store.get_instance(&name).unwrap();
-                    linker.instance(instance).unwrap();
+                    let instance_ref = engine
+                        .register(
+                            &name,
+                            tweed::execution::engine::InstanceRef::Name(last.to_string()),
+                        )
+                        .unwrap();
+                    engine.register_exports(instance_ref).unwrap();
                 }
                 Some(id) => {
                     let name = module_registry.get(Some(id)).unwrap();
-                    let instance = store.get_instance(&name).unwrap();
-                    linker.instance(instance).unwrap()
+                    engine
+                        .register_exports(tweed::execution::engine::InstanceRef::Name(
+                            name.to_string(),
+                        ))
+                        .unwrap();
                 }
             },
             Module(mut module) => {
                 let module_binary = module.encode()?;
-                let mut test_module = initialize(&module_binary).unwrap();
-                let name = convert_name(module.name());
-                let instance = linker
-                    .instantiate(&mut test_module, &mut store, name.as_deref())
-                    .unwrap();
+                let test_module = initialize(&module_binary).unwrap();
+                let instance_addr = engine.instantiate(test_module).unwrap();
 
                 if let Some(name) = module.name() {
-                    module_registry.register(name.name(), &instance);
+                    engine.register(name.name(), instance_addr).unwrap();
+                    module_registry.register(name.name(), name.name());
                 } else {
-                    module_registry.update_last(&instance);
+                    let instance_default_name = format!(
+                        "{}#{}",
+                        "__module_instance_default__",
+                        module_registry.count()
+                    );
+                    engine
+                        .register(&instance_default_name, instance_addr)
+                        .unwrap();
+                    module_registry.update_last(&instance_default_name);
                 }
             }
             Invoke(invoke_confs) => {
@@ -258,7 +266,13 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     .collect();
                 let module = module_registry.get(invoke_confs.module).unwrap();
                 let function = invoke_confs.name.to_string();
-                invoke(module, function, args, &mut store).unwrap();
+                engine
+                    .invoke(
+                        tweed::execution::engine::InstanceRef::Name(module),
+                        function,
+                        args,
+                    )
+                    .unwrap();
             }
             AssertUnlinkable {
                 span,
@@ -266,12 +280,12 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 message,
             } => {
                 let module_binary = module.encode()?;
-                let mut test_module = initialize(&module_binary).unwrap();
+                let test_module = initialize(&module_binary).unwrap();
                 let result = WastResult::AssertResult {
                     name: "Invalid test".to_string(),
                     line: span.linecol_in(&input).0 + 1,
                 };
-                if let Err(e) = linker.instantiate(&mut test_module, &mut store, None) {
+                if let Err(e) = engine.instantiate(test_module) {
                     if format!("{e}") == message {
                         report.success.push(result);
                     } else {
@@ -323,9 +337,13 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                             .collect();
 
                         let module = module_registry.get(invoke_confs.module).unwrap();
-                        let actual_results =
-                            invoke(module, invoke_confs.name.to_string(), args, &mut store)
-                                .unwrap();
+                        let actual_results = engine
+                            .invoke(
+                                tweed::execution::engine::InstanceRef::Name(module),
+                                invoke_confs.name.to_string(),
+                                args,
+                            )
+                            .unwrap();
                         let result = WastResult::AssertResult {
                             name: invoke_confs.name.to_string(),
                             line: span.linecol_in(&input).0 + 1,
@@ -342,11 +360,12 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         module,
                         global,
                     } => {
-                        let name = module_registry.get(module).unwrap();
-                        let instance = store.get_instance(&name).unwrap();
-                        let actual_results =
-                            vec![instance.get_global_by_name(global, &store).unwrap().value];
+                        let name = tweed::execution::engine::InstanceRef::Name(
+                            module_registry.get(module).unwrap(),
+                        );
 
+                        let actual_results =
+                            vec![engine.get_global(name, global.to_string()).unwrap().value];
                         let result = WastResult::AssertResult {
                             name: global.to_string(),
                             line: span.linecol_in(&input).0 + 1,
@@ -402,11 +421,10 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         .map(args_to_runtime_value)
                         .collect();
                     let name = module_registry.get(invoke_confs.module).unwrap();
-                    let result = invoke(
-                        name.to_string(),
+                    let result = engine.invoke(
+                        tweed::execution::engine::InstanceRef::Name(name.to_string()),
                         invoke_confs.name.to_string(),
                         args,
-                        &mut store,
                     );
                     let report_result = WastResult::AssertResult {
                         name: invoke_confs.name.to_string(),
@@ -432,8 +450,8 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         line: span.linecol_in(&input).0 + 1,
                     };
                     let module_binary = module.encode()?;
-                    let mut test_module = initialize(&module_binary).unwrap();
-                    let result = linker.instantiate(&mut test_module, &mut store, None);
+                    let test_module = initialize(&module_binary).unwrap();
+                    let result = engine.instantiate(test_module);
                     match result {
                         Err(e) => {
                             info!("{e} == {message}");
@@ -458,7 +476,11 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 let args: Vec<Value> = call.args.iter().map(args_to_runtime_value).collect();
                 let module = module_registry.get(call.module).unwrap();
                 let function = call.name.to_string();
-                let result = invoke(module, function, args, &mut store);
+                let result = engine.invoke(
+                    tweed::execution::engine::InstanceRef::Name(module),
+                    function,
+                    args,
+                );
                 let report_result = WastResult::AssertResult {
                     name: call.name.to_string(),
                     line: span.linecol_in(&input).0 + 1,
@@ -565,7 +587,7 @@ fn compare_results(actual: Vec<Value>, expected: Vec<Value>) -> bool {
                 return x.eq(y);
             }
             (Value::I64(x), Value::I64(y)) => {
-                println!("Actual: {:x} vs Exepected {:x}", x, y);
+                println!("Actual: {:x} vs Expected {:x}", x, y);
                 return x.eq(y);
             }
             _ => assert_eq!(a, e, "Mismatch at index {}", i),

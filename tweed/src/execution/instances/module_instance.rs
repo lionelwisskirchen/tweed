@@ -2,29 +2,36 @@ use crate::binary::export_section::ExportContext;
 
 use crate::binary::type_section::FuncType;
 use crate::core::error::ExecutionError;
+use crate::execution::instances::MemoryInstance;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use super::store::{GlobalInstance, MemoryInstance, Store};
+use crate::execution::adresses::{
+    DataAddr, ElementAddr, FuncAddr, GlobalAddr, MemoryAddr, ReaderAddr, TableAddr,
+};
+
+use crate::execution::store::Store;
+
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 // An instantiated Module
 #[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
-pub struct Instance {
-    pub name: String,
+pub struct ModuleInstance {
     pub types: Vec<FuncType>,
-    pub funcaddr: Vec<usize>,
-    pub tableaddr: Vec<usize>,
-    pub memaddr: Vec<usize>,
-    pub globaladdr: Vec<usize>,
-    pub elemaddr: Vec<usize>,
-    pub dataddr: Vec<usize>,
+    pub funcaddr: Vec<FuncAddr>,
+    pub tableaddr: Vec<TableAddr>,
+    pub memaddr: Vec<MemoryAddr>,
+    pub globaladdr: Vec<GlobalAddr>,
+    pub elemaddr: Vec<ElementAddr>,
+    pub dataddr: Vec<DataAddr>,
     pub exports: BTreeMap<String, ExportContext>,
+    pub reader: ReaderAddr,
+    pub start: Option<FuncAddr>,
 }
 
-impl Instance {
-    pub fn get_func_by_name(&self, name: &str) -> Result<usize> {
+impl ModuleInstance {
+    pub fn get_func_by_name(&self, name: &str) -> Result<FuncAddr> {
         let Some(export_instance) = self.exports.get(name) else {
             return Err(ExecutionError::UnknownExportCall);
         };
@@ -52,38 +59,23 @@ impl Instance {
                     .memaddr
                     .get(*index as usize)
                     .ok_or(ExecutionError::UnknownExportCall)?;
-                let st = store
-                    .data
-                    .memories
-                    .get(*store_index)
-                    .ok_or(ExecutionError::UnknownExportCall)?;
+                let st = store.memories.get(*store_index)?;
                 Ok(st)
             }
             _ => Err(ExecutionError::UnknownExportCall),
         }
     }
-    pub fn get_global_by_name<'a>(
-        &self,
-        name: &str,
-        store: &'a Store,
-    ) -> Result<&'a GlobalInstance> {
+    pub fn get_global_by_name(&self, name: &str) -> Result<GlobalAddr> {
         let Some(export_instance) = self.exports.get(name) else {
             return Err(ExecutionError::UnknownExportCall);
         };
 
         match export_instance {
-            ExportContext::GlobalExport(index) => {
-                let store_index = self
-                    .globaladdr
-                    .get(*index as usize)
-                    .ok_or(ExecutionError::UnknownExportCall)?;
-                let gl = store
-                    .data
-                    .globals
-                    .get(*store_index)
-                    .ok_or(ExecutionError::UnknownExportCall)?;
-                Ok(gl)
-            }
+            ExportContext::GlobalExport(index) => self
+                .globaladdr
+                .get(*index as usize)
+                .cloned()
+                .ok_or(ExecutionError::UnknownExportCall),
             _ => Err(ExecutionError::UnknownExportCall),
         }
     }

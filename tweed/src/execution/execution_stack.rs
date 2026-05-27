@@ -33,6 +33,10 @@ impl CallStack {
     pub fn pop(&mut self) -> Option<Frame> {
         self.stack.pop()
     }
+
+    pub fn reset(&mut self) {
+        self.stack.clear();
+    }
 }
 
 #[derive(Debug)]
@@ -72,11 +76,20 @@ impl ExecutionStack {
         }
         self.stack.drain(size..);
     }
-    pub fn pop(&mut self) -> Result<Value> {
-        self.stack
-            .pop()
-            .ok_or(ExecutionError::ExpectedAValueOnTheStack)
+    #[cfg(not(feature = "unsafe"))]
+    pub fn pop(&mut self) -> Value {
+        self.stack.pop().unwrap()
     }
+    #[cfg(feature = "unsafe")]
+    pub fn pop(&mut self) -> Value {
+        unsafe {
+            let len = self.len();
+            let ptr = self.stack.as_mut_ptr().add(len - 1);
+            self.stack.set_len(len - 1);
+            ptr.read()
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.stack.len()
     }
@@ -86,35 +99,40 @@ impl ExecutionStack {
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()
     }
-    pub fn pop_i32(&mut self) -> Result<i32> {
-        let Value::I32(value) = self.pop()? else {
-            return Err(ExecutionError::UnexpectedValueType);
+    pub fn pop_i32(&mut self) -> i32 {
+        let value = self.pop();
+        let Value::I32(v) = value else {
+            unreachable!("Expected I32 on stack (validated)");
         };
-        Ok(value)
+        v
     }
-    pub fn pop_i64(&mut self) -> Result<i64> {
-        let Value::I64(value) = self.pop()? else {
-            return Err(ExecutionError::UnexpectedValueType);
+    pub fn pop_i64(&mut self) -> i64 {
+        let value = self.pop();
+        let Value::I64(v) = value else {
+            unreachable!("Expected I64 on stack (validated)");
         };
-        Ok(value)
+        v
     }
-    pub fn pop_f64(&mut self) -> Result<f64> {
-        let Value::F64(value) = self.pop()? else {
-            return Err(ExecutionError::UnexpectedValueType);
+    pub fn pop_f64(&mut self) -> f64 {
+        let value = self.pop();
+        let Value::F64(v) = value else {
+            unreachable!("Expected F64 on stack (validated)");
         };
-        Ok(value)
+        v
     }
-    pub fn pop_f32(&mut self) -> Result<f32> {
-        let Value::F32(value) = self.pop()? else {
-            return Err(ExecutionError::UnexpectedValueType);
+    pub fn pop_f32(&mut self) -> f32 {
+        let value = self.pop();
+        let Value::F32(v) = value else {
+            unreachable!("Expected F32 on stack (validated)");
         };
-        Ok(value)
+        v
     }
-    pub fn pop_func_ref(&mut self) -> Result<usize> {
-        let Value::FuncRef(value) = self.pop()? else {
-            return Err(ExecutionError::UnexpectedValueType);
+    pub fn pop_func_ref(&mut self) -> usize {
+        let value = self.pop();
+        let Value::FuncRef(v) = value else {
+            unreachable!("Expected FuncRef on stack (validated)");
         };
-        Ok(value)
+        v
     }
     pub fn pop_n(&mut self, count: usize) -> Result<Vec<Value>> {
         if count > self.stack.len() {

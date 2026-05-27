@@ -1,15 +1,17 @@
 extern crate alloc;
 
 use super::execution_stack::{CallStack, ExecutionStack};
-use super::store::{map_memory, FuncInstance, HostEnv, Internal, MemoryInstance, Store};
-use crate::alloc::string::ToString;
+use super::instances::function_instance::Internal;
+use super::instances::{FuncInstance, MemoryInstance};
+use super::store::{map_memory, HostEnv, Store};
+use crate::execution::adresses::{FuncAddr, InstanceAddr};
+
 use crate::core::error::ExecutionError;
 use crate::core::opcode::*;
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::value_types::ValType;
 use crate::core::values::NaN;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
-use alloc::string::String;
 use alloc::vec::Vec;
 use extensions::*;
 use libm;
@@ -17,7 +19,7 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Default, Debug, Clone)]
 pub struct Frame {
-    pub instance_name: String,
+    pub instance_addr: InstanceAddr,
     pub program_counter: usize,
     pub stack_pointer: usize,
     pub start: usize,
@@ -27,101 +29,53 @@ pub struct Frame {
     pub side_table: SideTable,
     pub side_table_pointer: usize,
 }
-fn build_frame(function: &Internal, stack: &mut ExecutionStack) -> Result<Frame> {
-    let mut locals = stack.pop_n(function.signature.parameter.len())?;
-    locals.append(&mut function.locals.clone()); // Locals = Params + Locals
-    Ok(Frame {
-        instance_name: function.instance.to_string(),
-        program_counter: 0,
-        stack_pointer: stack.len(),
-        start: function.start,
-        end: function.end,
 
-        return_value: function.signature.result.clone(),
-        locals,
-        side_table: function.side_table.clone(),
-        side_table_pointer: 0,
-    })
-}
-
-#[derive(Debug)]
-pub struct Executor<'store> {
-    store: &'store mut Store,
+#[derive(Debug, Default)]
+pub struct Executor {
     pub call_stack: CallStack,
     pub stack: ExecutionStack,
 }
 
-impl<'store> Executor<'store> {
-    pub fn new(store: &'store mut Store) -> Self {
+impl Executor {
+    pub fn new() -> Self {
         Self {
-            store,
             call_stack: CallStack::default(),
             stack: ExecutionStack::default(),
         }
     }
+    fn build_frame(&mut self, function: &Internal) -> Result<Frame> {
+        let stack = &mut self.stack;
+        let mut locals = stack.pop_n(function.signature.parameter.len())?;
+        locals.append(&mut function.locals.clone()); // Locals = Params + Locals
+        Ok(Frame {
+            instance_addr: function.instance,
+            program_counter: 0,
+            stack_pointer: stack.len(),
+            start: function.start,
+            end: function.end,
 
-    pub fn invoke_start(&mut self, instance_name: &str, func_inst_id: u32) -> Result<Vec<Value>> {
-        let funcaddr = self
-            .store
-            .instances
-            .get(instance_name)
-            .unwrap()
-            .funcaddr
-            .get(func_inst_id as usize)
-            .unwrap(); // validated
-
-        let mut func_inst = self
-            .store
-            .data
-            .functions
-            .get_mut(*funcaddr)
-            .unwrap()
-            .clone();
-
-        let mut env: HostEnv = (&self.store.data).into();
-        match func_inst {
-            FuncInstance::Internal(instance) => {
-                let frame = build_frame(&instance, &mut self.stack)?;
-                self.call_stack.push(frame)?;
-                self.execute()
-            }
-            FuncInstance::External(ref mut host_function) => {
-                let args = self.stack.pop_n(host_function.signature.parameter.len())?;
-                let mut func_ref = host_function.func.borrow_mut();
-                let results = func_ref(&mut env, args)?;
-                self.stack.push_vec(&results)?;
-                Ok(results)
-            }
-        }
+            return_value: function.signature.result.clone(),
+            locals,
+            side_table: function.side_table.clone(),
+            side_table_pointer: 0,
+        })
     }
     pub fn invoke(
         &mut self,
-        instance_name: &str,
-        func_name: &str,
+        func_addr: FuncAddr,
         args: &[Value],
+        store: &mut Store,
     ) -> Result<Vec<Value>> {
+        self.call_stack.reset();
         self.stack.reset();
         self.stack.push_vec(args)?;
-        let func_inst_id = self
-            .store
-            .instances
-            .get(instance_name)
-            .unwrap()
-            .get_func_by_name(func_name)?;
-
-        let mut func_inst = self
-            .store
-            .data
-            .functions
-            .get_mut(func_inst_id)
-            .unwrap()
-            .clone();
-        let mut env: HostEnv = (&self.store.data).into();
+        let mut func_inst = store.functions.get(func_addr)?.clone();
+        let mut env: HostEnv = (store).into();
         match func_inst {
             FuncInstance::Internal(instance) => {
-                let frame = build_frame(&instance, &mut self.stack)?;
+                let frame = self.build_frame(&instance)?;
                 self.call_stack.push(frame)?;
-                self.execute()
+                self.execute(store)
             }
             FuncInstance::External(ref mut host_function) => {
                 let args = self.stack.pop_n(host_function.signature.parameter.len())?;
@@ -132,28 +86,20 @@ impl<'store> Executor<'store> {
             }
         }
     }
-    fn execute(&mut self) -> Result<Vec<Value>> {
+    fn execute(&mut self, store: &mut Store) -> Result<Vec<Value>> {
         loop {
             let Some(mut current_frame) = self.call_stack.pop() else {
                 return self.stack.pop_n(self.stack.len());
             };
-            self.execute_frame(&mut current_frame)?;
+            self.execute_frame(&mut current_frame, store)?;
         }
     }
 
-    fn execute_frame(&mut self, current_frame: &mut Frame) -> Result<()> {
-        let instance_name = &current_frame.instance_name;
-        let reader = self
-            .store
-            .reader
-            .get_mut(instance_name)
-            .ok_or(ExecutionError::UnknownReader)?;
-        let instance = self
-            .store
-            .instances
-            .get_mut(instance_name)
-            .ok_or(ExecutionError::UnknownInstance)?;
-
+    fn execute_frame(&mut self, current_frame: &mut Frame, store: &mut Store) -> Result<()> {
+        let instance_addr = &current_frame.instance_addr;
+        let instance = store.instances.get_mut(*instance_addr)?;
+        let reader_address = instance.reader;
+        let reader = store.reader.get_mut(reader_address).unwrap();
         reader.seek(current_frame.start + current_frame.program_counter);
         loop {
             let instruction = reader.next_byte();
@@ -161,11 +107,13 @@ impl<'store> Executor<'store> {
                 UNREACHABLE => {
                     return Err(ExecutionError::TrapUnreachable);
                 }
+
                 I32_CONST => {
                     let value = reader.next_leb128_i32();
                     trace!("I32_CONST({})", value);
                     self.stack.push(Value::I32(value))?;
                 }
+
                 I64_CONST => {
                     let value = reader.next_leb128_i64();
                     trace!("I64_CONST({})", value);
@@ -190,7 +138,7 @@ impl<'store> Executor<'store> {
                     reader.next_leb128_u32(); // Skip Block type
                 }
                 IF => {
-                    let bool_val = self.stack.pop()?;
+                    let bool_val = self.stack.pop();
                     trace!("IF({:?})", bool_val);
                     if bool_val == Value::I32(0) {
                         Self::do_goto(&mut self.stack, current_frame, reader)?;
@@ -213,7 +161,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(*local)?;
                 }
                 I32_POPCNT => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     let res = value.count_ones() as i32;
                     trace!("I32_POPCNT({}) TO {:?}", value, res);
                     self.stack.push(Value::I32(res))?;
@@ -224,7 +172,7 @@ impl<'store> Executor<'store> {
                         .locals
                         .get_mut(idx)
                         .ok_or(ExecutionError::InvalidLocalIndex)?;
-                    let new_value = self.stack.pop()?;
+                    let new_value = self.stack.pop();
                     trace!("LOCAL_SET({}) TO {:?}", idx, new_value);
                     *local = new_value;
                 }
@@ -235,12 +183,7 @@ impl<'store> Executor<'store> {
                         .globaladdr
                         .get(idx)
                         .ok_or(ExecutionError::UnknownGlobal)?;
-                    let global = self
-                        .store
-                        .data
-                        .globals
-                        .get_mut(*global_addr)
-                        .ok_or(ExecutionError::UnknownGlobal)?;
+                    let global = store.globals.get_mut(*global_addr)?;
                     self.stack.push(global.value)?;
                 }
                 GLOBAL_SET => {
@@ -249,13 +192,8 @@ impl<'store> Executor<'store> {
                         .globaladdr
                         .get(idx)
                         .ok_or(ExecutionError::UnknownGlobal)?;
-                    let global = self
-                        .store
-                        .data
-                        .globals
-                        .get_mut(*global_addr)
-                        .ok_or(ExecutionError::UnknownGlobal)?;
-                    let new_value = self.stack.pop()?;
+                    let global = store.globals.get_mut(*global_addr)?;
+                    let new_value = self.stack.pop();
                     trace!("GLOBAL_SET({}) TO {:?}", idx, new_value);
                     global.value = new_value;
                 }
@@ -265,57 +203,57 @@ impl<'store> Executor<'store> {
                         .locals
                         .get_mut(idx)
                         .ok_or(ExecutionError::InvalidLocalIndex)?;
-                    let new_value = self.stack.pop()?;
+                    let new_value = self.stack.pop();
                     trace!("LOCAL_TEE({}) TO {:?}", idx, new_value);
                     *local = new_value;
                     self.stack.push(new_value)?;
                 }
                 DROP => {
-                    let val = self.stack.pop()?;
+                    let val = self.stack.pop();
                     trace!("DROP {:?}", val);
                 }
                 NOP => {
                     trace!("NOP");
                 }
                 I32_CTZ => {
-                    let val = self.stack.pop_i32()?;
+                    let val = self.stack.pop_i32();
                     trace!("I32_CTZ({val})");
                     let result = val.trailing_zeros() as i32;
                     self.stack.push(result.into())?;
                 }
                 I64_POPCNT => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     let res = value.count_ones() as i64;
                     trace!("I64_POPCNT({}) TO {:?}", value, res);
                     self.stack.push(Value::I64(res))?;
                 }
                 I64_CTZ => {
-                    let val = self.stack.pop_i64()?;
+                    let val = self.stack.pop_i64();
                     trace!("I64_CTZ({val})");
                     let result = val.trailing_zeros() as i64;
                     self.stack.push(result.into())?;
                 }
                 I64_ADD => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_ADD({left}, {right})");
                     let result = right.wrapping_add(left);
                     self.stack.push(result.into())?;
                 }
                 I64_SUB => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_SUB({left}, {right})");
                     let result = left.wrapping_sub(right);
                     self.stack.push(result.into())?;
                 }
                 I64_MUL => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_MUL({left}, {right})");
                     let result = left.wrapping_mul(right);
                     self.stack.push(result.into())?;
                 }
 
                 I64_DIV_S => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_DIV_S({left}, {right})");
                     if right == 0 {
                         return Err(ExecutionError::DivisionByZero);
@@ -326,7 +264,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((left / right).into())?;
                 }
                 I64_DIV_U => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_DIV_U({left}, {right})");
                     if right == 0 {
                         return Err(ExecutionError::DivisionByZero);
@@ -334,7 +272,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(((left as u64) / (right as u64)).into())?;
                 }
                 I64_REM_S => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_REM_S({left}, {right})");
 
                     if right == 0 {
@@ -344,7 +282,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(result.unwrap_or_default().into())?;
                 }
                 I64_REM_U => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_REM_U({left}, {right})");
 
                     if right == 0 {
@@ -355,77 +293,77 @@ impl<'store> Executor<'store> {
                 }
 
                 I64_AND => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_AND({left}, {right})");
 
                     let result = right & left;
                     self.stack.push(result.into())?;
                 }
                 I64_OR => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_OR({left}, {right})");
 
                     let result = right | left;
                     self.stack.push(result.into())?;
                 }
                 I64_XOR => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_XOR({left}, {right})");
 
                     let result = right ^ left;
                     self.stack.push(result.into())?;
                 }
                 I64_SHR_U => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_SHR_U({left}, {right})");
 
                     let result = (left as u64).wrapping_shr((right & 63) as u32) as i64;
                     self.stack.push(result.into())?;
                 }
                 I64_SHR_S => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_SHR_S({left}, {right})");
                     let result = left.wrapping_shr((right & 63) as u32);
                     self.stack.push(result.into())?;
                 }
                 I64_SHL => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_SHL({left}, {right})");
                     let result = left.wrapping_shl((right & 63) as u32);
                     self.stack.push(result.into())?;
                 }
                 I32_SHR_S => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_SHR_S({left}, {right})");
                     let result = left.wrapping_shr((right) as u32);
                     self.stack.push(result.into())?;
                 }
                 I32_SHR_U => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_SHR_U({left}, {right})");
                     let result = (left as u32).wrapping_shr((right) as u32) as i32;
                     self.stack.push(result.into())?;
                 }
                 I32_SHL => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_SHL({left}, {right})");
                     let result = left.wrapping_shl((right) as u32);
                     self.stack.push(result.into())?;
                 }
                 I32_ADD => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_ADD({left}, {right})");
                     let result = right.wrapping_add(left);
                     self.stack.push(result.into())?;
                 }
                 I32_MUL => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_MUL({left}, {right})");
                     let result = right.wrapping_mul(left);
                     self.stack.push(result.into())?;
                 }
                 I32_DIV_S => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_DIV_S({left}, {right})");
                     if right == 0 {
                         return Err(ExecutionError::DivisionByZero);
@@ -436,7 +374,7 @@ impl<'store> Executor<'store> {
                     self.stack.push((left / right).into())?;
                 }
                 I32_DIV_U => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_DIV_U({left}, {right})");
                     if right == 0 {
                         return Err(ExecutionError::DivisionByZero);
@@ -444,7 +382,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(((left as u32) / (right as u32)).into())?;
                 }
                 I32_REM_S => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_REM_S({left}, {right})");
 
                     if right == 0 {
@@ -454,7 +392,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(result.unwrap_or_default().into())?;
                 }
                 I32_REM_U => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_REM_U({left}, {right})");
 
                     if right == 0 {
@@ -464,13 +402,13 @@ impl<'store> Executor<'store> {
                     self.stack.push(result.unwrap_or_default().into())?;
                 }
                 I32_SUB => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_SUB({left}, {right})");
                     let result = left.wrapping_sub(right);
                     self.stack.push(result.into())?;
                 }
                 I32_EQZ => {
-                    let val = self.stack.pop_i32()?;
+                    let val = self.stack.pop_i32();
                     trace!("I32_EQZ({val})");
                     if val == 0 {
                         self.stack.push(Value::I32(1))?;
@@ -480,7 +418,7 @@ impl<'store> Executor<'store> {
                 }
 
                 I32_EQ => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_EQ({left}, {right})");
                     if right == left {
                         self.stack.push(Value::I32(1))?;
@@ -490,12 +428,12 @@ impl<'store> Executor<'store> {
                 }
 
                 I32_CLZ => {
-                    let val = self.stack.pop_i32()?;
+                    let val = self.stack.pop_i32();
                     trace!("I32_CLZ({val})");
                     self.stack.push(val.leading_zeros().into())?;
                 }
                 I32_LT_S => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_LT_S({left}, {right})");
                     if left < right {
                         self.stack.push(Value::I32(1))?;
@@ -504,7 +442,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_LE_S => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_LE_S({left}, {right})");
                     if left <= right {
                         self.stack.push(Value::I32(1))?;
@@ -513,7 +451,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_LT_U => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_LT_U({left}, {right})");
                     if (left as u32) < (right as u32) {
                         self.stack.push(Value::I32(1))?;
@@ -522,7 +460,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_LE_U => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_LE_U({left}, {right})");
                     if (left as u32) <= (right as u32) {
                         self.stack.push(Value::I32(1))?;
@@ -531,7 +469,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_GT_U => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_GT_U({left}, {right})");
                     if (left as u32) > (right as u32) {
                         self.stack.push(Value::I32(1))?;
@@ -540,7 +478,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_GE_U => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_GT_U({left}, {right})");
                     if (left as u32) >= (right as u32) {
                         self.stack.push(Value::I32(1))?;
@@ -549,14 +487,14 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_XOR => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_XOR({left}, {right})");
                     let result = right ^ left;
                     self.stack.push(result.into())?;
                 }
 
                 I32_NE => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_NE({left}, {right})");
                     if left != right {
                         self.stack.push(Value::I32(1))?;
@@ -565,82 +503,82 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_ROTR => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     let result = left.rotate_right(right as u32);
                     trace!("I32_ROTR [{left} {right}] -> [{result}]");
                     self.stack.push(Value::I32(result))?;
                 }
                 I32_ROTL => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     let result = left.rotate_left(right as u32);
                     trace!("I32_ROTL [{left} {right}] -> [{result}]");
                     self.stack.push(Value::I32(result))?;
                 }
                 I64_ROTR => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     let result = left.rotate_right(right as u32);
                     trace!("I64_ROTR [{left} {right}] -> [{result}]");
                     self.stack.push(Value::I64(result))?;
                 }
                 I64_ROTL => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     let result = left.rotate_left(right as u32);
                     trace!("I64_ROTL [{left} {right}] -> [{result}]");
                     self.stack.push(Value::I64(result))?;
                 }
                 I64_CLZ => {
-                    let val = self.stack.pop_i64()?;
+                    let val = self.stack.pop_i64();
                     trace!("I64_CLZ({val})");
                     let result = val.leading_zeros() as u64;
                     self.stack.push(result.into())?;
                 }
                 I32_WRAP_I64 => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     trace!("I32_WRAP_I64({value})");
                     self.stack.push((value as i32).into())?
                 }
                 I32_EXTEND8_S => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     trace!("I32_EXTEND8_S({value})");
                     let extended = (value as i8) as i32;
                     self.stack.push(extended.into())?
                 }
                 I32_EXTEND16_S => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     trace!("I32_EXTEND16_S({value})");
                     let extended = (value as i16) as i32;
                     self.stack.push(extended.into())?
                 }
                 I64_EXTEND8_S => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     trace!("I64_EXTEND8_S({value})");
                     let extended = (value as i8) as i64;
                     self.stack.push(extended.into())?
                 }
                 I64_EXTEND16_S => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     trace!("I64_EXTEND16_S({value})");
                     let extended = (value as i16) as i64;
                     self.stack.push(extended.into())?
                 }
                 I64_EXTEND32_S => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     trace!("I64_EXTEND32_S({value})");
                     let extended = (value as i32) as i64;
                     self.stack.push(extended.into())?
                 }
                 I64_EXTEND_I32_U => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     trace!("I64_EXTEND_I32_U({value})");
                     self.stack.push((value as u32 as i64).into())?
                 }
                 I64_EXTEND_I32_S => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     trace!("I64_EXTEND_I32_S({value})");
                     self.stack.push((value as i64).into())?
                 }
                 I64_GE_U => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_GE_U({left}, {right})");
                     if (left as u64) >= (right as u64) {
                         self.stack.push(Value::I32(1))?;
@@ -649,7 +587,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_GT_S => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_GT_S({left}, {right})");
                     if (left) > (right) {
                         self.stack.push(Value::I32(1))?;
@@ -658,7 +596,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_GT_U => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_GT_U({left}, {right})");
                     if (left as u64) > (right as u64) {
                         self.stack.push(Value::I32(1))?;
@@ -667,7 +605,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_LT_S => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_LT_S({left}, {right})");
                     if (left) < (right) {
                         self.stack.push(Value::I32(1))?;
@@ -676,7 +614,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_LT_U => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_LT_U({left}, {right})");
                     if (left as u64) < (right as u64) {
                         self.stack.push(Value::I32(1))?;
@@ -685,7 +623,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_GE_S => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_GE_S({left}, {right})");
                     if (left) >= (right) {
                         self.stack.push(Value::I32(1))?;
@@ -694,7 +632,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_LE_S => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_LE_S({left}, {right})");
                     if (left) <= (right) {
                         self.stack.push(Value::I32(1))?;
@@ -703,7 +641,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_LE_U => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_GE_U({left}, {right})");
                     if (left as u64) <= (right as u64) {
                         self.stack.push(Value::I32(1))?;
@@ -712,7 +650,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_EQZ => {
-                    let val = self.stack.pop_i64()?;
+                    let val = self.stack.pop_i64();
                     trace!("I64_EQZ({val})");
                     if val == 0 {
                         self.stack.push(Value::I32(1))?;
@@ -722,7 +660,7 @@ impl<'store> Executor<'store> {
                 }
 
                 I64_EQ => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_EQ({left}, {right})");
                     if left == right {
                         self.stack.push(Value::I32(1))?;
@@ -731,7 +669,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I64_NE => {
-                    let (right, left) = (self.stack.pop_i64()?, self.stack.pop_i64()?);
+                    let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
                     trace!("I64_NE({left}, {right})");
                     if left != right {
                         self.stack.push(Value::I32(1))?;
@@ -740,7 +678,7 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_GT_S => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_GT_S({left}, {right})");
                     if left > right {
                         self.stack.push(Value::I32(1))?;
@@ -750,7 +688,7 @@ impl<'store> Executor<'store> {
                 }
 
                 I32_GE_S => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_GE_S({left}, {right})");
                     if left >= right {
                         self.stack.push(Value::I32(1))?;
@@ -759,20 +697,19 @@ impl<'store> Executor<'store> {
                     }
                 }
                 I32_AND => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_AND({left}, {right})");
                     let result = right & left;
                     self.stack.push(Value::I32(result))?;
                 }
                 I32_OR => {
-                    let (right, left) = (self.stack.pop_i32()?, self.stack.pop_i32()?);
+                    let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
                     trace!("I32_OR({left}, {right})");
                     let result = right | left;
                     self.stack.push(Value::I32(result))?;
                 }
                 SELECT => {
-                    let (cond, b, a) =
-                        (self.stack.pop_i32()?, self.stack.pop()?, self.stack.pop()?);
+                    let (cond, b, a) = (self.stack.pop_i32(), self.stack.pop(), self.stack.pop());
                     trace!("SELECT({cond} ? {a:?} : {b:?})");
                     if cond == 0 {
                         self.stack.push(b)?;
@@ -785,7 +722,7 @@ impl<'store> Executor<'store> {
                     Self::do_goto(&mut self.stack, current_frame, reader)?;
                 }
                 BR_IF => {
-                    let bool_val = self.stack.pop_i32()?;
+                    let bool_val = self.stack.pop_i32();
                     trace!("BR_IF({bool_val})");
                     if bool_val == 0 {
                         reader.next_leb128_u32(); // skip depth
@@ -798,9 +735,9 @@ impl<'store> Executor<'store> {
                     reader.next_leb128_u32();
 
                     reader.next_byte();
-                    let c = self.stack.pop_i32()?;
-                    let val_2 = self.stack.pop()?; // TODO Type check?
-                    let val_1 = self.stack.pop()?;
+                    let c = self.stack.pop_i32();
+                    let val_2 = self.stack.pop(); // TODO Type check?
+                    let val_1 = self.stack.pop();
                     trace!("SELECT_T({c})");
                     if c == 0 {
                         self.stack.push(val_2)?;
@@ -810,7 +747,7 @@ impl<'store> Executor<'store> {
                 }
                 BR_TABLE => {
                     // TODO br_table vec[Branch index] not += branch_index!
-                    let branch_index = self.stack.pop_i32()?;
+                    let branch_index = self.stack.pop_i32();
                     trace!("BR_TABLE({branch_index})");
                     let number_of_branches = reader.next_leb128_u32() as usize;
                     if branch_index as usize >= number_of_branches {
@@ -843,35 +780,28 @@ impl<'store> Executor<'store> {
                         .get(table_index as usize)
                         .ok_or(ExecutionError::UnknownTable)?;
 
-                    let table = self
-                        .store
-                        .data
-                        .tables
-                        .get(*table_addr)
-                        .ok_or(ExecutionError::UnknownTable)?;
+                    let table = store.tables.get(*table_addr)?;
 
                     let func_type = instance
                         .types
                         .get(type_index as usize)
                         .ok_or(ExecutionError::InvalidFunctionIndex)?;
 
-                    let entry_index = self.stack.pop_i32()? as usize;
+                    let entry_index = self.stack.pop_i32() as usize;
                     let Ok(entry) = table.get(entry_index) else {
                         return Err(ExecutionError::UndefinedElement);
                     };
                     let index = match entry {
                         Value::RefNull(_) => return Err(ExecutionError::UninitializedReference),
-                        Value::FuncRef(idx) => idx,
+                        Value::FuncRef(idx) => FuncAddr(idx),
                         Value::ExternRef(_) => return Err(ExecutionError::TypeMismatch),
                         _ => unreachable!(),
                     };
 
-                    let function = self
-                        .store
-                        .data
+                    let function = store
                         .functions
                         .get_mut(index)
-                        .ok_or(ExecutionError::InvalidFunctionIndex)?
+                        .map_err(|_| ExecutionError::InvalidFunctionIndex)?
                         .clone();
 
                     if function.get_signature() != func_type {
@@ -880,15 +810,19 @@ impl<'store> Executor<'store> {
 
                     match function {
                         FuncInstance::Internal(instance) => {
-                            let frame = build_frame(&instance, &mut self.stack)?;
+                            let frame = self.build_frame(&instance)?;
                             current_frame.program_counter =
                                 reader.current_index() - current_frame.start + 1;
                             self.call_stack.push(current_frame.clone())?;
                             self.call_stack.push(frame)?;
                             break;
                         }
+
                         FuncInstance::External(host_function) => {
-                            let mut env: HostEnv = (&self.store.data).into();
+                            let mut env: HostEnv = HostEnv {
+                                memories: store.memories.items(),
+                                globals: store.globals.items(),
+                            };
                             let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                             let mut func_ref = host_function.func.borrow_mut();
                             let results = func_ref(&mut env, args)?;
@@ -909,25 +843,23 @@ impl<'store> Executor<'store> {
                         .get(index as usize)
                         .ok_or(ExecutionError::InvalidFunctionIndex)?;
 
-                    let function = self
-                        .store
-                        .data
-                        .functions
-                        .get_mut(*function_addr)
-                        .ok_or(ExecutionError::InvalidFunctionIndex)?
-                        .clone();
+                    let function = store.functions.get_mut(*function_addr)?.clone();
 
                     match function {
                         FuncInstance::Internal(instance) => {
-                            let frame = build_frame(&instance, &mut self.stack)?;
+                            let frame = self.build_frame(&instance)?;
                             current_frame.program_counter =
                                 reader.current_index() - current_frame.start + 1;
                             self.call_stack.push(current_frame.clone())?;
                             self.call_stack.push(frame)?;
                             break;
                         }
+
                         FuncInstance::External(host_function) => {
-                            let mut env: HostEnv = (&self.store.data).into();
+                            let mut env: HostEnv = HostEnv {
+                                memories: store.memories.items(),
+                                globals: store.globals.items(),
+                            };
                             let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                             let mut func_ref = host_function.func.borrow_mut();
                             let results = func_ref(&mut env, args)?;
@@ -937,99 +869,99 @@ impl<'store> Executor<'store> {
                 }
                 I64_STORE => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_i64()?).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_i64()).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("I64_STORE({store_data:?} to {rel_address:?})");
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 F32_STORE => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_f32()?).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_f32()).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("F64_STORE({store_data:?} to {rel_address:?})");
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 F64_STORE => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_f64()?).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_f64()).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("F64_STORE({store_data:?} to {rel_address:?})");
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I64_STORE8 => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_i64()? as u8).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_i64() as u8).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("I64_STORE8({store_data:?} to {rel_address:?})");
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I64_STORE16 => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_i64()? as u16).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_i64() as u16).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("I64_STORE16({store_data:?} to {rel_address:?})");
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I64_STORE32 => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_i64()? as u32).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_i64() as u32).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("I64_STORE32({store_data:?} to {rel_address:?})");
 
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I64_LOAD => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: i64 = Self::load(mem, offset, address, 8)?;
                     trace!("I64_LOAD({data:?} from {address:?})");
                     self.stack.push(data.into())?;
                 }
                 F64_LOAD => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: f64 = Self::load(mem, offset, address, 8)?;
                     trace!("F64_LOAD({data:?} from {address:?})");
                     self.stack.push(data.into())?;
                 }
                 I32_STORE => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_i32()? as u32).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_i32() as u32).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("I32_STORE({store_data:?} to {rel_address:?})");
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I32_STORE8 => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_i32()? as u8).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_i32() as u8).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("I32_STORE8({store_data:?} to {rel_address:?})");
 
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I32_STORE16 => {
                     let (_, offset) = reader.read_mem_args();
-                    let store_data = (self.stack.pop_i32()? as u16).to_le_bytes();
-                    let rel_address = self.stack.pop_i32()? as u32;
+                    let store_data = (self.stack.pop_i32() as u16).to_le_bytes();
+                    let rel_address = self.stack.pop_i32() as u32;
                     trace!("I32_STORE16({store_data:?} to {rel_address:?})");
 
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     mem.store(rel_address as usize, offset as usize, &store_data)?;
                 }
                 I32_LOAD => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: i32 = Self::load(mem, offset, address, 4)?;
                     trace!("I32_LOAD({data:?} from {address:?})");
 
@@ -1037,8 +969,8 @@ impl<'store> Executor<'store> {
                 }
                 F32_LOAD => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: f32 = Self::load(mem, offset, address, 4)?;
                     trace!("F32_LOAD({data:?} from {address:?})");
 
@@ -1046,80 +978,80 @@ impl<'store> Executor<'store> {
                 }
                 I64_LOAD8_S => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: i8 = Self::load(mem, offset, address, 1)?;
                     trace!("I64_LOAD8_S({data:?} from {address:?})");
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD8_U => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: u8 = Self::load(mem, offset, address, 1)?;
                     trace!("I64_LOAD8_S({data:?} from {address:?})");
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD16_S => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: i16 = Self::load(mem, offset, address, 2)?;
                     trace!("I64_LOAD16_S({data:?} from {address:?})");
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD16_U => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: u16 = Self::load(mem, offset, address, 2)?;
                     trace!("I64_LOAD16_S({data:?} from {address:?})");
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD32_S => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: i32 = Self::load(mem, offset, address, 4)?;
                     trace!("I64_LOAD32_S({data:?} from {address:?})");
                     self.stack.push((data as u64).into())?;
                 }
                 I64_LOAD32_U => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: u32 = Self::load(mem, offset, address, 4)?;
                     trace!("I64_LOAD32_S({data:?} from {address:?})");
                     self.stack.push((data as u64).into())?;
                 }
                 I32_LOAD8_U => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: u8 = Self::load(mem, offset, address, 1)?;
                     trace!("I32_LOAD8_U({data:?} from {address:?})");
                     self.stack.push((data as u32).into())?;
                 }
                 I32_LOAD16_U => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: u16 = Self::load(mem, offset, address, 2)?;
                     trace!("I32_LOAD16_U({data:?} from {address:?})");
                     self.stack.push((data as u32).into())?;
                 }
                 I32_LOAD16_S => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: i16 = Self::load(mem, offset, address, 2)?;
                     trace!("I32_LOAD16_S({data:?} from {address:?})");
                     self.stack.push((data as u32).into())?;
                 }
                 I32_LOAD8_S => {
                     let (_, offset) = reader.read_mem_args();
-                    let address = self.stack.pop_i32()? as u32;
-                    let mem = map_memory(0, instance, &mut self.store.data)?;
+                    let address = self.stack.pop_i32() as u32;
+                    let mem = map_memory(0, instance, &mut store.memories)?;
                     let data: i8 = Self::load(mem, offset, address, 1)?;
                     trace!("I32_LOAD8_S({data:?} from {address:?})");
                     self.stack.push((data as u32).into())?;
@@ -1132,8 +1064,8 @@ impl<'store> Executor<'store> {
                         .tableaddr
                         .get(table_idx)
                         .ok_or(ExecutionError::TableAccessOutOfBounds)?;
-                    let offset = self.stack.pop_i32()? as usize;
-                    let table = self.store.data.tables.get_mut(*table_addr).unwrap(); // validated
+                    let offset = self.stack.pop_i32() as usize;
+                    let table = store.tables.get_mut(*table_addr).unwrap(); // validated
                     let value = table.get(offset)?;
                     self.stack.push(value)?;
                     trace!("TABLE_GET '{}' [{}] -> [{:?}]", table_idx, offset, value);
@@ -1144,15 +1076,15 @@ impl<'store> Executor<'store> {
                         .tableaddr
                         .get(table_idx)
                         .ok_or(ExecutionError::TableAccessOutOfBounds)?;
-                    let table = self.store.data.tables.get_mut(*table_addr).unwrap(); // validated
-                    let val = self.stack.pop()?;
-                    let index = self.stack.pop_i32()? as usize;
+                    let table = store.tables.get_mut(*table_addr).unwrap(); // validated
+                    let val = self.stack.pop();
+                    let index = self.stack.pop_i32() as usize;
                     table.insert(index, &[val])?;
                     trace!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val)
                 }
 
                 I32_TRUNC_F32_S => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     if value.is_nan() {
                         return Err(ExecutionError::InvalidConversionToInt);
                     }
@@ -1168,7 +1100,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 I32_TRUNC_F32_U => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     if value.is_nan() {
                         return Err(ExecutionError::InvalidConversionToInt);
                     }
@@ -1188,7 +1120,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 I32_TRUNC_F64_S => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     if value.is_nan() {
                         return Err(ExecutionError::InvalidConversionToInt);
                     }
@@ -1204,7 +1136,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 I32_TRUNC_F64_U => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     if value.is_nan() {
                         return Err(ExecutionError::InvalidConversionToInt);
                     }
@@ -1219,7 +1151,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 I64_TRUNC_F32_S => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     if value.is_nan() {
                         return Err(ExecutionError::InvalidConversionToInt);
                     }
@@ -1234,7 +1166,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 I64_TRUNC_F32_U => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     if value.is_nan() {
                         return Err(ExecutionError::InvalidConversionToInt);
                     }
@@ -1251,7 +1183,7 @@ impl<'store> Executor<'store> {
                 }
 
                 I64_TRUNC_F64_S => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     if value.is_nan() {
                         return Err(ExecutionError::InvalidConversionToInt);
                     }
@@ -1266,7 +1198,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 I64_TRUNC_F64_U => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     if value.is_nan() {
                         return Err(ExecutionError::InvalidConversionToInt);
                     }
@@ -1281,21 +1213,21 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 I32_REINTERPRET_F32 => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let bits = value.to_bits();
                     let res = Value::I32(bits as i32);
                     trace!("Instruction: i32.reinterpret_f32 [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 I64_REINTERPRET_F64 => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let bits = value.to_bits();
                     let res = Value::I64(bits as i64);
                     trace!("Instruction: i64.reinterpret_f64 [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_REINTERPRET_I64 => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     let bits = value as u64;
                     let f_value = f64::from_bits(bits);
                     let res = Value::F64(f_value);
@@ -1303,7 +1235,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F32_REINTERPRET_I32 => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     let bits = value as u32;
                     let f_value = f32::from_bits(bits);
                     let res = Value::F32(f_value);
@@ -1311,75 +1243,75 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F32_DEMOTE_F64 => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let result = value as f32;
                     trace!("Instruction: f32.demote_f64 [{value:?}] -> [{result:?}]");
                     self.stack.push(Value::F32(result))?;
                 }
                 F64_COPYSIGN => {
-                    let z_2 = self.stack.pop_f64()?;
-                    let z_1 = self.stack.pop_f64()?;
+                    let z_2 = self.stack.pop_f64();
+                    let z_1 = self.stack.pop_f64();
                     let res = Value::F64(libm::copysign(z_1, z_2));
                     trace!("Instruction: f64.copysign [{z_1} {z_2}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_COPYSIGN => {
-                    let z_2 = self.stack.pop_f32()?;
-                    let z_1 = self.stack.pop_f32()?;
+                    let z_2 = self.stack.pop_f32();
+                    let z_1 = self.stack.pop_f32();
                     let res = Value::F32(libm::copysignf(z_1, z_2));
                     trace!("Instruction: f32.copysign [{z_1} {z_2}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_CONVERT_I32_S => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     let res = Value::F32(value as f32);
                     trace!("Instruction: f32.convert_i32_s [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_CONVERT_I32_U => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     let res = Value::F32(value as u32 as f32);
                     trace!("Instruction: f32.convert_i32_u [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_CONVERT_I64_S => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     let res = Value::F32(value as f32);
                     trace!("Instruction: f32.convert_i64_s [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_CONVERT_I64_U => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     let res = Value::F32(value as u64 as f32);
                     trace!("Instruction: f32.convert_i64_u [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_CONVERT_I32_S => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     let res = Value::F64(value as f64);
                     trace!("Instruction: f64.convert_i32_s [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_CONVERT_I32_U => {
-                    let value = self.stack.pop_i32()?;
+                    let value = self.stack.pop_i32();
                     let res = Value::F64(value as u32 as f64);
                     trace!("Instruction: f64.convert_i32_u [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_CONVERT_I64_S => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     let res = Value::F64(value as f64);
                     trace!("Instruction: f64.convert_i64_s [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_CONVERT_I64_U => {
-                    let value = self.stack.pop_i64()?;
+                    let value = self.stack.pop_i64();
                     let res = Value::F64(value as u64 as f64);
                     trace!("Instruction: f64.convert_i64_u [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_PROMOTE_F32 => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let res = value as f64;
                     trace!("Instruction: f64.promote_f32 [{value:?}] -> [{res:?}]");
                     let quiet_bit = (res.to_bits() >> 51) & 0x1;
@@ -1388,13 +1320,13 @@ impl<'store> Executor<'store> {
                 }
 
                 F64_ABS => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let res = Value::F64(libm::fabs(value));
                     trace!("Instruction: f64_abs [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_NEG => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let bits = value.to_bits();
                     let neg = f64::from_bits(bits ^ 0x8000000000000000);
                     let res = Value::F64(neg);
@@ -1402,37 +1334,37 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F64_CEIL => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let res = Value::F64(libm::ceil(value));
                     trace!("Instruction: f64_ceil [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_FLOOR => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let res = Value::F64(libm::floor(value));
                     trace!("Instruction: f64_floor [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_TRUNC => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let res = Value::F64(libm::trunc(value));
                     trace!("Instruction: f64_trunc [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_NEAREST => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let res = Value::F64(libm::rint(value));
                     trace!("Instruction: f64_nearest [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_SQRT => {
-                    let value = self.stack.pop_f64()?;
+                    let value = self.stack.pop_f64();
                     let res = Value::F64(libm::sqrt(value));
                     trace!("Instruction: f64.sqrt [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F64_ADD => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_ADD({left}, {right})");
 
                     // if an arithmetic NaN is used, no add is done
@@ -1445,7 +1377,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F64_SUB => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_SUB({left}, {right})");
 
                     // if an arithmetic NaN is used, no sub is done
@@ -1458,7 +1390,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F64_MUL => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_MUL({left}, {right})");
 
                     // if an arithmetic NaN is used, no mul is done
@@ -1471,7 +1403,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F64_DIV => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_DIV({left}, {right})");
 
                     // if an arithmetic NaN is used, no div is done
@@ -1484,7 +1416,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F64_MIN => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_MIN({left}, {right})");
 
                     // Handling the NaN Edge Cases so the right errors are returned
@@ -1508,7 +1440,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(Value::F64(res))?;
                 }
                 F64_MAX => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_MAX({left}, {right})");
 
                     // Handling the NaN Edge Cases so the right errors are returned
@@ -1534,7 +1466,7 @@ impl<'store> Executor<'store> {
                 }
 
                 F32_SUB => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_SUB({left}, {right})");
 
                     // if an arithmetic NaN is used, no sub is done
@@ -1548,7 +1480,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F32_MUL => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_MUL({left}, {right})");
 
                     // if an arithmetic NaN is used, no mul is done
@@ -1561,7 +1493,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F32_DIV => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_DIV({left}, {right})");
 
                     // if an arithmetic NaN is used, no div is done
@@ -1574,7 +1506,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F32_MIN => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_MIN({left}, {right})");
 
                     // Handling the NaN Edge Cases so the right errors are returned
@@ -1598,7 +1530,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(Value::F32(res))?;
                 }
                 F32_MAX => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_MAX({left}, {right})");
 
                     // Handling the NaN Edge Cases so the right errors are returned
@@ -1623,13 +1555,13 @@ impl<'store> Executor<'store> {
                 }
 
                 F32_ABS => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let res = Value::F32(libm::fabsf(value));
                     trace!("Instruction: f32_abs [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_NEG => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let bits = value.to_bits();
                     let neg = f32::from_bits(bits ^ 0x80000000);
                     let res = Value::F32(neg);
@@ -1637,37 +1569,37 @@ impl<'store> Executor<'store> {
                     self.stack.push(res)?;
                 }
                 F32_CEIL => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let res = Value::F32(libm::ceilf(value));
                     trace!("Instruction: f32_ceil [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_FLOOR => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let res = Value::F32(libm::floorf(value));
                     trace!("Instruction: f32_floor [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_TRUNC => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let res = Value::F32(libm::truncf(value));
                     trace!("Instruction: f32_trunc [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_NEAREST => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let res = Value::F32(libm::rintf(value));
                     trace!("Instruction: f32_nearest [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_SQRT => {
-                    let value = self.stack.pop_f32()?;
+                    let value = self.stack.pop_f32();
                     let res = Value::F32(libm::sqrtf(value));
                     trace!("Instruction: f32.sqrt [{value:?}] -> [{res:?}]");
                     self.stack.push(res)?;
                 }
                 F32_ADD => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_ADD({left}, {right})");
 
                     // if an arithmetic NaN is used, no add is done
@@ -1681,74 +1613,74 @@ impl<'store> Executor<'store> {
                 }
 
                 F64_EQ => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_EQ({left}, {right})");
                     let res = Value::I32(if left == right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F64_NE => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_NE({left}, {right})");
                     let res = Value::I32(if left != right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F64_LT => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_LT({left}, {right})");
                     let res = Value::I32(if left < right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F64_GT => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_GT({left}, {right})");
                     let res = Value::I32(if left > right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F64_LE => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_LE({left}, {right})");
                     let res = Value::I32(if left <= right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F64_GE => {
-                    let (right, left) = (self.stack.pop_f64()?, self.stack.pop_f64()?);
+                    let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
                     trace!("F64_GE({left}, {right})");
                     let res = Value::I32(if left >= right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
 
                 F32_EQ => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_EQ({left}, {right})");
                     let res = Value::I32(if left == right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F32_NE => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_NE({left}, {right})");
                     let res = Value::I32(if left != right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F32_LT => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_LT({left}, {right})");
                     let res = Value::I32(if left < right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F32_GT => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_GT({left}, {right})");
                     let res = Value::I32(if left > right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F32_LE => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_LE({left}, {right})");
                     let res = Value::I32(if left <= right { 1 } else { 0 });
                     self.stack.push(res)?;
                 }
                 F32_GE => {
-                    let (right, left) = (self.stack.pop_f32()?, self.stack.pop_f32()?);
+                    let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
                     trace!("F32_GE({left}, {right})");
                     let res = Value::I32(if left >= right { 1 } else { 0 });
                     self.stack.push(res)?;
@@ -1760,7 +1692,7 @@ impl<'store> Executor<'store> {
                     self.stack.push(Value::RefNull(ref_type))?;
                 }
                 REF_IS_NULL => {
-                    let value = self.stack.pop()?;
+                    let value = self.stack.pop();
                     match value {
                         Value::RefNull(_) => self.stack.push(Value::I32(1))?,
                         _ => self.stack.push(Value::I32(0))?,
@@ -1772,7 +1704,7 @@ impl<'store> Executor<'store> {
                 }
                 MEMORY_SIZE => {
                     let idx = reader.next_byte();
-                    let mem = map_memory(idx as usize, instance, &mut self.store.data).unwrap();
+                    let mem = map_memory(idx as usize, instance, &mut store.memories).unwrap();
                     // always 0
                     let size = mem.size();
 
@@ -1781,10 +1713,10 @@ impl<'store> Executor<'store> {
                 }
                 MEMORY_GROW => {
                     let idx = reader.next_byte();
-                    let mem = map_memory(idx as usize, instance, &mut self.store.data).unwrap();
+                    let mem = map_memory(idx as usize, instance, &mut store.memories).unwrap();
                     // always 0
                     let size = mem.pages();
-                    let amount = self.stack.pop_i32()? as u32;
+                    let amount = self.stack.pop_i32() as u32;
                     trace!("Instruction: memory.grow {}", size);
                     if mem.grow(amount).is_ok() {
                         self.stack.push(Value::I32(size as i32))?;
@@ -1796,7 +1728,7 @@ impl<'store> Executor<'store> {
                     let byte = reader.next_leb128_u32();
                     match byte {
                         I32_TRUNC_SAT_F32_S => {
-                            let val = self.stack.pop_f32()?;
+                            let val = self.stack.pop_f32();
                             let res = if val.is_nan() {
                                 0
                             } else if val <= (i32::MIN as f32) {
@@ -1810,7 +1742,7 @@ impl<'store> Executor<'store> {
                             self.stack.push(Value::I32(res))?;
                         }
                         I32_TRUNC_SAT_F32_U => {
-                            let val = self.stack.pop_f32()?;
+                            let val = self.stack.pop_f32();
                             let res = if val.is_nan() || val <= 0.0 {
                                 0
                             } else if val >= u32::MAX as f32 {
@@ -1822,7 +1754,7 @@ impl<'store> Executor<'store> {
                             self.stack.push(Value::I32(res as i32))?;
                         }
                         I32_TRUNC_SAT_F64_S => {
-                            let val = self.stack.pop_f64()?;
+                            let val = self.stack.pop_f64();
                             let res = if val.is_nan() {
                                 0
                             } else if val <= (i32::MIN as f64) {
@@ -1836,7 +1768,7 @@ impl<'store> Executor<'store> {
                             self.stack.push(Value::I32(res))?;
                         }
                         I32_TRUNC_SAT_F64_U => {
-                            let val = self.stack.pop_f64()?;
+                            let val = self.stack.pop_f64();
                             let res = if val.is_nan() || val <= 0.0 {
                                 0
                             } else if val >= (u32::MAX as f64) {
@@ -1848,7 +1780,7 @@ impl<'store> Executor<'store> {
                             self.stack.push(Value::I32(res as i32))?;
                         }
                         I64_TRUNC_SAT_F64_S => {
-                            let val = self.stack.pop_f64()?;
+                            let val = self.stack.pop_f64();
                             let res = if val.is_nan() {
                                 0
                             } else if val <= (i64::MIN as f64) {
@@ -1862,7 +1794,7 @@ impl<'store> Executor<'store> {
                             self.stack.push(Value::I64(res))?;
                         }
                         I64_TRUNC_SAT_F32_S => {
-                            let val = self.stack.pop_f32()?;
+                            let val = self.stack.pop_f32();
                             let res = if val.is_nan() {
                                 0
                             } else if val <= (i64::MIN as f32) {
@@ -1876,7 +1808,7 @@ impl<'store> Executor<'store> {
                             self.stack.push(Value::I64(res))?;
                         }
                         I64_TRUNC_SAT_F64_U => {
-                            let val = self.stack.pop_f64()?;
+                            let val = self.stack.pop_f64();
                             let res = if val.is_nan() || val <= 0.0 {
                                 0
                             } else if val >= (u64::MAX as f64) {
@@ -1888,7 +1820,7 @@ impl<'store> Executor<'store> {
                             self.stack.push(Value::I64(res as i64))?;
                         }
                         I64_TRUNC_SAT_F32_U => {
-                            let val = self.stack.pop_f32()?;
+                            let val = self.stack.pop_f32();
                             let res = if val.is_nan() || val <= 0.0 {
                                 0
                             } else if val >= (u64::MAX as f32) {
@@ -1903,19 +1835,18 @@ impl<'store> Executor<'store> {
                             let data_index = reader.next_leb128_u32();
                             let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
 
-                            let data_inst = self.store.data.datas.get_mut(*data_addr).unwrap(); // validated
+                            let data_inst = store.datas.get_mut(*data_addr).unwrap(); // validated
                             data_inst.clear();
                         }
                         MEMORY_INIT => {
                             let data_index = reader.next_leb128_u32();
                             let memory_index = reader.next_byte();
-
-                            let number_of_bytes = self.stack.pop_i32()? as usize;
-                            let start_in_data_segment = self.stack.pop_i32()? as usize;
-                            let dest_address = self.stack.pop_i32()? as usize;
+                            let number_of_bytes = self.stack.pop_i32() as usize;
+                            let start_in_data_segment = self.stack.pop_i32() as usize;
+                            let dest_address = self.stack.pop_i32() as usize;
 
                             let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
-                            let data_inst = self.store.data.datas.get(*data_addr).unwrap(); // validated
+                            let data_inst = store.datas.get_mut(*data_addr).unwrap(); // validated
                             if start_in_data_segment + number_of_bytes > data_inst.data.len() {
                                 return Err(ExecutionError::MemoryAccessOutOfBounds);
                             }
@@ -1923,7 +1854,7 @@ impl<'store> Executor<'store> {
                                 data_inst.load_slice(start_in_data_segment, number_of_bytes)?;
 
                             let mem =
-                                map_memory(memory_index as usize, instance, &mut self.store.data)
+                                map_memory(memory_index as usize, instance, &mut store.memories)
                                     .unwrap();
                             // Destination bound check happens in store function
                             mem.store(dest_address, 0, &data)?;
@@ -1932,29 +1863,29 @@ impl<'store> Executor<'store> {
                         MEMORY_COPY => {
                             let (dest, src) = (reader.next_byte(), reader.next_byte());
 
-                            let number_of_bytes = self.stack.pop_i32()? as usize;
-                            let src_address = self.stack.pop_i32()? as usize;
-                            let dest_address = self.stack.pop_i32()? as usize;
+                            let number_of_bytes = self.stack.pop_i32() as usize;
+                            let src_address = self.stack.pop_i32() as usize;
+                            let dest_address = self.stack.pop_i32() as usize;
 
                             let data = {
                                 let src_mem =
-                                    map_memory(src as usize, instance, &mut self.store.data)
+                                    map_memory(src as usize, instance, &mut store.memories)
                                         .unwrap();
                                 src_mem.load_slice(src_address, number_of_bytes)?.to_vec()
                             };
                             let dest_mem =
-                                map_memory(dest as usize, instance, &mut self.store.data).unwrap();
+                                map_memory(dest as usize, instance, &mut store.memories).unwrap();
                             dest_mem.store(dest_address, 0, &data)?;
                             trace!("MEMORY_COPY: {number_of_bytes} bytes from {src}:{src_address} to {dest}:{dest_address}");
                         }
                         MEMORY_FILL => {
                             let idx = reader.next_byte();
                             let mem =
-                                map_memory(idx as usize, instance, &mut self.store.data).unwrap(); // always 0
-                            let number_of_bytes = self.stack.pop_i32()? as usize;
-                            let val = self.stack.pop_i32()? as u8;
+                                map_memory(idx as usize, instance, &mut store.memories).unwrap(); // always 0
+                            let number_of_bytes = self.stack.pop_i32() as usize;
+                            let val = self.stack.pop_i32() as u8;
                             let data = vec![val; number_of_bytes];
-                            let address = self.stack.pop_i32()? as usize;
+                            let address = self.stack.pop_i32() as usize;
                             mem.store(address, 0, &data)?;
                             trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");
                         }

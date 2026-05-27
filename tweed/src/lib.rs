@@ -9,25 +9,23 @@ pub mod core;
 pub mod execution;
 pub mod validation;
 
-use core::error::{ExecutionError, TweedError, ValidationError};
+use core::error::{TweedError, ValidationError};
 pub use core::values::Value;
 
-use execution::executor::Executor;
 pub use log::LevelFilter;
 
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
 use binary::module_environment::create_module_environment;
-use execution::linker::Linker;
-use execution::store::Store;
+use execution::engine::Engine;
 use validation::module::Module;
 
 pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>, TweedError> {
-    let mut module = initialize(input)?;
-    let mut store = Store::default();
-    let instance_name = instantiate(&mut module, &mut store, None)?;
-    let result = invoke(instance_name, name, params, &mut store)?;
+    let module = initialize(input)?;
+    let mut engine = Engine::default();
+    let instance_addr = engine.instantiate(module)?;
+    let result = engine.invoke(instance_addr, name, params)?;
     Ok(result)
 }
 pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
@@ -50,25 +48,4 @@ pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
         startsec: module_environment.startsec,
         sidetables: module_environment.sidetables,
     })
-}
-
-pub fn instantiate(
-    module: &mut Module,
-    store: &mut Store,
-    instance_name: Option<&str>,
-) -> Result<String, ExecutionError> {
-    trace!("Instantiate module");
-    let mut linker = Linker::default();
-    linker.instantiate(module, store, instance_name)
-}
-
-pub fn invoke(
-    instance_name: String,
-    name: String,
-    params: Vec<Value>,
-    store: &mut Store,
-) -> Result<Vec<Value>, ExecutionError> {
-    trace!("Invoke `{name}` with {params:?}");
-    let mut exec = Executor::new(store);
-    exec.invoke(&instance_name, &name, &params)
 }

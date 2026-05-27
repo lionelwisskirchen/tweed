@@ -1,9 +1,10 @@
 use clap::Subcommand;
 use clap::{Parser, ValueHint};
+use tweed::execution::engine::Engine;
 use std::fs;
 use std::path::PathBuf;
 use tweed::core::logger::STDLogger;
-use tweed::{initialize, instantiate, invoke, LevelFilter, Value};
+use tweed::{initialize, LevelFilter, Value};
 #[derive(Parser, Debug)]
 #[command(name = "tweed")]
 #[command(about = "A tiny CLI for tweed", long_about = None)]
@@ -44,11 +45,11 @@ fn main() -> anyhow::Result<()> {
     } else {
         STDLogger::init(LevelFilter::Info);
     }
-    let mut store = Default::default();
-    let mut module = initialize(&wasm_bytes)
+    let mut engine = Engine::default();
+    let module = initialize(&wasm_bytes)
         .map_err(|e| anyhow::anyhow!("Failed to initialize the module: {}", e))?;
 
-    let instance = instantiate(&mut module, &mut store, None)
+    let instance = engine.instantiate(module)
         .map_err(|e| anyhow::anyhow!("Failed to instantiate the module: {}", e))?;
 
     match cli.command {
@@ -57,7 +58,7 @@ fn main() -> anyhow::Result<()> {
                 .into_iter()
                 .map(|arg0: i32| Value::I32(arg0))
                 .collect();
-            let result = invoke(instance.clone(), function, values, &mut store)
+            let result = engine.invoke(instance, function, values)
                 .map_err(|e| anyhow::anyhow!("Function invocation failed: {:?}", e))?;
 
             println!("Result: {:?}", result);

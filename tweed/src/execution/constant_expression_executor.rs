@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use alloc::vec::Vec;
 
 use crate::core::error::ExecutionError;
@@ -8,18 +6,19 @@ use crate::core::{opcode::*, value_types::ValType};
 
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::values::Value;
-use crate::execution::linker::function_registry_entry::FunctionRegistryEntry;
 
+use super::adresses::{FuncAddr, GlobalAddr};
 use super::execution_stack::ExecutionStack;
-use super::store::GlobalInstance;
+use super::store::Store;
 
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 pub fn execute_const_expr(
     reader: &mut ValidatedWasmReader,
-    globals: &[GlobalInstance],
+    globals: &[GlobalAddr],
+    functions: &[FuncAddr],
     result: &[ValType],
-    function_registry: &HashMap<usize, FunctionRegistryEntry>,
+    store: &Store,
 ) -> Result<Vec<Value>> {
     let mut value_stack: ExecutionStack = ExecutionStack::default();
     loop {
@@ -43,12 +42,12 @@ pub fn execute_const_expr(
                 value_stack.push(Value::F64(value))?;
             }
             I64_ADD => {
-                let (right, left) = (value_stack.pop_i64()?, value_stack.pop_i64()?);
+                let (right, left) = (value_stack.pop_i64(), value_stack.pop_i64());
                 let result = right + left;
                 value_stack.push(result.into())?;
             }
             I64_SUB => {
-                let (right, left) = (value_stack.pop_i64()?, value_stack.pop_i64()?);
+                let (right, left) = (value_stack.pop_i64(), value_stack.pop_i64());
                 let result = left.wrapping_sub(right);
                 value_stack.push(result.into())?;
             }
@@ -60,15 +59,15 @@ pub fn execute_const_expr(
                 // if global.global_type.is_mutable {
                 //     return Err(ValidationError::GlobalIsMutable);
                 // }
-                value_stack.push(global.value)?;
+                value_stack.push(store.globals.get(*global)?.value)?;
             }
             I32_ADD => {
-                let (right, left) = (value_stack.pop_i32()?, value_stack.pop_i32()?);
+                let (right, left) = (value_stack.pop_i32(), value_stack.pop_i32());
                 let result = right + left;
                 value_stack.push(result.into())?;
             }
             I32_SUB => {
-                let (right, left) = (value_stack.pop()?, value_stack.pop()?);
+                let (right, left) = (value_stack.pop(), value_stack.pop());
 
                 value_stack.push(left - right)?;
             }
@@ -78,15 +77,15 @@ pub fn execute_const_expr(
             }
             REF_FUNC => {
                 let func_idx = reader.next_leb128_u32() as usize;
-                let _func = function_registry
-                    .get(&func_idx)
+                let _func = functions
+                    .get(func_idx)
                     .ok_or(ExecutionError::FunctionNotFound)?;
                 value_stack.push(Value::FuncRef(func_idx))?;
             }
             END => {
                 let mut unpacked_result = vec![];
                 for ty in result {
-                    let val = value_stack.pop()?;
+                    let val = value_stack.pop();
                     unpacked_result.push(val);
                     if !ty.is_type(val) {
                         return Err(ExecutionError::TypeMismatch);

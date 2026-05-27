@@ -14,7 +14,7 @@ pub type Result<T> = core::result::Result<T, ValidationError>;
 pub enum SegmentMode {
     /// Contents of active data segments are copied during instantiation
     Active {
-        memory: u32,
+        memory_idx: u32,
         offset_start: usize,
         offset_end: usize,
     },
@@ -121,7 +121,7 @@ fn create_data_segment(
     let data = reader.next_chunk(data_size as usize)?;
     Ok(DataSegment {
         mode: SegmentMode::Active {
-            memory: memory_index,
+            memory_idx: memory_index,
             offset_start: start,
             offset_end: end,
         },

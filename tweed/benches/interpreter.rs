@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use tweed::{initialize, instantiate, invoke, Value};
+use tweed::{initialize, Value};
 use wat;
 
 #[cfg(feature = "std")]
@@ -55,14 +55,17 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     for val in test_values {
         group.bench_with_input(BenchmarkId::new("Tweed", &val.0), &val, |b, _val| {
             b.iter(|| {
-                let mut module = initialize(&val.1).unwrap_or_else(|e| {
+                use tweed::execution::engine::Engine;
+
+                let module = initialize(&val.1).unwrap_or_else(|e| {
                     panic!("Initialization failed: {e}");
                 });
-                let mut store = Default::default();
-                let instance = instantiate(&mut module, &mut store, None).unwrap_or_else(|e| {
+                let mut engine = Engine::default();
+                let instance = engine.instantiate(module).unwrap_or_else(|e| {
                     panic!("Instantiation failed: {e}");
                 });
-                let result = invoke(instance, "_run".to_string(), vec![], &mut store)
+                let result = engine
+                    .invoke(instance, "_run".to_string(), vec![])
                     .expect("Execution failed");
                 if result != vec![Value::I32(0)] {
                     panic!("Embench program failed!");

@@ -20,11 +20,11 @@ variables:
 
 style-test-job:
   stage: test
-  script: nix develop --command style-checks
+  script: ./scripts/style-checks.bash
 
 format-test-job:
   stage: test
-  script: nix develop --command format-checks
+  script: ./scripts/format-checks.bash
 
 unit-test-job:
   stage: test
@@ -35,4 +35,4 @@ unit-test-job:
         path: tweed/target/llvm-cov-target/cobertura.xml
   # this uses region for coverage summary
   coverage: '/TOTAL\s+(\d+\s+)+(\d+\.\d+\%)/'
-  script: nix develop --command coverage-checks
+  script: ./scripts/coverage-checks.bash

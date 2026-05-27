@@ -46,14 +46,16 @@ impl From<ExecutionError> for TweedError {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExecutionError {
     InstanceNameTaken,
+    IncompatibleNumberOfImports,
     UnknownReader,
     UnknownInstance,
-    UnknownImport,
     DivisionByZero,
     IntegerOverflow,
     MissingFunctionImport,
-    IncompatibleImportType,
     MissingGlobalImport,
+    MissingTableImport,
+    MissingMemoryImport,
+    IncompatibleImportType,
     TypeMismatch,
     InvalidFunctionIndex,
     InvalidMemoryIndex,
@@ -85,10 +87,11 @@ impl Display for ExecutionError {
             Self::InstanceNameTaken => f.write_str("instance name taken"),
             Self::UnknownReader => f.write_str("no reader found for instance"),
             Self::UnknownInstance => f.write_str("unknown instance"),
-            Self::UnknownImport => f.write_str("unknown import"),
-            Self::MissingFunctionImport => f.write_str("missing function import"),
-            Self::IncompatibleImportType => f.write_str("incompatible import type"),
             Self::MissingGlobalImport => f.write_str("missing global import"),
+            Self::MissingTableImport => f.write_str("unknown import"),
+            Self::MissingFunctionImport => f.write_str("missing function import"),
+            Self::MissingMemoryImport => f.write_str("unknown import"),
+            Self::IncompatibleImportType => f.write_str("incompatible import type"),
             Self::TypeMismatch => f.write_str("type mismatch"),
             Self::InvalidFunctionIndex => f.write_str("invalid function index"),
             Self::InvalidMemoryIndex => f.write_str("invalid memory index"),
@@ -114,6 +117,7 @@ impl Display for ExecutionError {
             Self::InvalidSignatureIndex => f.write_str("invalid signature index"),
             Self::FunctionNotFound => f.write_str("function not found"),
             Self::MultipleMemories => f.write_str("multiple memories"),
+            Self::IncompatibleNumberOfImports => f.write_str("incompatible number of imports"),
         }
     }
 }
