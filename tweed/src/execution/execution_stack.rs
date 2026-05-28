@@ -138,7 +138,7 @@ impl ExecutionStack {
         v
     }
     pub fn pop_v128(&mut self) -> Result<V128Shape> {
-        let Value::V128(value) = self.pop()? else {
+        let Value::V128(value) = self.pop() else {
             return Err(ExecutionError::UnexpectedValueType);
         };
         Ok(value)

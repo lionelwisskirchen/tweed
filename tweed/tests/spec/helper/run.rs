@@ -4,11 +4,11 @@ use std::{self, f32, fs};
 use tweed::binary::table_section::Table;
 use tweed::binary::type_section::FuncType;
 use tweed::core::value_types::ValType;
-use tweed::core::values::NaN;
+use tweed::core::values::{NaN, V128Shape};
 use tweed::execution::engine::Engine;
 
 use tweed::{initialize, Value};
-use wast::core::{HeapType, WastArgCore, WastRetCore};
+use wast::core::{HeapType, NanPattern, WastArgCore, WastRetCore};
 use wast::token::Index;
 use wast::{WastArg, WastRet, Wat};
 

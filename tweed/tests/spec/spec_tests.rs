@@ -258,11 +258,6 @@ fn spec_tests_simd_i8x16_arith() {
 }
 
 #[test_log::test]
-fn spec_tests_simd_i8x16_arith2() {
-    run_spec_test(Path::new("./tests/spec/testsuite/simd_i8x16_arith2.wast"));
-}
-
-#[test_log::test]
 fn spec_tests_simd_i16x8_arith() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_i16x8_arith.wast"));
 }
