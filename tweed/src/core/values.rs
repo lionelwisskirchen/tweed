@@ -17,16 +17,6 @@ pub enum V128Shape {
     Bytes([u8; 16]),
 }
 
-impl FromLeBytes for V128Shape {
-    fn from_le_bytes(bytes: &[u8]) -> V128Shape {
-        if bytes.len() != 16 {
-            unreachable!("V128 requires exactly 16 bytes, (validated)")
-        }
-
-        V128Shape::I8x16(core::array::from_fn(|i| bytes[i] as i8))
-    }
-}
-
 impl V128Shape {
     /// Converts the SIMD value into its underlying 16-byte representation.
     ///
