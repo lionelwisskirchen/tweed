@@ -213,8 +213,8 @@ pub mod vector_extensions {
     pub const V128_LOAD_8X8_U: u32 = 0x02;
     pub const V128_LOAD_16X4_S: u32 = 0x03;
     pub const V128_LOAD_16X4_U: u32 = 0x04;
-    pub const V128_LOAD_328X2_S: u32 = 0x05;
-    pub const V128_LOAD_328X2_U: u32 = 0x06;
+    pub const V128_LOAD_32X2_S: u32 = 0x05;
+    pub const V128_LOAD_32X2_U: u32 = 0x06;
     pub const V128_LOAD_8_SPLAT: u32 = 0x07;
     pub const V128_LOAD_16_SPLAT: u32 = 0x08;
     pub const V128_LOAD_32_SPLAT: u32 = 0x09;

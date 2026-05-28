@@ -293,6 +293,11 @@ fn spec_tests_simd_store() {
 }
 
 #[test_log::test]
+fn spec_tests_simd_align() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_align.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_table_get() {
     run_spec_test(Path::new("./tests/spec/testsuite/table_get.wast"));
 }

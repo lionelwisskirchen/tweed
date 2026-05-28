@@ -957,7 +957,49 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                                 return Err(ValidationError::UnknownMemory)?;
                             }
 
-                            self.check_align(16)?;
+                            self.check_align(4)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+
+                        V128_LOAD_8X8_S | V128_LOAD_8X8_U | V128_LOAD_16X4_S | V128_LOAD_16X4_U
+                        | V128_LOAD_32X2_S | V128_LOAD_32X2_U | V128_LOAD_64_SPLAT => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(3)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+                        V128_LOAD_8_SPLAT => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(0)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+                        V128_LOAD_16_SPLAT => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(1)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+                        V128_LOAD_32_SPLAT => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(2)?;
 
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.push(ValType::V128Type);
@@ -967,7 +1009,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             if memories.is_empty() {
                                 return Err(ValidationError::UnknownMemory)?;
                             }
-                            self.check_align(16)?;
+                            self.check_align(4)?;
 
                             self.abstract_value_stack.pop_expected(ValType::V128Type)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -1001,6 +1043,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         self.reset();
         Ok(result)
     }
+
     fn check_align(&mut self, max_align: u32) -> Result<()> {
         let align = self.reader.next_leb128_u32()?;
         let _offset = self.reader.next_leb128_u32()?;
