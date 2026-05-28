@@ -25,7 +25,7 @@ macro_rules! define_i8x16_simd_unary_op {
         /// # Arguments
         /// * `stack` - a mutable reference to the [ExecutionStack] to work with
         pub fn $func_name(stack: &mut ExecutionStack) -> Result<()> {
-            let value = stack.pop_v128()?.to_i8x16();
+            let value = stack.pop_v128().to_i8x16();
 
             let result = std::array::from_fn(|i| $op(value[i]));
 
@@ -54,7 +54,7 @@ macro_rules! define_i8x16_simd_binary_op {
         /// # Arguments
         /// * `stack` - a mutable reference to the [ExecutionStack] to work with
         pub fn $func_name(stack: &mut ExecutionStack) -> Result<()> {
-            let (right, left) = (stack.pop_v128()?.to_i8x16(), stack.pop_v128()?.to_i8x16());
+            let (right, left) = (stack.pop_v128().to_i8x16(), stack.pop_v128().to_i8x16());
 
             let result = std::array::from_fn(|i| $op(left[i], right[i]));
 

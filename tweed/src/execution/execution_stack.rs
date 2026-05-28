@@ -137,11 +137,11 @@ impl ExecutionStack {
         };
         v
     }
-    pub fn pop_v128(&mut self) -> Result<V128Shape> {
+    pub fn pop_v128(&mut self) -> V128Shape {
         let Value::V128(value) = self.pop() else {
-            return Err(ExecutionError::UnexpectedValueType);
+            unreachable!("Expected v128 on stack (validated)");
         };
-        Ok(value)
+        value
     }
 
     pub fn pop_n(&mut self, count: usize) -> Result<Vec<Value>> {

@@ -952,26 +952,42 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 VECTOR_EXTENSION_PREFIX => {
                     let byte = self.reader.next_leb128_u32()?;
                     match byte {
+                        V128_LOAD => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(16)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+
+                        V128_STORE => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+                            self.check_align(16)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::V128Type)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                        }
+
                         V128_CONST => {
                             simd_validate::v128_const(self.reader, &mut self.abstract_value_stack)?;
                         }
-                        I8X16_ADD | I16X8_ADD | I32X4_ADD | I64X2_ADD => {
-                            simd_validate::v128_add(&mut self.abstract_value_stack)?;
+
+                        I8X16_ADD | I16X8_ADD | I32X4_ADD | I64X2_ADD | I8X16_SUB | I16X8_SUB
+                        | I32X4_SUB | I64X2_SUB | I16X8_MUL | I32X4_MUL | I64X2_MUL
+                        | I8X16_MIN_S | I8X16_MIN_U => {
+                            simd_validate::v128_vvbinop(&mut self.abstract_value_stack)?;
                         }
-                        I8X16_SUB | I16X8_SUB | I32X4_SUB | I64X2_SUB => {
-                            simd_validate::v128_sub(&mut self.abstract_value_stack)?;
-                        }
-                        I16X8_MUL | I32X4_MUL | I64X2_MUL => {
-                            simd_validate::v128_mul(&mut self.abstract_value_stack)?;
-                        }
+
                         I8X16_NEG | I16X8_NEG | I32X4_NEG | I64X2_NEG => {
-                            simd_validate::v128_neg(&mut self.abstract_value_stack)?;
-                        }
-                        I8X16_MIN_S | I8X16_MIN_U => {
-                            simd_validate::v128_min_s(&mut self.abstract_value_stack)?;
+                            simd_validate::v128_vvunop(&mut self.abstract_value_stack)?;
                         }
                         _ => {
-                            println!("Undefined Vector Code");
+                            println!("Undefined Vector Code: {}", byte);
                             return Err(ValidationError::UndefinedOpCode(byte as u8));
                         }
                     }

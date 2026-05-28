@@ -31,12 +31,12 @@ pub fn v128_const(
 ///
 /// # Arguments
 /// * `stack`: a mutable reference to the [ValidationStack] to pop the values and store the result
-pub fn v128_add(abstract_value_stack: &mut ValidationStack) -> Result<()> {
-    abstract_value_stack.pop_expected(ValType::V128Type)?;
-    abstract_value_stack.pop_expected(ValType::V128Type)?;
-    abstract_value_stack.push(ValType::V128Type);
-    Ok(())
-}
+// pub fn v128_add(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.push(ValType::V128Type);
+//     Ok(())
+// }
 
 /// Function to validate the commands v128.sub (0x71)
 ///
@@ -44,12 +44,12 @@ pub fn v128_add(abstract_value_stack: &mut ValidationStack) -> Result<()> {
 ///
 /// # Arguments
 /// * `stack`: a mutable reference to the [ValidationStack] to pop the values and store the result
-pub fn v128_sub(abstract_value_stack: &mut ValidationStack) -> Result<()> {
-    abstract_value_stack.pop_expected(ValType::V128Type)?;
-    abstract_value_stack.pop_expected(ValType::V128Type)?;
-    abstract_value_stack.push(ValType::V128Type);
-    Ok(())
-}
+// pub fn v128_sub(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.push(ValType::V128Type);
+//     Ok(())
+// }
 
 /// Function to validate the commands v128.mul (0x71)
 ///
@@ -57,12 +57,12 @@ pub fn v128_sub(abstract_value_stack: &mut ValidationStack) -> Result<()> {
 ///
 /// # Arguments
 /// * `stack`: a mutable reference to the [ValidationStack] to pop the values and store the result
-pub fn v128_mul(abstract_value_stack: &mut ValidationStack) -> Result<()> {
-    abstract_value_stack.pop_expected(ValType::V128Type)?;
-    abstract_value_stack.pop_expected(ValType::V128Type)?;
-    abstract_value_stack.push(ValType::V128Type);
-    Ok(())
-}
+// pub fn v128_mul(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.push(ValType::V128Type);
+//     Ok(())
+// }
 
 /// Function to validate the commands v128.neg (0x61)
 ///
@@ -70,11 +70,11 @@ pub fn v128_mul(abstract_value_stack: &mut ValidationStack) -> Result<()> {
 ///
 /// # Arguments
 /// * `stack`: a mutable reference to the [ValidationStack] to pop the values and store the result
-pub fn v128_neg(abstract_value_stack: &mut ValidationStack) -> Result<()> {
-    abstract_value_stack.pop_expected(ValType::V128Type)?;
-    abstract_value_stack.push(ValType::V128Type);
-    Ok(())
-}
+// pub fn v128_neg(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.push(ValType::V128Type);
+//     Ok(())
+// }
 
 /// Function to validate the commands min
 ///
@@ -82,9 +82,83 @@ pub fn v128_neg(abstract_value_stack: &mut ValidationStack) -> Result<()> {
 ///
 /// # Arguments
 /// * `stack`: a mutable reference to the [ValidationStack] to pop the values and store the result
-pub fn v128_min_s(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+// pub fn v128_min_s(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.pop_expected(ValType::V128Type)?;
+//     abstract_value_stack.push(ValType::V128Type);
+//     Ok(())
+// }
+
+pub fn v128_vvunop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}
+
+pub fn v128_vvbinop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
     abstract_value_stack.pop_expected(ValType::V128Type)?;
     abstract_value_stack.pop_expected(ValType::V128Type)?;
     abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}
+
+pub fn v128_vvternop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}
+
+pub fn v128_vvtestop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::I32);
+    Ok(())
+}
+
+pub fn shape_vunop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}
+
+pub fn shape_vbinop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}
+
+pub fn shape_vternop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}
+
+pub fn shape_vtestop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::I32);
+    Ok(())
+}
+
+pub fn shape_vrelop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}
+
+pub fn ishape_vshiftop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.pop_expected(ValType::I32)?;
+    abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}
+
+pub fn ishape_bitmask(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::I32);
     Ok(())
 }

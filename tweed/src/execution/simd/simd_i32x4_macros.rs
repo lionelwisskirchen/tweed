@@ -25,7 +25,7 @@ macro_rules! define_i32x4_simd_unary_op {
         /// # Arguments
         /// * `stack` - a mutable reference to the [ExecutionStack] to work with
         pub fn $func_name(stack: &mut ExecutionStack) -> Result<()> {
-            let value = stack.pop_v128()?.to_i32x4();
+            let value = stack.pop_v128().to_i32x4();
 
             let result = std::array::from_fn(|i| value[i].$method().0);
             stack.push(Value::V128(V128Shape::I32x4(result)))?;
@@ -54,7 +54,7 @@ macro_rules! define_i32x4_simd_binary_op {
         /// # Arguments
         /// * `stack` - a mutable reference to the [ExecutionStack] to work with
         pub fn $func_name(stack: &mut ExecutionStack) -> Result<()> {
-            let (right, left) = (stack.pop_v128()?.to_i32x4(), stack.pop_v128()?.to_i32x4());
+            let (right, left) = (stack.pop_v128().to_i32x4(), stack.pop_v128().to_i32x4());
 
             let mut result = [0i32; 4];
 

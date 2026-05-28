@@ -11,7 +11,7 @@ use crate::core::opcode::vector_extensions::*;
 use crate::core::opcode::*;
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::value_types::ValType;
-use crate::core::values::NaN;
+use crate::core::values::{NaN, V128Shape};
 use crate::execution::simd;
 use crate::execution::simd::simd_execute;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
@@ -1919,6 +1919,23 @@ impl Executor {
                         I64X2_SUB => simd::i64x2_sub(&mut self.stack)?,
                         I64X2_NEG => simd::i64x2_neg(&mut self.stack)?,
                         I64X2_MUL => simd::i64x2_mul(&mut self.stack)?,
+
+                        V128_LOAD => {
+                            let (_, offset) = reader.read_mem_args();
+                            let address = self.stack.pop_i32() as u32;
+                            let mem = map_memory(0, instance, &mut store.memories)?;
+                            let data: V128Shape = Self::load(mem, offset, address, 16)?;
+                            trace!("V128_LOAD({data:?} from {address:?})");
+                            self.stack.push(data.into())?;
+                        }
+                        V128_STORE => {
+                            let (_, offset) = reader.read_mem_args();
+                            let store_data = (self.stack.pop_v128()).to_bytes();
+                            let rel_address = self.stack.pop_i32() as u32;
+                            trace!("V128_STORE({store_data:?} to {rel_address:?})");
+                            let mem = map_memory(0, instance, &mut store.memories)?;
+                            mem.store(rel_address as usize, offset as usize, &store_data)?;
+                        }
 
                         _ => unreachable!("Unreachable due to validation"),
                     }

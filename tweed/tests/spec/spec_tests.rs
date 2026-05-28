@@ -248,6 +248,11 @@ fn spec_tests_table() {
 }
 
 #[test_log::test]
+fn spec_tests_simd_address() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_address.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_simd_const() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_const.wast"));
 }
@@ -270,6 +275,21 @@ fn spec_tests_simd_i32x4_arith() {
 #[test_log::test]
 fn spec_tests_simd_i64x2_arith() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_i64x2_arith.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_linking() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_linking.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_load() {
+    run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_store() {
+    run_spec_test(Path::new("./tests/spec/testsuite/store.wast"));
 }
 
 #[test_log::test]
