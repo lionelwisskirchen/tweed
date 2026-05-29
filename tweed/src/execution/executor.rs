@@ -1904,21 +1904,33 @@ impl Executor {
                         I8X16_NEG => simd::i8x16_neg(&mut self.stack)?,
                         I8X16_MIN_S => simd::i8x16_min_s(&mut self.stack)?,
                         I8X16_MIN_U => simd::i8x16_min_u(&mut self.stack)?,
+                        I8X16_SHL => simd::i8x16_shl(&mut self.stack)?,
+                        I8X16_SHR_U => simd::i8x16_shr_u(&mut self.stack)?,
+                        I8X16_SHR_S => simd::i8x16_shr_s(&mut self.stack)?,
 
                         I16X8_ADD => simd::i16x8_add(&mut self.stack)?,
                         I16X8_SUB => simd::i16x8_sub(&mut self.stack)?,
                         I16X8_NEG => simd::i16x8_neg(&mut self.stack)?,
                         I16X8_MUL => simd::i16x8_mul(&mut self.stack)?,
+                        I16X8_SHL => simd::i16x8_shl(&mut self.stack)?,
+                        I16X8_SHR_U => simd::i16x8_shr_u(&mut self.stack)?,
+                        I16X8_SHR_S => simd::i16x8_shr_s(&mut self.stack)?,
 
                         I32X4_ADD => simd::i32x4_add(&mut self.stack)?,
                         I32X4_SUB => simd::i32x4_sub(&mut self.stack)?,
                         I32X4_NEG => simd::i32x4_neg(&mut self.stack)?,
                         I32X4_MUL => simd::i32x4_mul(&mut self.stack)?,
+                        I32X4_SHL => simd::i32x4_shl(&mut self.stack)?,
+                        I32X4_SHR_U => simd::i32x4_shr_u(&mut self.stack)?,
+                        I32X4_SHR_S => simd::i32x4_shr_s(&mut self.stack)?,
 
                         I64X2_ADD => simd::i64x2_add(&mut self.stack)?,
                         I64X2_SUB => simd::i64x2_sub(&mut self.stack)?,
                         I64X2_NEG => simd::i64x2_neg(&mut self.stack)?,
                         I64X2_MUL => simd::i64x2_mul(&mut self.stack)?,
+                        I64X2_SHL => simd::i64x2_shl(&mut self.stack)?,
+                        I64X2_SHR_U => simd::i64x2_shr_u(&mut self.stack)?,
+                        I64X2_SHR_S => simd::i64x2_shr_s(&mut self.stack)?,
 
                         V128_LOAD => {
                             let (_, offset) = reader.read_mem_args();

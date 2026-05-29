@@ -68,7 +68,43 @@ macro_rules! define_i64x2_simd_binary_op {
     };
 }
 
+/// Generates a shift SIMD operation function for i64x2 vectors.
+///
+/// This macro creates a function that applies a shift operation to each lane
+/// of an i64x2 vector. The given operation should be a method that shift a given i64 to the left or
+/// the right (e.g., `wrapping_shl`, ..).
+///
+/// # Arguments
+/// * `$func_name` - Name of the generated function
+/// * `$op` - The shift operation to call on each lane
+/// * `$shift_type` - An intermediate type in which the shift should take place
+macro_rules! define_i64x2_simd_shift_op {
+    ($func_name:ident => $op:ident, $shift_type:ty) => {
+        #[doc = concat!("Computes `", stringify!($op), "` on each lane of an i8x16 vector.")]
+        ///
+        /// This Method pops one i32 and one v128 of the given [ExecutionStack]. After executing
+        /// the operation, the result is pushed back to the stack.
+        ///
+        /// # Arguments
+        /// * `stack` - a mutable reference to the [ExecutionStack] to work with
+        pub fn $func_name(stack: &mut ExecutionStack) -> Result<()> {
+            let rhs = (stack.pop_i32() % 64) as u32;
+            let mut v128_value = stack.pop_v128().to_i64x2();
+
+            for idx in 0..v128_value.len() {
+                v128_value[idx] = (v128_value[idx] as $shift_type).$op(rhs) as i64;
+            }
+            stack.push(Value::V128(V128Shape::I64x2(v128_value)))?;
+            Ok(())
+        }
+    };
+}
+
 define_i64x2_simd_binary_op!(i64x2_add, overflowing_add);
 define_i64x2_simd_binary_op!(i64x2_sub, overflowing_sub);
 define_i64x2_simd_binary_op!(i64x2_mul, overflowing_mul);
 define_i64x2_simd_unary_op!(i64x2_neg, overflowing_neg);
+
+define_i64x2_simd_shift_op!(i64x2_shl => wrapping_shl, i64);
+define_i64x2_simd_shift_op!(i64x2_shr_s => wrapping_shr, i64);
+define_i64x2_simd_shift_op!(i64x2_shr_u => wrapping_shr, u64);

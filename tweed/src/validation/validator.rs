@@ -1018,6 +1018,11 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         V128_CONST => {
                             simd_validate::v128_const(self.reader, &mut self.abstract_value_stack)?;
                         }
+                        I8X16_SHL | I8X16_SHR_S | I8X16_SHR_U | I16X8_SHL | I16X8_SHR_S
+                        | I16X8_SHR_U | I32X4_SHL | I32X4_SHR_S | I32X4_SHR_U | I64X2_SHL
+                        | I64X2_SHR_S | I64X2_SHR_U => {
+                            simd_validate::ishape_vshiftop(&mut self.abstract_value_stack)?;
+                        }
 
                         I8X16_ADD | I16X8_ADD | I32X4_ADD | I64X2_ADD | I8X16_SUB | I16X8_SUB
                         | I32X4_SUB | I64X2_SUB | I16X8_MUL | I32X4_MUL | I64X2_MUL

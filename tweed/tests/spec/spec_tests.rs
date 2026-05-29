@@ -253,6 +253,16 @@ fn spec_tests_simd_address() {
 }
 
 #[test_log::test]
+fn spec_tests_simd_align() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_align.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_simd_bit_shift() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_bit_shift.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_simd_const() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_const.wast"));
 }
@@ -282,19 +292,21 @@ fn spec_tests_simd_linking() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_linking.wast"));
 }
 
-#[test_log::test]
-fn spec_tests_simd_load() {
-    run_spec_test(Path::new("./tests/spec/testsuite/load.wast"));
-}
+// #[test_log::test]
+// fn spec_tests_simd_load() {
+//     // depends on:
+//     // - simd_extract_land
+//     // - eq
+//     // - not
+//     // - all-true
+//     // - bitselect
+//     // - shl
+//     run_spec_test(Path::new("./tests/spec/testsuite/simd_load.wast"));
+// }
 
 #[test_log::test]
 fn spec_tests_simd_store() {
-    run_spec_test(Path::new("./tests/spec/testsuite/store.wast"));
-}
-
-#[test_log::test]
-fn spec_tests_simd_align() {
-    run_spec_test(Path::new("./tests/spec/testsuite/simd_align.wast"));
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_store.wast"));
 }
 
 #[test_log::test]
