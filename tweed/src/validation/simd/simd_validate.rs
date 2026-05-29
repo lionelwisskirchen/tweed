@@ -151,7 +151,6 @@ pub fn shape_vrelop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
 }
 
 pub fn ishape_vshiftop(abstract_value_stack: &mut ValidationStack) -> Result<()> {
-    abstract_value_stack.pop_expected(ValType::V128Type)?;
     abstract_value_stack.pop_expected(ValType::I32)?;
     abstract_value_stack.pop_expected(ValType::V128Type)?;
     abstract_value_stack.push(ValType::V128Type);

@@ -263,6 +263,11 @@ fn spec_tests_simd_bit_shift() {
 }
 
 #[test_log::test]
+fn spec_tests_simd_bitwise() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_bitwise.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_simd_const() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_const.wast"));
 }

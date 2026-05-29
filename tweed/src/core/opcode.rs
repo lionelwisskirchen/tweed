@@ -221,24 +221,43 @@ pub mod vector_extensions {
     pub const V128_LOAD_64_SPLAT: u32 = 0x0A;
     pub const V128_STORE: u32 = 0x0B;
 
+    pub const V128_NOT: u32 = 0x4D;
+    pub const V128_AND: u32 = 0x4E;
+    pub const V128_ANDNOT: u32 = 0x4F;
+    pub const V128_OR: u32 = 0x50;
+    pub const V128_XOR: u32 = 0x51;
+    pub const V128_BITSELECT: u32 = 0x52;
+
     pub const I8X16_NEG: u32 = 0x61;
     pub const I8X16_ADD: u32 = 0x6E;
     pub const I8X16_SUB: u32 = 0x71;
     pub const I8X16_MIN_S: u32 = 0x76;
     pub const I8X16_MIN_U: u32 = 0x77;
+    pub const I8X16_SHL: u32 = 0x6B;
+    pub const I8X16_SHR_S: u32 = 0x6C;
+    pub const I8X16_SHR_U: u32 = 0x6D;
 
     pub const I16X8_ADD: u32 = 0x8E;
     pub const I16X8_SUB: u32 = 0x91;
     pub const I16X8_MUL: u32 = 0x95;
     pub const I16X8_NEG: u32 = 0x81;
+    pub const I16X8_SHL: u32 = 0x8B;
+    pub const I16X8_SHR_S: u32 = 0x8C;
+    pub const I16X8_SHR_U: u32 = 0x8D;
 
     pub const I32X4_ADD: u32 = 0xAE;
     pub const I32X4_SUB: u32 = 0xB1;
     pub const I32X4_MUL: u32 = 0xB5;
     pub const I32X4_NEG: u32 = 0xA1;
+    pub const I32X4_SHL: u32 = 0xAB;
+    pub const I32X4_SHR_S: u32 = 0xAC;
+    pub const I32X4_SHR_U: u32 = 0xAD;
 
     pub const I64X2_ADD: u32 = 0xCE;
     pub const I64X2_SUB: u32 = 0xD1;
     pub const I64X2_MUL: u32 = 0xD5;
     pub const I64X2_NEG: u32 = 0xC1;
+    pub const I64X2_SHL: u32 = 0xCB;
+    pub const I64X2_SHR_S: u32 = 0xCC;
+    pub const I64X2_SHR_U: u32 = 0xCD;
 }

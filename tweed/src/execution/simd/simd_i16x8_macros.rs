@@ -27,7 +27,7 @@ macro_rules! define_i16x8_simd_unary_op {
         pub fn $func_name(stack: &mut ExecutionStack) -> Result<()> {
             let value = stack.pop_v128().to_i16x8();
 
-            let result = std::array::from_fn(|i| value[i].$method().0);
+            let result = core::array::from_fn(|i| value[i].$method().0);
 
             stack.push(Value::V128(V128Shape::I16x8(result)))?;
 
@@ -92,9 +92,8 @@ macro_rules! define_i16x8_simd_shift_op {
             let rhs = (stack.pop_i32() % 16) as u32;
             let mut v128_value = stack.pop_v128().to_i16x8();
 
-            for idx in 0..v128_value.len() {
-                v128_value[idx] = (v128_value[idx] as $shift_type).$op(rhs) as i16;
-            }
+            v128_value = v128_value.map(|v| (v as $shift_type).$op(rhs) as i16);
+
             stack.push(Value::V128(V128Shape::I16x8(v128_value)))?;
             Ok(())
         }

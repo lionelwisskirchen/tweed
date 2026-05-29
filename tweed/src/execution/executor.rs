@@ -1899,6 +1899,13 @@ impl Executor {
                     let byte = reader.next_leb128_u32();
                     match byte {
                         V128_CONST => simd_execute::v128_const(reader, &mut self.stack)?,
+                        V128_NOT => simd_execute::v128_not(&mut self.stack)?,
+                        V128_AND => simd_execute::v128_and(&mut self.stack)?,
+                        V128_ANDNOT => simd_execute::v128_andnot(&mut self.stack)?,
+                        V128_OR => simd_execute::v128_or(&mut self.stack)?,
+                        V128_XOR => simd_execute::v128_xor(&mut self.stack)?,
+                        V128_BITSELECT => simd_execute::v128_bitselect(&mut self.stack)?,
+
                         I8X16_ADD => simd::i8x16_add(&mut self.stack)?,
                         I8X16_SUB => simd::i8x16_sub(&mut self.stack)?,
                         I8X16_NEG => simd::i8x16_neg(&mut self.stack)?,
