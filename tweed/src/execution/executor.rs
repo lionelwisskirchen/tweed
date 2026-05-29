@@ -1905,6 +1905,7 @@ impl Executor {
                         V128_OR => simd_execute::v128_or(&mut self.stack)?,
                         V128_XOR => simd_execute::v128_xor(&mut self.stack)?,
                         V128_BITSELECT => simd_execute::v128_bitselect(&mut self.stack)?,
+                        V128_ANY_TRUE => simd_execute::v128_any_true(&mut self.stack)?,
 
                         I8X16_ADD => simd::i8x16_add(&mut self.stack)?,
                         I8X16_SUB => simd::i8x16_sub(&mut self.stack)?,
@@ -1914,6 +1915,8 @@ impl Executor {
                         I8X16_SHL => simd::i8x16_shl(&mut self.stack)?,
                         I8X16_SHR_U => simd::i8x16_shr_u(&mut self.stack)?,
                         I8X16_SHR_S => simd::i8x16_shr_s(&mut self.stack)?,
+                        I8X16_ALL_TRUE => simd::i8x16_all_true(&mut self.stack)?,
+                        I8X16_BITMASK => simd::i8x16_bitmask(&mut self.stack)?,
 
                         I16X8_ADD => simd::i16x8_add(&mut self.stack)?,
                         I16X8_SUB => simd::i16x8_sub(&mut self.stack)?,
@@ -1922,6 +1925,8 @@ impl Executor {
                         I16X8_SHL => simd::i16x8_shl(&mut self.stack)?,
                         I16X8_SHR_U => simd::i16x8_shr_u(&mut self.stack)?,
                         I16X8_SHR_S => simd::i16x8_shr_s(&mut self.stack)?,
+                        I16X8_ALL_TRUE => simd::i16x8_all_true(&mut self.stack)?,
+                        I16X8_BITMASK => simd::i16x8_bitmask(&mut self.stack)?,
 
                         I32X4_ADD => simd::i32x4_add(&mut self.stack)?,
                         I32X4_SUB => simd::i32x4_sub(&mut self.stack)?,
@@ -1930,6 +1935,8 @@ impl Executor {
                         I32X4_SHL => simd::i32x4_shl(&mut self.stack)?,
                         I32X4_SHR_U => simd::i32x4_shr_u(&mut self.stack)?,
                         I32X4_SHR_S => simd::i32x4_shr_s(&mut self.stack)?,
+                        I32X4_ALL_TRUE => simd::i32x4_all_true(&mut self.stack)?,
+                        I32X4_BITMASK => simd::i32x4_bitmask(&mut self.stack)?,
 
                         I64X2_ADD => simd::i64x2_add(&mut self.stack)?,
                         I64X2_SUB => simd::i64x2_sub(&mut self.stack)?,
@@ -1938,6 +1945,8 @@ impl Executor {
                         I64X2_SHL => simd::i64x2_shl(&mut self.stack)?,
                         I64X2_SHR_U => simd::i64x2_shr_u(&mut self.stack)?,
                         I64X2_SHR_S => simd::i64x2_shr_s(&mut self.stack)?,
+                        I64X2_ALL_TRUE => simd::i64x2_all_true(&mut self.stack)?,
+                        I64X2_BITMASK => simd::i64x2_bitmask(&mut self.stack)?,
 
                         V128_LOAD => {
                             let (_, offset) = reader.read_mem_args();

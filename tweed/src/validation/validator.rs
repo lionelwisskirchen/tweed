@@ -15,7 +15,7 @@ use crate::binary::type_section::FuncType;
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::control_stack::ControlStack;
 use crate::validation::control_types::ControlType;
-use crate::validation::simd::simd_validate::{self, v128_vvbinop, v128_vvternop};
+use crate::validation::simd::simd_validate::{self, v128_vvbinop, v128_vvternop, v128_vvtestop};
 use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
 use extensions::*;
@@ -1031,6 +1031,11 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         }
                         V128_BITSELECT => {
                             v128_vvternop(&mut self.abstract_value_stack)?;
+                        }
+                        V128_ANY_TRUE | I8X16_ALL_TRUE | I8X16_BITMASK | I16X8_ALL_TRUE
+                        | I16X8_BITMASK | I32X4_ALL_TRUE | I32X4_BITMASK | I64X2_ALL_TRUE
+                        | I64X2_BITMASK => {
+                            v128_vvtestop(&mut self.abstract_value_stack)?;
                         }
 
                         I8X16_ADD | I16X8_ADD | I32X4_ADD | I64X2_ADD | I8X16_SUB | I16X8_SUB

@@ -107,3 +107,36 @@ define_i32x4_simd_unary_op!(i32x4_neg, overflowing_neg);
 define_i32x4_simd_shift_op!(i32x4_shl => wrapping_shl, i32);
 define_i32x4_simd_shift_op!(i32x4_shr_s => wrapping_shr, i32);
 define_i32x4_simd_shift_op!(i32x4_shr_u => wrapping_shr, u32);
+
+/// Check if all lanes are larger than zero.
+///
+/// This function pops one v128 values from the stack pushes back one i32.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
+pub fn i32x4_all_true(stack: &mut ExecutionStack) -> Result<()> {
+    let res = stack.pop_v128().to_i32x4().iter().all(|&i| i != 0) as i32;
+    stack.push(Value::I32(res))?;
+    Ok(())
+}
+
+/// Computes the `i8x16.bitmask` operation on a v128 value.
+///
+/// Checks which lane is positive and which lane is negative.
+/// For lane[0] = -1, result:0 = 1 => result = 0x00000001
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an i32.
+pub fn i32x4_bitmask(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i32x4();
+    let mut result = 0;
+
+    for (idx, &lane) in v.iter().enumerate() {
+        if lane < 0 {
+            result = result | (1 << idx);
+        }
+    }
+
+    stack.push(Value::I32(result))?;
+    Ok(())
+}

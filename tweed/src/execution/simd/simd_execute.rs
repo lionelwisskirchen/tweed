@@ -49,6 +49,18 @@ pub fn v128_bitselect(stack: &mut ExecutionStack) -> Result<()> {
     Ok(())
 }
 
+/// Check if any byte is larger than zero.
+///
+/// This function pops one v128 values from the stack pushes back one i32.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
+pub fn v128_any_true(stack: &mut ExecutionStack) -> Result<()> {
+    let res = stack.pop_v128().to_bytes().iter().any(|i| *i > 0) as i32;
+    stack.push(Value::I32(res))?;
+    Ok(())
+}
+
 /// Generates a unary SIMD operation function for i8x16 vectors.
 ///
 /// This macro creates a function that applies a unary operation to each lane
