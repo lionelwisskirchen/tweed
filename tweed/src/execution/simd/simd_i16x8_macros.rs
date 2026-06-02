@@ -128,6 +128,9 @@ pub fn i16x8_all_true(stack: &mut ExecutionStack) -> Result<()> {
 ///
 /// This method pops one v128 from the given [ExecutionStack]. After executing
 /// the operation, the result is pushed back to the stack as an i32.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
 pub fn i16x8_bitmask(stack: &mut ExecutionStack) -> Result<()> {
     let v = stack.pop_v128().to_i16x8();
     let mut result = 0;
@@ -139,5 +142,109 @@ pub fn i16x8_bitmask(stack: &mut ExecutionStack) -> Result<()> {
     }
 
     stack.push(Value::I32(result))?;
+    Ok(())
+}
+
+/// Takes two i32x4 and combines them in a i16x8 vec
+///
+/// This function fills the first 4 lanes of an i8x16 vec with one i32x4 and the second 4 lanes
+/// with the other i32x4. Each i32 lane is clamped to the u16 range (-327680 – 32768) before truncation.
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an v128.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
+pub fn i16_8_narrow_i32_s(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i32x4();
+    let v2 = stack.pop_v128().to_i32x4();
+    let mut result = [0i16; 8];
+
+    for idx in 0..4 {
+        result[idx] = v2[idx].clamp(-32768, 32767) as i16;
+        result[idx + 4] = v[idx].clamp(-32768, 32767) as i16;
+    }
+
+    stack.push(Value::V128(V128Shape::I16x8(result)))?;
+
+    Ok(())
+}
+
+/// Takes two i32x4 and combines them in a i16x8 vec
+///
+/// This function fills the first 4 lanes of an i8x16 vec with one i32x4 and the second 4 lanes
+/// with the other i32x4. Each i32 lane is clamped to the u16 range (0–65535) before truncation.
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an v128.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
+pub fn i16_8_narrow_i32_u(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i32x4();
+    let v2 = stack.pop_v128().to_i32x4();
+    let mut result = [0i16; 8];
+    for idx in 0..4 {
+        result[idx] = (v2[idx].clamp(0, 65535) as u16) as i16;
+        result[idx + 4] = (v[idx].clamp(0, 65535) as u16) as i16;
+    }
+
+    stack.push(Value::V128(V128Shape::I16x8(result)))?;
+
+    Ok(())
+}
+
+/// Extends a i8x16 vec to a i16x8 vec
+///
+/// This function takes the first 8 lanes of an i8x16 vec and stores them as i16 in a new v128
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an v128.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
+///
+/// # Examples
+/// ```
+/// // [-1, 127, -128, 0, ...ignored...]
+/// //  ↓
+/// // [-1, 127, -128, 0]  (sign-extended to i16)
+/// ```
+pub fn i16_8_extend_low_i8x16_s(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i8x16();
+    let mut result = [0i16; 8];
+    for idx in 0..8 {
+        result[idx] = v[idx] as i16;
+    }
+
+    stack.push(Value::V128(V128Shape::I16x8(result)))?;
+
+    Ok(())
+}
+
+/// Extends a i8x16 vec to a i16x8 vec
+///
+/// This function takes the first 8 lanes of an i8x16 vec and stores them as i16 in a new v128
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an v128.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
+///
+/// # Examples
+/// ```
+/// // [-1, 127, -128, 0, ...ignored...]
+/// //  ↓
+/// // [255, 127, 128, 0]  (zero-extended, i8 bits reinterpreted as u8)
+pub fn i16_8_extend_low_i8x16_u(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i8x16();
+    let mut result = [0i16; 8];
+    for idx in 0..8 {
+        result[idx] = (v[idx] as u8) as i16;
+    }
+
+    stack.push(Value::V128(V128Shape::I16x8(result)))?;
+
     Ok(())
 }

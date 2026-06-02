@@ -139,3 +139,52 @@ pub fn i8x16_bitmask(stack: &mut ExecutionStack) -> Result<()> {
     stack.push(Value::I32(result))?;
     Ok(())
 }
+
+/// Takes two i16x8 and combines them in a i8x16 vec
+///
+/// This function fills the first 8 lanes of an i8x16 vec with one i16x8 and the second 8 lanes
+/// with the other i16x8. Each i16 lane is clamped to the i8 range (-128 – 127) before truncation.
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an v128.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
+pub fn i8_16_narrow_i16_s(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i16x8();
+    let v2 = stack.pop_v128().to_i16x8();
+    let mut result = [0i8; 16];
+
+    for idx in 0..8 {
+        result[idx] = v2[idx].clamp(-128, 127) as i8;
+        result[idx + 8] = v[idx].clamp(-128, 127) as i8;
+    }
+
+    stack.push(Value::V128(V128Shape::I8x16(result)))?;
+
+    Ok(())
+}
+
+/// Takes two i16x8 and combines them in a i8x16 vec
+///
+/// This function fills the first 8 lanes of an i8x16 vec with one i16x8 and the second 8 lanes
+/// with the other i16x8. Each i16 lane is clamped to the u8 range (0–255) before truncation.
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an v128.
+///
+/// # Arguments
+/// * `stack`: a mutable reference to the [ExecutionStack] on which the new const will be stored
+pub fn i8_16_narrow_i16_u(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i16x8();
+    let v2 = stack.pop_v128().to_i16x8();
+    let mut result = [0i8; 16];
+    for idx in 0..8 {
+        result[idx] = (v2[idx].clamp(0, 255) as u8) as i8;
+        result[idx + 8] = (v[idx].clamp(0, 255) as u8) as i8;
+    }
+
+    stack.push(Value::V128(V128Shape::I8x16(result)))?;
+
+    Ok(())
+}

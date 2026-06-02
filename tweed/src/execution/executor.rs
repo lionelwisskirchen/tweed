@@ -1965,6 +1965,77 @@ impl Executor {
                             mem.store(rel_address as usize, offset as usize, &store_data)?;
                         }
 
+                        F32X4_CONVERT_I32X4_S => {
+                            let v128_value = self.stack.pop_v128().to_i32x4().map(|i| i as f32);
+                            self.stack.push(Value::V128(V128Shape::F32x4(v128_value)))?;
+                        }
+
+                        F32X4_CONVERT_I32X4_U => {
+                            let v128_value =
+                                self.stack.pop_v128().to_i32x4().map(|i| (i as u32) as f32);
+                            self.stack.push(Value::V128(V128Shape::F32x4(v128_value)))?;
+                        }
+                        F64X2_PROMOTE_LOW_F32_4 => {
+                            let v128_value_f32 = self.stack.pop_v128().to_f32x4();
+                            let result: [f64; 2] = core::array::from_fn(|i| {
+                                if v128_value_f32[i].is_nan() {
+                                    0.0
+                                } else {
+                                    v128_value_f32[i] as f64
+                                }
+                            });
+
+                            self.stack.push(Value::V128(V128Shape::F64x2(result)))?;
+                        }
+                        F32X4_DEMOTE_F64X2_ZERO => {
+                            let v128_value_f64 = self.stack.pop_v128().to_f64x2();
+                            let result: [f32; 4] = core::array::from_fn(|i| {
+                                if i < 2 {
+                                    if v128_value_f64[i].is_nan() {
+                                        0.0
+                                    } else {
+                                        v128_value_f64[i] as f32
+                                    }
+                                } else {
+                                    0.0
+                                }
+                            });
+                            self.stack.push(Value::V128(V128Shape::F32x4(result)))?;
+                        }
+                        F64X2_CONVERT_LOW_I32X4_S => {
+                            let v128_value_i32 = self.stack.pop_v128().to_i32x4();
+                            let v128_value_f64 =
+                                [v128_value_i32[0] as f64, v128_value_i32[1] as f64];
+                            self.stack
+                                .push(Value::V128(V128Shape::F64x2(v128_value_f64)))?;
+                        }
+                        F64X2_CONVERT_LOW_I32X4_U => {
+                            let v128_value_i32 = self.stack.pop_v128().to_i32x4();
+                            let v128_value_f64 = [
+                                (v128_value_i32[0] as u32) as f64,
+                                (v128_value_i32[1] as u32) as f64,
+                            ];
+                            self.stack
+                                .push(Value::V128(V128Shape::F64x2(v128_value_f64)))?;
+                        }
+                        I8X16_NARROW_I16X8_S => simd::i8_16_narrow_i16_s(&mut self.stack)?,
+                        I8X16_NARROW_I16X8_U => simd::i8_16_narrow_i16_u(&mut self.stack)?,
+                        I16X8_NARROW_I32X4_S => simd::i16_8_narrow_i32_s(&mut self.stack)?,
+                        I16X8_NARROW_I32X4_U => simd::i16_8_narrow_i32_u(&mut self.stack)?,
+                        I16X8_EXTEND_LOW_I8X16_S => {
+                            simd::i16_8_extend_low_i8x16_s(&mut self.stack)?
+                        }
+
+                        I16X8_EXTEND_LOW_I8X16_U => {
+                            simd::i16_8_extend_low_i8x16_u(&mut self.stack)?
+                        }
+                        I32X4_EXTEND_LOW_I16X8_S => {
+                            simd::i32x4_extend_low_i16x8_s(&mut self.stack)?
+                        }
+
+                        I32X4_EXTEND_LOW_I16X8_U => {
+                            simd::i32x4_extend_low_i16x8_u(&mut self.stack)?
+                        }
                         _ => unreachable!("Unreachable due to validation"),
                     }
                 }

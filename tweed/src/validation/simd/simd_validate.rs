@@ -162,3 +162,9 @@ pub fn ishape_bitmask(abstract_value_stack: &mut ValidationStack) -> Result<()> 
     abstract_value_stack.push(ValType::I32);
     Ok(())
 }
+
+pub fn shape_vcvtop_half_shape_sx_zero(abstract_value_stack: &mut ValidationStack) -> Result<()> {
+    abstract_value_stack.pop_expected(ValType::V128Type)?;
+    abstract_value_stack.push(ValType::V128Type);
+    Ok(())
+}

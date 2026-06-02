@@ -140,3 +140,53 @@ pub fn i32x4_bitmask(stack: &mut ExecutionStack) -> Result<()> {
     stack.push(Value::I32(result))?;
     Ok(())
 }
+
+/// Extends a i16x8 vec to a i32x4 vec
+///
+/// This function takes the first 4 lanes of an i16x8 vec and stores them as i32 in a new v128
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an v128.
+///
+/// # Examples
+/// ```
+/// // [-1, 32767, -32768, 100, ...ignored...]
+/// //  ↓
+/// // [-1, 32767, -32768, 100]  (sign-extended to i32)
+/// ```
+pub fn i32x4_extend_low_i16x8_s(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i16x8();
+    let mut result = [0i32; 4];
+    for idx in 0..4 {
+        result[idx] = v[idx] as i32;
+    }
+
+    stack.push(Value::V128(V128Shape::I32x4(result)))?;
+
+    Ok(())
+}
+
+/// Extends a i16x8 vec to a i32x4 vec
+///
+/// This function takes the first 4 lanes of an i16x8 vec and stores them as i32 in a new v128
+///
+/// This method pops one v128 from the given [ExecutionStack]. After executing
+/// the operation, the result is pushed back to the stack as an v128.
+///
+/// # Examples
+/// ```
+/// // [-1, 32767, -32768, 100, ...ignored...]
+/// //  ↓
+/// // [65535, 32767, 32768, 100]  (zero-extended, i16 bits reinterpreted as u16)
+/// ```
+pub fn i32x4_extend_low_i16x8_u(stack: &mut ExecutionStack) -> Result<()> {
+    let v = stack.pop_v128().to_i16x8();
+    let mut result = [0i32; 4];
+    for idx in 0..4 {
+        result[idx] = (v[idx] as u16) as i32;
+    }
+
+    stack.push(Value::V128(V128Shape::I32x4(result)))?;
+
+    Ok(())
+}

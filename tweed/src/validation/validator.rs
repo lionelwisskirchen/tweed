@@ -1023,7 +1023,19 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         | I64X2_SHR_S | I64X2_SHR_U => {
                             simd_validate::ishape_vshiftop(&mut self.abstract_value_stack)?;
                         }
-                        V128_NOT => {
+                        V128_NOT
+                        | F32X4_CONVERT_I32X4_S
+                        | F32X4_CONVERT_I32X4_U
+                        | F64X2_PROMOTE_LOW_F32_4
+                        | F32X4_DEMOTE_F64X2_ZERO
+                        | I16X8_EXTEND_LOW_I8X16_S
+                        | I16X8_EXTEND_HIGH_I8X16_S
+                        | I16X8_EXTEND_LOW_I8X16_U
+                        | I16X8_EXTEND_HIGH_I8X16_U
+                        | I32X4_EXTEND_LOW_I16X8_S
+                        | I32X4_EXTEND_HIGH_I16X8_S
+                        | I32X4_EXTEND_LOW_I16X8_U
+                        | I32X4_EXTEND_HIGH_I16X8_U => {
                             simd_validate::v128_vvunop(&mut self.abstract_value_stack)?;
                         }
                         V128_AND | V128_ANDNOT | V128_OR | V128_XOR => {
@@ -1040,12 +1052,18 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
 
                         I8X16_ADD | I16X8_ADD | I32X4_ADD | I64X2_ADD | I8X16_SUB | I16X8_SUB
                         | I32X4_SUB | I64X2_SUB | I16X8_MUL | I32X4_MUL | I64X2_MUL
-                        | I8X16_MIN_S | I8X16_MIN_U => {
+                        | I8X16_MIN_S | I8X16_MIN_U | I8X16_NARROW_I16X8_S
+                        | I8X16_NARROW_I16X8_U | I16X8_NARROW_I32X4_S | I16X8_NARROW_I32X4_U => {
                             simd_validate::v128_vvbinop(&mut self.abstract_value_stack)?;
                         }
 
                         I8X16_NEG | I16X8_NEG | I32X4_NEG | I64X2_NEG => {
                             simd_validate::v128_vvunop(&mut self.abstract_value_stack)?;
+                        }
+                        F64X2_CONVERT_LOW_I32X4_S | F64X2_CONVERT_LOW_I32X4_U => {
+                            simd_validate::shape_vcvtop_half_shape_sx_zero(
+                                &mut self.abstract_value_stack,
+                            )?;
                         }
                         _ => {
                             println!("Undefined Vector Code: {}", byte);

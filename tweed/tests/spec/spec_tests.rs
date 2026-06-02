@@ -278,6 +278,11 @@ fn spec_tests_simd_const() {
 }
 
 #[test_log::test]
+fn spec_tests_simd_conversions() {
+    run_spec_test(Path::new("./tests/spec/testsuite/simd_conversions.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_simd_i8x16_arith() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_i8x16_arith.wast"));
 }
@@ -306,11 +311,6 @@ fn spec_tests_simd_linking() {
 // fn spec_tests_simd_load() {
 //     // depends on:
 //     // - simd_extract_land
-//     // - eq
-//     // - not
-//     // - all-true
-//     // - bitselect
-//     // - shl
 //     run_spec_test(Path::new("./tests/spec/testsuite/simd_load.wast"));
 // }
 
