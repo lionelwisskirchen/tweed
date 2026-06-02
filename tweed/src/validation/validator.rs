@@ -3,7 +3,7 @@ use crate::binary::global_section::GlobalType;
 use crate::binary::memory_section::Limits;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::ValidationError;
-use crate::core::opcode::vector_extensions::*;
+
 use crate::core::value_types::{RefType, ValType};
 
 use crate::core::signature_lookup::lookup_signature;
@@ -15,10 +15,14 @@ use crate::binary::type_section::FuncType;
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::control_stack::ControlStack;
 use crate::validation::control_types::ControlType;
-use crate::validation::simd::simd_validate::{self, v128_vvbinop, v128_vvternop, v128_vvtestop};
 use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
 use extensions::*;
+
+#[cfg(feature = "simd")]
+use crate::core::opcode::vector_extensions::*;
+#[cfg(feature = "simd")]
+use crate::validation::simd::simd_validate::{self, v128_vvbinop, v128_vvternop, v128_vvtestop};
 
 use super::side_table::SideTable;
 pub type Result<T> = core::result::Result<T, ValidationError>;
@@ -949,6 +953,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         _ => return Err(ValidationError::UndefinedOpCode(byte as u8)),
                     }
                 }
+                #[cfg(feature = "simd")]
                 VECTOR_EXTENSION_PREFIX => {
                     let byte = self.reader.next_leb128_u32()?;
                     match byte {

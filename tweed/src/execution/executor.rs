@@ -7,17 +7,24 @@ use super::store::{map_memory, HostEnv, Store};
 use crate::execution::adresses::{FuncAddr, InstanceAddr};
 
 use crate::core::error::ExecutionError;
-use crate::core::opcode::vector_extensions::*;
 use crate::core::opcode::*;
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::value_types::ValType;
-use crate::core::values::{NaN, V128Shape};
-use crate::execution::simd;
-use crate::execution::simd::simd_execute;
+use crate::core::values::NaN;
 use crate::{core::values::FromLeBytes, validation::side_table::SideTable, Value};
 use alloc::vec::Vec;
 use extensions::*;
 use libm;
+
+#[cfg(feature = "simd")]
+use crate::core::opcode::vector_extensions::*;
+#[cfg(feature = "simd")]
+use crate::core::values::V128Shape;
+#[cfg(feature = "simd")]
+use crate::execution::simd;
+#[cfg(feature = "simd")]
+use crate::execution::simd::simd_execute;
+
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Default, Debug, Clone)]
@@ -1895,6 +1902,7 @@ impl Executor {
                         _ => unreachable!("Unreachable due to validation"),
                     }
                 }
+                #[cfg(feature = "simd")]
                 VECTOR_EXTENSION_PREFIX => {
                     let byte = reader.next_leb128_u32();
                     match byte {

@@ -247,61 +247,73 @@ fn spec_tests_table() {
     run_spec_test(Path::new("./tests/spec/testsuite/table.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_address() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_address.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_align() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_align.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_bit_shift() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_bit_shift.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_bitwise() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_bitwise.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_boolean() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_boolean.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_const() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_const.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_conversions() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_conversions.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_i8x16_arith() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_i8x16_arith.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_i16x8_arith() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_i16x8_arith.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_i32x4_arith() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_i32x4_arith.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_i64x2_arith() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_i64x2_arith.wast"));
 }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_linking() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_linking.wast"));
@@ -314,6 +326,7 @@ fn spec_tests_simd_linking() {
 //     run_spec_test(Path::new("./tests/spec/testsuite/simd_load.wast"));
 // }
 
+#[cfg(feature = "simd")]
 #[test_log::test]
 fn spec_tests_simd_store() {
     run_spec_test(Path::new("./tests/spec/testsuite/simd_store.wast"));

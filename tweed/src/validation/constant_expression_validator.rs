@@ -1,11 +1,14 @@
 use crate::binary::function_section::FuncDecl;
 use crate::binary::import_section::GlobalImport;
-use crate::core::opcode::vector_extensions::*;
 use crate::core::opcode::*;
 
 use crate::core::error::ValidationError;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
+
+#[cfg(feature = "simd")]
+use crate::core::opcode::vector_extensions::*;
+#[cfg(feature = "simd")]
 use crate::validation::simd::simd_validate;
 
 use super::validation_stack::ValidationStack;
@@ -78,6 +81,8 @@ pub fn validate_const_expr(
                 }
                 return Ok(());
             }
+
+            #[cfg(feature = "simd")]
             VECTOR_EXTENSION_PREFIX => {
                 let byte = reader.next_leb128_u32()?;
                 match byte {
