@@ -1,6 +1,9 @@
 use alloc::vec::Vec;
 
-use crate::core::{error::ExecutionError, values::Value};
+use crate::core::{
+    error::ExecutionError,
+    values::{V128Shape, Value},
+};
 
 use super::executor::Frame;
 
@@ -134,6 +137,13 @@ impl ExecutionStack {
         };
         v
     }
+    pub fn pop_v128(&mut self) -> V128Shape {
+        let Value::V128(value) = self.pop() else {
+            unreachable!("Expected v128 on stack (validated)");
+        };
+        value
+    }
+
     pub fn pop_n(&mut self, count: usize) -> Result<Vec<Value>> {
         if count > self.stack.len() {
             return Err(ExecutionError::ExpectedAValueOnTheStack);

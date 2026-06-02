@@ -182,6 +182,7 @@ pub const REF_NULL: u8 = 0xD0;
 pub const REF_IS_NULL: u8 = 0xD1;
 pub const REF_FUNC: u8 = 0xD2;
 pub const EXTENSION_PREFIX: u8 = 0xFC;
+pub const VECTOR_EXTENSION_PREFIX: u8 = 0xFD;
 
 pub mod extensions {
     pub const I32_TRUNC_SAT_F32_S: u32 = 0x00;
@@ -202,4 +203,89 @@ pub mod extensions {
     // pub const TABLE_GROW: u32 = 0x0F;
     // pub const TABLE_SIZE: u32 = 0x10;
     // pub const TABLE_FILL: u32 = 0x11;
+}
+
+pub mod vector_extensions {
+    pub const V128_CONST: u32 = 0x0C;
+
+    pub const V128_LOAD: u32 = 0x00;
+    pub const V128_LOAD_8X8_S: u32 = 0x01;
+    pub const V128_LOAD_8X8_U: u32 = 0x02;
+    pub const V128_LOAD_16X4_S: u32 = 0x03;
+    pub const V128_LOAD_16X4_U: u32 = 0x04;
+    pub const V128_LOAD_32X2_S: u32 = 0x05;
+    pub const V128_LOAD_32X2_U: u32 = 0x06;
+    pub const V128_LOAD_8_SPLAT: u32 = 0x07;
+    pub const V128_LOAD_16_SPLAT: u32 = 0x08;
+    pub const V128_LOAD_32_SPLAT: u32 = 0x09;
+    pub const V128_LOAD_64_SPLAT: u32 = 0x0A;
+    pub const V128_STORE: u32 = 0x0B;
+
+    pub const V128_NOT: u32 = 0x4D;
+    pub const V128_AND: u32 = 0x4E;
+    pub const V128_ANDNOT: u32 = 0x4F;
+    pub const V128_OR: u32 = 0x50;
+    pub const V128_XOR: u32 = 0x51;
+    pub const V128_BITSELECT: u32 = 0x52;
+    pub const V128_ANY_TRUE: u32 = 0x53;
+
+    pub const I8X16_NEG: u32 = 0x61;
+    pub const I8X16_ADD: u32 = 0x6E;
+    pub const I8X16_SUB: u32 = 0x71;
+    pub const I8X16_MIN_S: u32 = 0x76;
+    pub const I8X16_MIN_U: u32 = 0x77;
+    pub const I8X16_SHL: u32 = 0x6B;
+    pub const I8X16_SHR_S: u32 = 0x6C;
+    pub const I8X16_SHR_U: u32 = 0x6D;
+    pub const I8X16_ALL_TRUE: u32 = 0x63;
+    pub const I8X16_BITMASK: u32 = 0x64;
+    pub const I8X16_NARROW_I16X8_S: u32 = 0x65;
+    pub const I8X16_NARROW_I16X8_U: u32 = 0x66;
+
+    pub const I16X8_ADD: u32 = 0x8E;
+    pub const I16X8_SUB: u32 = 0x91;
+    pub const I16X8_MUL: u32 = 0x95;
+    pub const I16X8_NEG: u32 = 0x81;
+    pub const I16X8_SHL: u32 = 0x8B;
+    pub const I16X8_SHR_S: u32 = 0x8C;
+    pub const I16X8_SHR_U: u32 = 0x8D;
+    pub const I16X8_ALL_TRUE: u32 = 0x83;
+    pub const I16X8_BITMASK: u32 = 0x84;
+    pub const I16X8_NARROW_I32X4_S: u32 = 0x85;
+    pub const I16X8_NARROW_I32X4_U: u32 = 0x86;
+    pub const I16X8_EXTEND_LOW_I8X16_S: u32 = 0x87;
+    pub const I16X8_EXTEND_HIGH_I8X16_S: u32 = 0x88;
+    pub const I16X8_EXTEND_LOW_I8X16_U: u32 = 0x89;
+    pub const I16X8_EXTEND_HIGH_I8X16_U: u32 = 0x8A;
+
+    pub const I32X4_ADD: u32 = 0xAE;
+    pub const I32X4_SUB: u32 = 0xB1;
+    pub const I32X4_MUL: u32 = 0xB5;
+    pub const I32X4_NEG: u32 = 0xA1;
+    pub const I32X4_SHL: u32 = 0xAB;
+    pub const I32X4_SHR_S: u32 = 0xAC;
+    pub const I32X4_SHR_U: u32 = 0xAD;
+    pub const I32X4_ALL_TRUE: u32 = 0xA3;
+    pub const I32X4_BITMASK: u32 = 0xA4;
+    pub const I32X4_EXTEND_LOW_I16X8_S: u32 = 0xA7;
+    pub const I32X4_EXTEND_HIGH_I16X8_S: u32 = 0xA8;
+    pub const I32X4_EXTEND_LOW_I16X8_U: u32 = 0xA9;
+    pub const I32X4_EXTEND_HIGH_I16X8_U: u32 = 0xAA;
+
+    pub const I64X2_ADD: u32 = 0xCE;
+    pub const I64X2_SUB: u32 = 0xD1;
+    pub const I64X2_MUL: u32 = 0xD5;
+    pub const I64X2_NEG: u32 = 0xC1;
+    pub const I64X2_SHL: u32 = 0xCB;
+    pub const I64X2_SHR_S: u32 = 0xCC;
+    pub const I64X2_SHR_U: u32 = 0xCD;
+    pub const I64X2_ALL_TRUE: u32 = 0xC3;
+    pub const I64X2_BITMASK: u32 = 0xC4;
+
+    pub const F32X4_CONVERT_I32X4_S: u32 = 0xFA;
+    pub const F32X4_CONVERT_I32X4_U: u32 = 0xFB;
+    pub const F64X2_CONVERT_LOW_I32X4_S: u32 = 0xFE;
+    pub const F64X2_CONVERT_LOW_I32X4_U: u32 = 0xFF;
+    pub const F32X4_DEMOTE_F64X2_ZERO: u32 = 0x5E;
+    pub const F64X2_PROMOTE_LOW_F32_4: u32 = 0x5F;
 }

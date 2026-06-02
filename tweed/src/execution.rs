@@ -6,4 +6,5 @@ pub mod executor;
 pub mod instances;
 pub mod instantiator;
 pub mod linker;
+pub mod simd;
 pub mod store;

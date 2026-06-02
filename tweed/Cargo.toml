@@ -7,8 +7,8 @@ edition = "2021"
 [dependencies]
 libm = "0.2.15"
 log = {version = "0.4.27", default-features = false }
- 
-[dev-dependencies]  
+
+[dev-dependencies]
 wat = "1.219.1"
 wast = "221.0.2"
 rstest = "0.22.0"
@@ -18,7 +18,7 @@ test-log = "0.2.17"
 [[bench]]
 name = "interpreter"
 harness = false
- 
+
 [profile.profiling]
 inherits = "release"
 debug = true
@@ -27,3 +27,4 @@ debug = true
 default = ["std"]
 std = []
 unsafe = []
+simd=[]

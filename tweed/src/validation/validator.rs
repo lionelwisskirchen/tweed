@@ -3,6 +3,7 @@ use crate::binary::global_section::GlobalType;
 use crate::binary::memory_section::Limits;
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::error::ValidationError;
+
 use crate::core::value_types::{RefType, ValType};
 
 use crate::core::signature_lookup::lookup_signature;
@@ -17,6 +18,11 @@ use crate::validation::control_types::ControlType;
 use crate::validation::validation_stack::ValidationStack;
 use alloc::vec::Vec;
 use extensions::*;
+
+#[cfg(feature = "simd")]
+use crate::core::opcode::vector_extensions::*;
+#[cfg(feature = "simd")]
+use crate::validation::simd::simd_validate::{self, v128_vvbinop, v128_vvternop, v128_vvtestop};
 
 use super::side_table::SideTable;
 pub type Result<T> = core::result::Result<T, ValidationError>;
@@ -947,6 +953,129 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         _ => return Err(ValidationError::UndefinedOpCode(byte as u8)),
                     }
                 }
+                #[cfg(feature = "simd")]
+                VECTOR_EXTENSION_PREFIX => {
+                    let byte = self.reader.next_leb128_u32()?;
+                    match byte {
+                        V128_LOAD => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(4)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+
+                        V128_LOAD_8X8_S | V128_LOAD_8X8_U | V128_LOAD_16X4_S | V128_LOAD_16X4_U
+                        | V128_LOAD_32X2_S | V128_LOAD_32X2_U | V128_LOAD_64_SPLAT => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(3)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+                        V128_LOAD_8_SPLAT => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(0)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+                        V128_LOAD_16_SPLAT => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(1)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+                        V128_LOAD_32_SPLAT => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+
+                            self.check_align(2)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.push(ValType::V128Type);
+                        }
+
+                        V128_STORE => {
+                            if memories.is_empty() {
+                                return Err(ValidationError::UnknownMemory)?;
+                            }
+                            self.check_align(4)?;
+
+                            self.abstract_value_stack.pop_expected(ValType::V128Type)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                        }
+
+                        V128_CONST => {
+                            simd_validate::v128_const(self.reader, &mut self.abstract_value_stack)?;
+                        }
+                        I8X16_SHL | I8X16_SHR_S | I8X16_SHR_U | I16X8_SHL | I16X8_SHR_S
+                        | I16X8_SHR_U | I32X4_SHL | I32X4_SHR_S | I32X4_SHR_U | I64X2_SHL
+                        | I64X2_SHR_S | I64X2_SHR_U => {
+                            simd_validate::ishape_vshiftop(&mut self.abstract_value_stack)?;
+                        }
+                        V128_NOT
+                        | F32X4_CONVERT_I32X4_S
+                        | F32X4_CONVERT_I32X4_U
+                        | F64X2_PROMOTE_LOW_F32_4
+                        | F32X4_DEMOTE_F64X2_ZERO
+                        | I16X8_EXTEND_LOW_I8X16_S
+                        | I16X8_EXTEND_HIGH_I8X16_S
+                        | I16X8_EXTEND_LOW_I8X16_U
+                        | I16X8_EXTEND_HIGH_I8X16_U
+                        | I32X4_EXTEND_LOW_I16X8_S
+                        | I32X4_EXTEND_HIGH_I16X8_S
+                        | I32X4_EXTEND_LOW_I16X8_U
+                        | I32X4_EXTEND_HIGH_I16X8_U => {
+                            simd_validate::v128_vvunop(&mut self.abstract_value_stack)?;
+                        }
+                        V128_AND | V128_ANDNOT | V128_OR | V128_XOR => {
+                            v128_vvbinop(&mut self.abstract_value_stack)?;
+                        }
+                        V128_BITSELECT => {
+                            v128_vvternop(&mut self.abstract_value_stack)?;
+                        }
+                        V128_ANY_TRUE | I8X16_ALL_TRUE | I8X16_BITMASK | I16X8_ALL_TRUE
+                        | I16X8_BITMASK | I32X4_ALL_TRUE | I32X4_BITMASK | I64X2_ALL_TRUE
+                        | I64X2_BITMASK => {
+                            v128_vvtestop(&mut self.abstract_value_stack)?;
+                        }
+
+                        I8X16_ADD | I16X8_ADD | I32X4_ADD | I64X2_ADD | I8X16_SUB | I16X8_SUB
+                        | I32X4_SUB | I64X2_SUB | I16X8_MUL | I32X4_MUL | I64X2_MUL
+                        | I8X16_MIN_S | I8X16_MIN_U | I8X16_NARROW_I16X8_S
+                        | I8X16_NARROW_I16X8_U | I16X8_NARROW_I32X4_S | I16X8_NARROW_I32X4_U => {
+                            simd_validate::v128_vvbinop(&mut self.abstract_value_stack)?;
+                        }
+
+                        I8X16_NEG | I16X8_NEG | I32X4_NEG | I64X2_NEG => {
+                            simd_validate::v128_vvunop(&mut self.abstract_value_stack)?;
+                        }
+                        F64X2_CONVERT_LOW_I32X4_S | F64X2_CONVERT_LOW_I32X4_U => {
+                            simd_validate::shape_vcvtop_half_shape_sx_zero(
+                                &mut self.abstract_value_stack,
+                            )?;
+                        }
+                        _ => {
+                            println!("Undefined Vector Code: {}", byte);
+                            return Err(ValidationError::UndefinedOpCode(byte as u8));
+                        }
+                    }
+                }
 
                 UNREACHABLE => self.unreachable(),
                 _ => return Err(ValidationError::UndefinedOpCode(byte)),
@@ -956,6 +1085,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         self.reset();
         Ok(result)
     }
+
     fn check_align(&mut self, max_align: u32) -> Result<()> {
         let align = self.reader.next_leb128_u32()?;
         let _offset = self.reader.next_leb128_u32()?;
