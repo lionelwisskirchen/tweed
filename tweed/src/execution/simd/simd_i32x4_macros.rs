@@ -133,7 +133,7 @@ pub fn i32x4_bitmask(stack: &mut ExecutionStack) -> Result<()> {
 
     for (idx, &lane) in v.iter().enumerate() {
         if lane < 0 {
-            result = result | (1 << idx);
+            result |= 1 << idx;
         }
     }
 
