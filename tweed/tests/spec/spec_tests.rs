@@ -296,3 +296,8 @@ fn spec_tests_binary() {
 fn spec_tests_br_table() {
     run_spec_test(Path::new("./tests/spec/testsuite/br_table.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_custom() {
+    run_spec_test(Path::new("./tests/spec/testsuite/custom.wast"));
+}

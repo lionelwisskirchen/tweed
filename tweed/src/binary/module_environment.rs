@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 
 use super::{
     code_section::{process_code_section, FuncCode},
+    custom_section::process_custom_section,
     data_section::{process_data_section, DataSegment},
     element_section::ElementSegment,
     export_section::{process_export_section, Export},
@@ -109,11 +110,12 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
 
         match next_section {
             Section::Custom => {
-                let size = reader.next_leb128_u32()?;
-                let end = reader.current_index() + size as usize + 1;
-                let length_name = reader.next_leb128_u32()?;
-                reader.next_chunk_as_string(length_name as usize)?;
-                reader.seek(end);
+                info!("Process Custom Section");
+
+                process_custom_section(reader).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
+                    _ => e,
+                })?;
             }
             Section::Type => {
                 info!("Process Type Section");
