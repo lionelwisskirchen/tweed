@@ -26,37 +26,59 @@ pub fn process_global_section(
     global_imports: &[GlobalImport],
     functions: &[FuncDecl],
 ) -> Result<Vec<Global>> {
-    reader.next_leb128_u32()?;
-    // Size is not required for decoding, so just check if size is present
+    let section_size = reader.next_leb128_u32()?;
+    let section_end = reader.current_index() + section_size as usize;
     let number_of_globals = reader.next_leb128_u32()?;
-
     let mut globals = Vec::new();
     for _ in 0..number_of_globals {
-        let value_type = ValType::lookup(&reader.next_byte()?)?;
-
-        let is_mutable = match reader
-            .next_leb128_u32()
-            .map_err(|_| ValidationError::MalformedMutability)?
-        {
-            0x00 => false,
-            0x01 => true,
-            _ => return Err(ValidationError::MalformedMutability),
-        };
-        let start = reader.current_index();
-        /* We need to validate the constant expression here, as the size of the expression body is implicit.
-        We can't seek to the end (0x0b) byte because there may be a 0x0b byte before it.
-        For example, i32.const(900b). */
-        validate_const_expr(reader, global_imports, &[value_type], functions)?;
-        let end = reader.current_index();
-        let global_type = GlobalType {
-            value_type,
-            is_mutable,
-        };
-        globals.push(Global {
-            global_type,
-            start,
-            end,
-        });
+        globals.push(process_global(
+            reader,
+            section_end,
+            global_imports,
+            functions,
+        )?);
     }
+    if reader.current_index() != section_end {
+        return Err(ValidationError::SectionSizeMismatch);
+    };
     Ok(globals)
+}
+fn process_global(
+    reader: &mut WasmReader,
+    section_end: usize,
+    global_imports: &[GlobalImport],
+    functions: &[FuncDecl],
+) -> Result<Global> {
+    let value_type = ValType::lookup(&reader.next_byte()?)?;
+
+    let is_mutable = match reader
+        .next_leb128_u32()
+        .map_err(|_| ValidationError::MalformedMutability)?
+    {
+        0x00 => false,
+        0x01 => true,
+        _ => return Err(ValidationError::MalformedMutability),
+    };
+    let start = reader.current_index();
+    /* We need to validate the constant expression here, as the size of the expression body is implicit.
+    We can't seek to the end (0x0b) byte because there may be a 0x0b byte before it.
+    For example, i32.const(900b). */
+    validate_const_expr(
+        reader,
+        global_imports,
+        &[value_type],
+        functions,
+        section_end,
+    )?;
+
+    let end = reader.current_index();
+    let global_type = GlobalType {
+        value_type,
+        is_mutable,
+    };
+    Ok(Global {
+        global_type,
+        start,
+        end,
+    })
 }

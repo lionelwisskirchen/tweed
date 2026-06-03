@@ -28,35 +28,44 @@ pub struct Table {
 /// * `ValidationError::SizeMinimumMustNotBeGreaterThanMaximum`: The min value of the table size
 ///   is larger than the max value.
 pub fn process_table_section(reader: &mut WasmReader) -> Result<Vec<Table>> {
-    reader.next_leb128_u32()?;
-    // Size is not required for decoding, so just check if size is present
+    let section_size = reader.next_leb128_u32()?;
+    let start_of_section = reader.current_index();
     let number_of_tables = reader.next_leb128_u32()?;
     let mut tables = Vec::new();
     for _ in 0..number_of_tables {
-        let ref_type = reader.next_byte()?;
-        let flags = reader.next_leb128_u32()?;
-        let min = reader.next_leb128_u32()?;
-        let max = if flags != 0 {
-            let max_val = reader.next_leb128_u32()?;
-            if max_val < min {
-                return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
-            }
-            Some(max_val)
-        } else {
-            None
-        };
-
-        match ref_type {
-            0x70 => tables.push(Table {
-                ref_type: RefType::FuncRef,
-                limit: Limits { min, max },
-            }),
-            0x6F => tables.push(Table {
-                ref_type: RefType::ExternRef,
-                limit: Limits { min, max },
-            }),
-            _ => return Err(ValidationError::UnknownTable),
-        }
+        tables.push(process_table(reader)?)
     }
+    if reader.current_index() != start_of_section + section_size as usize {
+        return Err(ValidationError::SectionSizeMismatch);
+    };
     Ok(tables)
+}
+fn process_table(reader: &mut WasmReader) -> Result<Table> {
+    let ref_type = reader.next_byte()?;
+    let flags = reader.next_flag()?;
+    let min = reader.next_leb128_u32()?;
+    let max = if flags != 0 {
+        let max_val = reader.next_leb128_u32().map_err(|e| match e {
+            ValidationError::ReadingOutOfBounds => ValidationError::IntegerTooLarge,
+            _ => e,
+        })?;
+        if max_val < min {
+            return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
+        }
+        Some(max_val)
+    } else {
+        None
+    };
+
+    match ref_type {
+        0x70 => Ok(Table {
+            ref_type: RefType::FuncRef,
+            limit: Limits { min, max },
+        }),
+        0x6F => Ok(Table {
+            ref_type: RefType::ExternRef,
+            limit: Limits { min, max },
+        }),
+        _ => Err(ValidationError::UnknownTable),
+    }
 }

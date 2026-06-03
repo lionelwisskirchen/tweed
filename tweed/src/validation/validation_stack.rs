@@ -73,6 +73,12 @@ impl ValidationStack {
         }
         Ok(())
     }
+    pub fn are_on_top(&mut self, val_types: &[ValType]) -> Result<()> {
+        if self.stack.ends_with(val_types) {
+            return Ok(());
+        }
+        Err(ValidationError::TypeMismatch)
+    }
     pub fn is_on_top(&mut self, expected: &ValType) -> Result<()> {
         if self.stack.len() == self.top_height as usize && !self.top_reachable {
             return Ok(());

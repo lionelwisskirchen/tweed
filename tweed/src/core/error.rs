@@ -124,8 +124,16 @@ impl Display for ExecutionError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValidationError {
+    OffsetOutOfRange,
+    UnexpectedContentAfterLastSection,
+    MalformedRefType,
+    DataCountSectionRequired,
+    ZeroByteExpected,
+    InconsistentFunctionCodeSectionLengths,
+    SectionSizeMismatch,
     ReadingOutOfBounds,
     IntegerTooLarge,
+    TooManyLocals,
     InvalidIntegerRepresentation,
     InvalidStartFunctionSignature,
     NoDataSegmentFound(Option<usize>),
@@ -145,7 +153,7 @@ pub enum ValidationError {
     InvalidLocalIndex,
     InvalidFunctionIndex,
     UndefinedOpCode(u8),
-    UndefinedContantExpression,
+    UndefinedConstantExpression,
     UnknownLabel,
     UnknownGlobal,
     MalformedSectionId,
@@ -166,15 +174,40 @@ pub enum ValidationError {
     InvalidElementKind,
     MissingValue,
     UnexpectedEnd,
+    UnexpectedEndOfFunctionOrSection,
     EndOpCodeExpected,
+    InconsistentDataDataCountSectionLengths,
+    LengthOutOfBounds,
+    ConstantExpressionRequired,
+    MalformedOneByteFlag,
 }
 
 impl Display for ValidationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::OffsetOutOfRange => f.write_str("offset out of range"),
+
+            Self::MalformedOneByteFlag => f.write_str("malformed limits flags"),
+            Self::UnexpectedContentAfterLastSection => {
+                f.write_str("unexpected content after last section")
+            }
+            Self::InconsistentFunctionCodeSectionLengths => {
+                f.write_str("function and code section have inconsistent lengths")
+            }
+            Self::MalformedRefType => f.write_str("malformed reference type"),
+            Self::InconsistentDataDataCountSectionLengths => {
+                f.write_str("data count and data section have inconsistent lengths")
+            }
+            Self::DataCountSectionRequired => f.write_str("data count section required"),
+
+            Self::TooManyLocals => f.write_str("too many locals"),
+            Self::ZeroByteExpected => f.write_str("zero byte expected"),
+            Self::SectionSizeMismatch => f.write_str("section size mismatch"),
             Self::InvalidStringRepresentation => f.write_str("invalid string representation"),
             Self::UnequalChunkComparison => f.write_str("unequal chunk comparison"),
             Self::ReadingOutOfBounds => f.write_str("reading out of bounds"),
+            Self::LengthOutOfBounds => f.write_str("length out of bounds"),
+
             Self::MalformedMemOpFlags => f.write_str("malformed memop flags"),
             Self::InvalidStartFunctionSignature => f.write_str("start function"),
             Self::InvalidResultArity => f.write_str("invalid result arity"),
@@ -197,13 +230,15 @@ impl Display for ValidationError {
             Self::UnknownFunction => f.write_str("unknown function"),
 
             Self::InvalidFunctionIndex => f.write_str("invalid function index"),
-            Self::UndefinedContantExpression => f.write_str("constant expression required"),
+            Self::UndefinedConstantExpression => f.write_str("illegal opcode"),
+            Self::ConstantExpressionRequired => f.write_str("constant expression required"),
+
             Self::MultipleMemoriesNotImplemented => {
                 f.write_str("multiple Memory proposal is not implemented")
             }
             Self::MultipleMemories => f.write_str("multiple memories"),
             Self::UndefinedOpCode(opcode) => {
-                f.write_fmt(format_args!("invalid opcode {opcode:#04X}"))
+                f.write_fmt(format_args!("illegal opcode {opcode:x?}"))
             }
             Self::MalformedSectionId => f.write_str("malformed section id"),
             Self::UnknownType => f.write_str("unknown type"),
@@ -225,12 +260,16 @@ impl Display for ValidationError {
             Self::SizeMinimumMustNotBeGreaterThanMaximum => {
                 f.write_str("size minimum must not be greater than maximum")
             }
-            Self::UnsupportedImportKind => f.write_str("unsupported import kind"),
+            Self::UnsupportedImportKind => f.write_str("malformed import kind"),
             Self::MissingValue => f.write_str("missing value"),
             Self::MemorySizeExceeded => {
                 f.write_str("memory size must be at most 65536 pages (4GiB)")
             }
             Self::UnexpectedEnd => f.write_str("unexpected end"),
+            Self::UnexpectedEndOfFunctionOrSection => {
+                f.write_str("unexpected end of section or function")
+            }
+
             Self::EndOpCodeExpected => f.write_str("END opcode expected"),
         }
     }

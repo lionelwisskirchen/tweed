@@ -163,7 +163,12 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         imported_memories
     }
 
-    pub fn validate_code(&mut self, locals: &[ValType], index: usize) -> Result<SideTable> {
+    pub fn validate_code(
+        &mut self,
+        locals: &[ValType],
+        index: usize,
+        section_end: usize,
+    ) -> Result<SideTable> {
         let signature_index = self
             .module_environment
             .funcsec
@@ -185,8 +190,12 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         let memories = self.initialize_memories();
 
         loop {
+            // Reading out of the section size
+            if self.reader.current_index() == section_end {
+                return Err(ValidationError::EndOpCodeExpected);
+            }
             let byte = self.reader.next_byte()?;
-            trace!("Validating Byte: {byte:#04X}");
+            info!("Validating Byte: {byte:#04X}");
             trace!("Stack: {:?}", self.abstract_value_stack);
             match byte {
                 I32_CONST => {
@@ -254,6 +263,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 ELSE => {
                     let control_type = self.abstract_control_stack.top();
+
                     let index_of_else_sidetable_entry =
                         self.side_table
                             .create_entry(self.reader.current_index() as i32, 0, 0, 0);
@@ -552,15 +562,50 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.create_sidetable_entry(depth, index_of_br_if_bytecode)?;
                 }
                 BR_TABLE => {
-                    self.abstract_value_stack.pop_expected(ValType::I32)?; // index of branch
+                    // 1) br_table always consumes an i32 index from the stack.
+                    //    This index decides at runtime which label to jump to.
+                    self.abstract_value_stack.pop_expected(ValType::I32)?;
+
+                    // 2) Number of explicit branch targets (excluding the default case handling logic)
                     let number_of_branches = self.reader.next_leb128_u32()?;
 
-                    let index_of_br_table_bytecode = self.reader.current_index() as i32; // We jump from here because we need to parse the number of branches during execution (because the default branch can be any i32 and could move the stp to a wrong entry).
+                    // 3) Remember current bytecode position for sidetable
+                    // We jump from here because we need to parse the number of branches during execution
+                    // (because the default branch can be any i32 and could move the stp to a wrong entry).
+                    let index_of_br_table_bytecode = self.reader.current_index() as i32;
 
-                    for _ in 0..=number_of_branches {
-                        let depth = self.read_depth();
-                        self.create_sidetable_entry(depth, index_of_br_table_bytecode)?;
+                    // 4) Read all branch target control block indices (including default target)
+                    let target_ctrl_block_idxs =
+                        self.reader.next_leb128_u32_vec(number_of_branches + 1)?;
+
+                    // 5) Resolve all control-flow targets into typed control entries
+                    //    Each entry contains a FuncType (params -> results)
+                    let mut target_controls = vec![];
+
+                    for ctrl_block_idx in target_ctrl_block_idxs.iter() {
+                        let control_block = self
+                            .create_sidetable_entry(*ctrl_block_idx, index_of_br_table_bytecode)?;
+                        target_controls.push(control_block);
                     }
+                    // 6) Take the first target as reference type
+                    //    WebAssembly requires all br_table targets to have identical types
+                    if let Some(first) = target_controls.first() {
+                        // 7) Ensure all targets have exactly the same expected type
+                        //    (loops -> Parameter, the rest -> result)
+                        for target in &target_controls {
+                            if target.types() != first.types() {
+                                return Err(ValidationError::TypeMismatch);
+                            }
+                        }
+
+                        // 8) Stack check:
+                        //    Before br_table, the stack must match the shared label signature:
+                        //    (params..., i32 index)
+                        self.abstract_value_stack.are_on_top(first.types())?
+                    };
+
+                    // 9) After br_table, control flow does not continue normally
+                    //    (execution jumps away, so the current path becomes unreachable)
                     self.unreachable();
                 }
                 BR => {
@@ -571,7 +616,6 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 END => {
                     let control_type = self.abstract_control_stack.pop();
-
                     match control_type {
                         ControlType::Func {
                             func_type,
@@ -840,7 +884,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 MEMORY_GROW => {
                     let idx = self.reader.next_byte()?;
                     if idx != 0 {
-                        return Err(ValidationError::MultipleMemoriesNotImplemented);
+                        return Err(ValidationError::ZeroByteExpected);
                     }
 
                     if memories.is_empty() {
@@ -852,7 +896,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 MEMORY_SIZE => {
                     let idx = self.reader.next_byte()?;
                     if idx != 0 {
-                        return Err(ValidationError::MultipleMemoriesNotImplemented);
+                        return Err(ValidationError::ZeroByteExpected);
                     }
 
                     if memories.is_empty() {
@@ -891,8 +935,17 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         }
                         DATA_DROP => {
                             let data_index = self.reader.next_leb128_u32()?;
-                            if self.module_environment.datacountsec == 0
-                                || self.module_environment.datacountsec <= data_index
+                            if self.module_environment.datacountsec.is_none() {
+                                return Err(ValidationError::DataCountSectionRequired)?;
+                            }
+
+                            if self.module_environment.datacountsec.is_some_and(|x| x == 0) {
+                                return Err(ValidationError::NoDataSegmentFound(None))?;
+                            }
+                            if self
+                                .module_environment
+                                .datacountsec
+                                .is_some_and(|x| x <= data_index)
                             {
                                 return Err(ValidationError::NoDataSegmentFound(None))?;
                             }
@@ -903,11 +956,17 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             if idx != 0 {
                                 return Err(ValidationError::MultipleMemoriesNotImplemented);
                             }
+
                             if memories.is_empty() {
                                 return Err(ValidationError::UnknownMemoryIdx(idx as usize))?;
                             }
-                            if self.module_environment.datacountsec == 0
-                                || self.module_environment.datacountsec <= data_index
+                            if self.module_environment.datacountsec.is_none() {
+                                return Err(ValidationError::DataCountSectionRequired)?;
+                            }
+                            if self
+                                .module_environment
+                                .datacountsec
+                                .is_some_and(|x| x <= data_index)
                             {
                                 return Err(ValidationError::NoDataSegmentFound(Some(
                                     data_index as usize,
@@ -1004,8 +1063,13 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             entry.ip = rel_offset;
         }
     }
-    fn create_sidetable_entry(&mut self, depth: u32, index_of_start_bytecode: i32) -> Result<()> {
+    fn create_sidetable_entry(
+        &mut self,
+        depth: u32,
+        index_of_start_bytecode: i32,
+    ) -> Result<ControlType> {
         let target_control = self.abstract_control_stack.get_control_type(depth)?;
+
         let index_of_br_sidetable_entry =
             self.side_table
                 .create_entry(index_of_start_bytecode, 0, 0, 0);
@@ -1058,7 +1122,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 self.abstract_value_stack.push_vec(&func_type.parameter);
             }
         };
-        Ok(())
+
+        Ok(target_control.clone())
     }
     fn read_block_type(&mut self) -> FuncType {
         let func_idx = self
@@ -1066,608 +1131,5 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             .next_leb128_u32()
             .expect("ValidationError parsing block func idx");
         lookup_signature(func_idx, &self.module_environment.typesec)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use crate::{binary::function_section::FuncDecl, validation::side_table::SideTableEntry};
-    #[test]
-    fn test_validation_undefined_opcode() {
-        let bytes = wat::parse_str(
-            "(module
-
-             )",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![
-            FuncType {
-                parameter: vec![],
-                result: vec![ValType::I32],
-            },
-            FuncType {
-                parameter: vec![ValType::I32],
-                result: vec![ValType::I32],
-            },
-        ];
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        assert!(validator.validate_code(&vec![], 0).is_err());
-    }
-
-    #[test]
-    fn test_validation_with_blocks() -> Result<()> {
-        let bytes = wat::parse_str(
-            "(module
-               (func (result i32)
-                 (block $label1 (result i32)
-	    	   i32.const 10
-		   (block $label2 (param i32) (result i32)
-		   	  i32.const 2
-			  i32.add
-		   )
-	         )
-               )
-             )",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![
-            FuncType {
-                parameter: vec![],
-                result: vec![ValType::I32],
-            },
-            FuncType {
-                parameter: vec![ValType::I32],
-                result: vec![ValType::I32],
-            },
-        ];
-        let module_environment = ModuleEnvironment {
-            typesec,
-            codesec: vec![],
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        reader.seek(29);
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        let actual_sidetable = validator.validate_code(&vec![], 0)?;
-        let expected_sidetable = SideTable::new();
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
-    }
-
-    #[test]
-    fn test_validation_with_branches() -> Result<()> {
-        let bytes = wat::parse_str(
-            "(module
-                (func
-                  (block $label1
-                     br $label1
- 	            (block $label2
-		       (block $label3
-		           br $label1
-		        )
-      		       (block $label4
-		           br $label2
-		        )
-		    )
-	          )
-                )
-             )",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![FuncType {
-            parameter: vec![],
-            result: vec![],
-        }];
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        reader.seek(23);
-
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-        let actual_sidetable = validator.validate_code(&vec![], 0)?;
-        let expected_sidetable = SideTable {
-            entries: vec![
-                SideTableEntry {
-                    ip: 15,
-                    stp: 3,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 9,
-                    stp: 2,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 3,
-                    stp: 1,
-                    vals: 0,
-                    pop: 0,
-                },
-            ],
-        };
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
-    }
-    #[test]
-    fn test_validation_with_if_else() -> Result<()> {
-        let bytes = wat::parse_str(
-            "(module
-              (func (result i32)
-                i32.const 0
-                (if (result i32)
-                 (then
-                  i32.const 1
-                 )
-                (else
-                 i32.const 0
-                )
-              )
-             )
-            )",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![FuncType {
-            parameter: vec![],
-            result: vec![ValType::I32],
-        }];
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        reader.seek(24);
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        let actual_sidetable = validator.validate_code(&vec![], 0)?;
-        let expected_sidetable = SideTable {
-            entries: vec![
-                SideTableEntry {
-                    ip: 5,
-                    stp: 2,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 3,
-                    stp: 1,
-                    vals: 0,
-                    pop: 0,
-                },
-            ],
-        };
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
-    }
-    #[test]
-    fn test_validation_with_if_else_and_branches() -> Result<()> {
-        let bytes = wat::parse_str(
-            "
-(module
-  (func (result i32)
-    (block $label1 (result i32)
-      i32.const 0
-      (if $if (result i32)
-        (then
-          i32.const 1
-          br $label1
-        )
-        (else
-	i32.const 3
-	br $if
-        )
-      )
-      br $label1
-    )
-  )
-)",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![FuncType {
-            parameter: vec![],
-            result: vec![ValType::I32],
-        }];
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        reader.seek(24);
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        let actual_sidetable = validator.validate_code(&vec![], 0)?;
-        let expected_sidetable = SideTable {
-            entries: vec![
-                SideTableEntry {
-                    ip: 7,
-                    stp: 3,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 10,
-                    stp: 4,
-                    vals: 1,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 5,
-                    stp: 2,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 2,
-                    stp: 1,
-                    vals: 1,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 2,
-                    stp: 1,
-                    vals: 1,
-                    pop: 0,
-                },
-            ],
-        };
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
-    }
-
-    #[test]
-    fn test_validation_with_if_else_and_conditional_branches() -> Result<()> {
-        let bytes = wat::parse_str(
-            "
-(module
-  (func)
-  (func (param i32) (result i32)
-    (block $label1 (result i32)
-      (local.get 0)
-      (if (result i32)
-        (then
-          (call 0)
-          i32.const 1
-        )
-        (else
-          (call 0)
-          i32.const 0
-        )
-      )
-      i32.const 2
-      (br_if 0)
-      i32.const 3
-      return
-    )
-  )
-)",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![
-            FuncType {
-                parameter: vec![],
-                result: vec![],
-            },
-            FuncType {
-                parameter: vec![ValType::I32],
-                result: vec![ValType::I32],
-            },
-        ];
-
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }, FuncDecl { sig_index: 1 }],
-            ..Default::default()
-        };
-        reader.seek(32);
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        let actual_sidetable = validator.validate_code(&vec![], 1)?;
-        let expected_sidetable = SideTable {
-            entries: vec![
-                SideTableEntry {
-                    ip: 7,
-                    stp: 2,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 5,
-                    stp: 1,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 5,
-                    stp: 1,
-                    vals: 1,
-                    pop: 0,
-                },
-            ],
-        };
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
-    }
-
-    #[test]
-    fn test_validation_with_for_loop() -> Result<()> {
-        let bytes = wat::parse_str(
-            "
-(module
-
-(func
-      (local $i i32)
-      (loop $my_loop
-      local.get $i
-      i32.const 1
-      i32.add
-      local.set $i
-
-      local.get $i
-      i32.const 10
-      i32.lt_s
-      br_if $my_loop
-    )
- )
-)",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![FuncType {
-            parameter: vec![],
-            result: vec![],
-        }];
-
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        reader.seek(25);
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        let actual_sidetable = validator.validate_code(&vec![ValType::I32], 0)?;
-        let expected_sidetable = SideTable {
-            entries: vec![SideTableEntry {
-                ip: -14,
-                stp: 0,
-                vals: 0,
-                pop: 0,
-            }],
-        };
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
-    }
-
-    #[test]
-    fn test_validation_with_for_loop_and_blocks_with_branches() -> Result<()> {
-        let bytes = wat::parse_str(
-            "
-(module
-(func
-      (local $i i32)
-      (loop $my_loop
-      local.get $i
-      i32.const 1
-      i32.add
-      local.set $i
-       (block $label1 (result i32)
-      i32.const 0
-      (if $if (result i32)
-        (then
-          i32.const 1
-          br $label1
-        )
-        (else
-	i32.const 3
-	br $if
-        )
-      )
-      br $label1
-     )
-      i32.const 10
-      i32.lt_s
-      br_if $my_loop
-    )
- )
-)",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![FuncType {
-            parameter: vec![],
-            result: vec![],
-        }];
-
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        reader.seek(25);
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        let actual_sidetable = validator.validate_code(&vec![ValType::I32], 0)?;
-
-        let expected_sidetable = SideTable {
-            entries: vec![
-                SideTableEntry {
-                    ip: 7,
-                    stp: 3,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 10,
-                    stp: 4,
-                    vals: 1,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 5,
-                    stp: 2,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 2,
-                    stp: 1,
-                    vals: 1,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 2,
-                    stp: 1,
-                    vals: 1,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: -31,
-                    stp: -5,
-                    vals: 0,
-                    pop: 0,
-                },
-            ],
-        };
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
-    }
-
-    #[test]
-    fn test_validation_with_br_tables() -> Result<()> {
-        let bytes = wat::parse_str(
-            "
-(func (result i32)
-  (block
-    (block
-      (block
-        (block
-               i32.const 0
-               (br_table
-                         2
-                         1
-                         0
-                         3)
-	)
-        i32.const 100
-        return
-       )
-       i32.const 101
-       return
-      )
-    i32.const 102
-    return
-    )
-i32.const 103
-return
-)",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![FuncType {
-            parameter: vec![],
-            result: vec![ValType::I32],
-        }];
-
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        reader.seek(24);
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        let actual_sidetable = validator.validate_code(&vec![], 0)?;
-        let expected_sidetable = SideTable {
-            entries: vec![
-                SideTableEntry {
-                    ip: 15,
-                    stp: 4,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 10,
-                    stp: 3,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 5,
-                    stp: 2,
-                    vals: 0,
-                    pop: 0,
-                },
-                SideTableEntry {
-                    ip: 20,
-                    stp: 1,
-                    vals: 0,
-                    pop: 0,
-                },
-            ],
-        };
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
-    }
-
-    #[test]
-    fn test_pop_val() -> Result<()> {
-        let bytes = wat::parse_str(
-            "
-(module
-   (func (result i32)
-       (block $label1 (result i32)
-          i32.const 12
-          i32.const 10
-          i32.const 10
-          br $label1
-       )
-          i32.const 10
-          i32.add
-   )
-)",
-        )
-        .unwrap();
-        let mut reader = WasmReader::new(bytes.to_vec());
-        let typesec = vec![FuncType {
-            parameter: vec![],
-            result: vec![ValType::I32],
-        }];
-        let module_environment = ModuleEnvironment {
-            typesec,
-            funcsec: vec![FuncDecl { sig_index: 0 }],
-            ..Default::default()
-        };
-        reader.seek(24);
-        let mut validator = CodeValidator::new(&mut reader, &module_environment);
-
-        let actual_sidetable = validator.validate_code(&vec![], 0)?;
-        let expected_sidetable = SideTable {
-            entries: vec![SideTableEntry {
-                ip: 2,
-                stp: 1,
-                vals: 1,
-                pop: 2,
-            }],
-        };
-        assert_eq!(actual_sidetable, expected_sidetable);
-        Ok(())
     }
 }

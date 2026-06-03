@@ -62,11 +62,38 @@ impl WasmReader {
     pub fn get_bytecode_size(&self) -> usize {
         self.bytecode.len()
     }
+    /// Reads the next LEB128-encoded `u32` flag.
+    ///
+    /// The flag must use the canonical single-byte encoding.
+    /// Multi-byte representations such as `0x81 0x00` are rejected
+    /// with [`ValidationError::InvalidIntegerRepresentation`].
+    /// Value not 0 or 1 are rejected with [`ValidationError::IntegerTooLarge`].
+    pub fn next_flag(&mut self) -> Result<u32> {
+        let before_reading = self.byte_pointer;
+        let res = self.next_leb128_u32()?;
+        if self.byte_pointer - before_reading != 1 {
+            return Err(ValidationError::InvalidIntegerRepresentation);
+        };
+        if res > 1 {
+            return Err(ValidationError::IntegerTooLarge);
+        }
+        Ok(res)
+    }
+    /// Decodes the next `count` unsigned LEB128-encoded `u32`.
+    pub fn next_leb128_u32_vec(&mut self, count: u32) -> Result<Vec<u32>> {
+        let mut result = vec![];
+        for _ in 0..count {
+            result.push(self.next_leb128_u32()?);
+        }
+        Ok(result)
+    }
 
     /// Decodes the next unsigned LEB128-encoded `u32`.
     ///
-    /// Benchmarks indicate that this implementation is currently the
-    /// fastest available decoding variant.
+    /// To be exactly conform with the specification we
+    /// have the following error classes:
+    /// `ValidationError::IntegerTooLarge`: PaddingBitMask is not 0
+    /// or the decoded integer is not in the value range of u32
     pub fn next_leb128_u32(&mut self) -> Result<u32> {
         let mut byte = self.next_byte()?;
         let mut result: u32 = (byte & VALUE_BIT_MASK) as u32;
@@ -95,10 +122,11 @@ impl WasmReader {
         if padding != 0 {
             return Err(ValidationError::IntegerTooLarge);
         }
-        if (byte & CONTINUATION_BIT_MASK) != 0 {
-            return Err(ValidationError::InvalidIntegerRepresentation);
+        if (byte & CONTINUATION_BIT_MASK) == 0 {
+            return Ok(result);
         }
-        Ok(result)
+
+        Err(ValidationError::InvalidIntegerRepresentation)
     }
     /// Decodes the next signed LEB128-encoded `i64`.
     ///

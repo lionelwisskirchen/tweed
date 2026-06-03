@@ -34,6 +34,20 @@ fn shorthand_lookup(val: u32) -> Option<FuncType> {
                 result: vec![ValType::F64],
             },
         ),
+        (
+            0x6F,
+            FuncType {
+                parameter: Vec::new(),
+                result: vec![ValType::ExternRef],
+            },
+        ),
+        (
+            0x70,
+            FuncType {
+                parameter: Vec::new(),
+                result: vec![ValType::FuncRef],
+            },
+        ),
     ]);
     lookup_map.get(&val).cloned()
 }

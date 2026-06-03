@@ -3,7 +3,7 @@ use crate::{
         data_count_section::process_data_count_section, element_section::process_element_section,
         start_section::process_start_section,
     },
-    core::{error::ValidationError, wasm_reader::WasmReader},
+    core::{error::ValidationError, signature_lookup::lookup_signature, wasm_reader::WasmReader},
     validation::side_table::SideTable,
 };
 use alloc::vec::Vec;
@@ -34,83 +34,190 @@ pub struct ModuleEnvironment {
     pub tablesec: Vec<Table>,
     pub elementsec: Vec<ElementSegment>,
     pub importsec: Imports,
-    pub datacountsec: u32,
+    pub datacountsec: Option<u32>,
     pub startsec: Option<u32>,
     pub sidetables: Vec<SideTable>,
+}
+
+/// Defines the Order of the sections:
+/// https://webassembly.github.io/spec/core/binary/modules.html#binary-module
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum Section {
+    Custom = 0,
+    Type = 1,
+    Import = 2,
+    Function = 3,
+    Table = 4,
+    Memory = 5,
+    Global = 6,
+    Export = 7,
+    Start = 8,
+    Element = 9,
+    DataCount = 10,
+    Code = 11,
+    Data = 12,
+}
+impl TryFrom<u8> for Section {
+    type Error = ValidationError;
+
+    fn try_from(value: u8) -> Result<Self> {
+        match value {
+            0 => Ok(Self::Custom),
+            1 => Ok(Self::Type),
+            2 => Ok(Self::Import),
+            3 => Ok(Self::Function),
+            4 => Ok(Self::Table),
+            5 => Ok(Self::Memory),
+            6 => Ok(Self::Global),
+            7 => Ok(Self::Export),
+            8 => Ok(Self::Start),
+            9 => Ok(Self::Element),
+            10 => Ok(Self::Code),
+            11 => Ok(Self::Data),
+            12 => Ok(Self::DataCount),
+            _ => Err(ValidationError::MalformedSectionId),
+        }
+    }
 }
 
 pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnvironment> {
     let mut module = ModuleEnvironment {
         ..Default::default()
     };
-
+    let mut state = Section::Custom; // Custom can be everywhere, so this is fine
     reader
         .compare_chunk(&[0x00, 0x61, 0x73, 0x6D])
-        .map_err(|_| ValidationError::InvalidMagic)?;
+        .map_err(|e| match e {
+            ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
+            _ => ValidationError::InvalidMagic,
+        })?;
 
     reader
         .compare_chunk(&[0x01, 0x00, 0x00, 0x00])
-        .map_err(|_| ValidationError::InvalidVersion)?;
-
+        .map_err(|e| match e {
+            ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
+            _ => ValidationError::InvalidVersion,
+        })?;
+    let mut number_of_internal_funcs = 0;
     while let Ok(section_code) = reader.next_byte() {
-        match section_code {
-            0x00 => {
+        let next_section = Section::try_from(section_code)?;
+        // Custom Section can be at any place
+        if next_section != Section::Custom && next_section <= state {
+            return Err(ValidationError::UnexpectedContentAfterLastSection);
+        }
+        state = next_section;
+
+        match next_section {
+            Section::Custom => {
                 let size = reader.next_leb128_u32()?;
                 let end = reader.current_index() + size as usize + 1;
                 let length_name = reader.next_leb128_u32()?;
                 reader.next_chunk_as_string(length_name as usize)?;
                 reader.seek(end);
             }
-            0x01 => {
+            Section::Type => {
                 info!("Process Type Section");
-                module.typesec = process_type_section(reader)?;
+                module.typesec = process_type_section(reader).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
             }
 
-            0x02 => {
+            Section::Import => {
                 info!("Process Import Section");
-                let imports = process_import_section(reader)?;
+                let imports = process_import_section(reader).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
                 let signatures = imports
                     .functions
                     .clone()
                     .into_iter()
                     .map(|f| f.context)
                     .collect();
-
                 module.funcsec = signatures;
                 module.importsec = imports;
             }
-            0x03 => {
+            Section::Function => {
                 info!("Process Function Section");
-                module.funcsec.extend(process_function_section(reader)?);
+                let internal_funcs = process_function_section(reader).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
+                number_of_internal_funcs = internal_funcs.len();
+                module.funcsec.extend(internal_funcs);
             }
-            0x04 => {
+            Section::Table => {
                 info!("Process Table Section");
-                module.tablesec = process_table_section(reader)?;
+                module.tablesec = process_table_section(reader).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
             }
-            0x05 => {
+            Section::Memory => {
                 info!("Process Memory Section");
 
                 // currently (WebAssembly V2) there is only one memory allowed at once
                 if !module.importsec.memories.is_empty() {
                     return Err(ValidationError::MultipleMemories);
                 }
-                module.memorysec = process_memory_section(reader)?;
+                module.memorysec = process_memory_section(reader).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
             }
 
-            0x06 => {
+            Section::Global => {
                 info!("Process Global Section");
                 module.globalsec =
-                    process_global_section(reader, &module.importsec.globals, &module.funcsec)?;
+                    process_global_section(reader, &module.importsec.globals, &module.funcsec)
+                        .map_err(|e| match e {
+                            ValidationError::ReadingOutOfBounds => {
+                                ValidationError::UnexpectedEndOfFunctionOrSection
+                            }
+                            _ => e,
+                        })?;
             }
-            0x07 => {
+            Section::Export => {
                 info!("Process Export Section");
-                module.exportsec = process_export_section(reader)?;
+                module.exportsec = process_export_section(reader).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
             }
-            0x08 => {
+            Section::Start => {
                 info!("Process Start Section");
-                module.startsec = Some(process_start_section(reader, &module)?);
+                let start_function_idx = process_start_section(reader).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
+                // Check if start section signature is valid [] -> []
+                // https://webassembly.github.io/spec/core/valid/modules.html#start-function
+                let signature_index = module
+                    .funcsec
+                    .get(start_function_idx as usize)
+                    .ok_or(ValidationError::UnknownFunction)?;
+                let signature = lookup_signature(signature_index.sig_index, &module.typesec);
+                if !signature.parameter.is_empty() || !signature.result.is_empty() {
+                    return Err(ValidationError::InvalidStartFunctionSignature);
+                }
+                module.startsec = Some(start_function_idx);
             }
-            0x09 => {
+            Section::Element => {
                 info!("Process Element Section");
 
                 module.elementsec = process_element_section(
@@ -119,31 +226,58 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                     &module.funcsec,
                     &module.tablesec,
                     &module.importsec.tables,
-                )?;
+                )
+                .map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
+                    _ => e,
+                })?;
             }
-            0x0A => {
+            Section::Code => {
                 info!("Process Code Section");
-                let (functions, sidetables) = process_code_section(reader, &module)?;
+
+                let (functions, sidetables) =
+                    process_code_section(reader, &module).map_err(|e| match e {
+                        ValidationError::ReadingOutOfBounds => {
+                            ValidationError::UnexpectedEndOfFunctionOrSection
+                        }
+                        _ => e,
+                    })?;
+
                 module.codesec = functions;
                 module.sidetables = sidetables;
             }
-            0x0B => {
+            Section::Data => {
                 info!("Process Data Section");
-                module.datasec = process_data_section(
-                    reader,
-                    &module.importsec.globals,
-                    &module.funcsec,
-                    module.memorysec.len() + module.importsec.memories.len(),
-                )?;
+                module.datasec = process_data_section(reader, &module).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
             }
-            0x0C => {
+            Section::DataCount => {
                 info!("Process Data Count Section");
-                module.datacountsec = process_data_count_section(reader)?;
-            }
-            _ => {
-                return Err(ValidationError::MalformedSectionId);
+                module.datacountsec =
+                    Some(process_data_count_section(reader).map_err(|e| match e {
+                        ValidationError::ReadingOutOfBounds => {
+                            ValidationError::UnexpectedEndOfFunctionOrSection
+                        }
+                        _ => e,
+                    })?);
             }
         }
     }
+
+    if number_of_internal_funcs != module.codesec.len() {
+        return Err(ValidationError::InconsistentFunctionCodeSectionLengths);
+    }
+
+    if module
+        .datacountsec
+        .is_some_and(|x| x as usize != module.datasec.len())
+    {
+        return Err(ValidationError::InconsistentDataDataCountSectionLengths);
+    }
+
     Ok(module)
 }

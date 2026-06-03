@@ -34,8 +34,8 @@ pub struct Limits {
 ///   is larger than the max value.
 /// * `ValidationError::MemorySizeExceeded`: The memory size is larger than 65536 (64 KiB)
 pub fn process_memory_section(reader: &mut WasmReader) -> Result<Vec<Memory>> {
-    reader.next_leb128_u32()?;
-    // Size is not required for decoding, so just check if size is present
+    let section_size = reader.next_leb128_u32()?;
+    let start_of_section = reader.current_index();
     let mut memories = Vec::new();
     let number_of_memories = reader.next_leb128_u32()?;
 
@@ -45,28 +45,33 @@ pub fn process_memory_section(reader: &mut WasmReader) -> Result<Vec<Memory>> {
     }
 
     for _ in 0..number_of_memories {
-        let flags = reader.next_leb128_u32()?;
-        let min = reader.next_leb128_u32()?;
-        let max = if flags != 0 {
-            let max_val = reader.next_leb128_u32()?;
-            if max_val < min {
-                return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
-            }
-            if max_val > MAX_MEM_PAGES {
-                return Err(ValidationError::MemorySizeExceeded);
-            }
-            Some(max_val)
-        } else {
-            None
-        };
-
-        if min > MAX_MEM_PAGES {
+        memories.push(process_memory(reader)?);
+    }
+    if reader.current_index() != start_of_section + section_size as usize {
+        return Err(ValidationError::SectionSizeMismatch);
+    };
+    Ok(memories)
+}
+fn process_memory(reader: &mut WasmReader) -> Result<Memory> {
+    let flags = reader.next_flag()?;
+    let min = reader.next_leb128_u32()?;
+    let max = if flags != 0 {
+        let max_val = reader.next_leb128_u32()?;
+        if max_val < min {
+            return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
+        }
+        if max_val > MAX_MEM_PAGES {
             return Err(ValidationError::MemorySizeExceeded);
         }
+        Some(max_val)
+    } else {
+        None
+    };
 
-        let limits = Limits { min, max };
-        let memory = Memory { limits };
-        memories.push(memory);
+    if min > MAX_MEM_PAGES {
+        return Err(ValidationError::MemorySizeExceeded);
     }
-    Ok(memories)
+
+    let limits = Limits { min, max };
+    Ok(Memory { limits })
 }

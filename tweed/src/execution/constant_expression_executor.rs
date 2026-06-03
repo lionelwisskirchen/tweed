@@ -46,6 +46,11 @@ pub fn execute_const_expr(
                 let result = right + left;
                 value_stack.push(result.into())?;
             }
+            I64_MUL => {
+                let (right, left) = (value_stack.pop_i64(), value_stack.pop_i64());
+                let result = left.wrapping_mul(right);
+                value_stack.push(result.into())?;
+            }
             I64_SUB => {
                 let (right, left) = (value_stack.pop_i64(), value_stack.pop_i64());
                 let result = left.wrapping_sub(right);
@@ -70,6 +75,12 @@ pub fn execute_const_expr(
                 let (right, left) = (value_stack.pop(), value_stack.pop());
 
                 value_stack.push(left - right)?;
+            }
+
+            I32_MUL => {
+                let (right, left) = (value_stack.pop_i32(), value_stack.pop_i32());
+                let result = right.wrapping_mul(left);
+                value_stack.push(result.into())?;
             }
             REF_NULL => {
                 let ref_type = RefType::from_byte(reader.next_byte()).unwrap(); // Validated?

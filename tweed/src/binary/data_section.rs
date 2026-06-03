@@ -7,6 +7,7 @@ use crate::validation::constant_expression_validator::validate_const_expr;
 
 use super::function_section::FuncDecl;
 use super::import_section::GlobalImport;
+use super::module_environment::ModuleEnvironment;
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
 /// Structure to differentiate between active and passive data segments
@@ -48,13 +49,23 @@ pub struct DataSegment {
 /// * `ValidationError::UnknownMemory`: The memory index does not point to a valid memory
 pub fn process_data_section(
     reader: &mut WasmReader,
-    global_imports: &[GlobalImport],
-    functions: &[FuncDecl],
-    number_of_memories: usize,
+    environment: &ModuleEnvironment,
 ) -> Result<Vec<DataSegment>> {
-    reader.next_leb128_u32()?;
-    // Size is not required for decoding, so just check if size is present
+    let section_size = reader.next_leb128_u32()?;
+    let start_of_section = reader.current_index();
+
+    let section_end = reader.current_index() + section_size as usize;
+
+    let global_imports = &environment.importsec.globals;
+    let functions = &environment.funcsec;
+    let number_of_memories = environment.memorysec.len() + environment.importsec.memories.len();
     let number_of_segments = reader.next_leb128_u32()?;
+    if environment
+        .datacountsec
+        .is_some_and(|x| x != number_of_segments)
+    {
+        return Err(ValidationError::InconsistentDataDataCountSectionLengths);
+    }
     let mut data_segments = Vec::new();
     for _ in 0..number_of_segments {
         let mode = reader.next_leb128_u32()?;
@@ -69,7 +80,13 @@ pub fn process_data_section(
                     return Err(ValidationError::UnknownMemory);
                 }
 
-                data_segments.push(create_data_segment(reader, global_imports, functions, 0)?);
+                data_segments.push(create_data_segment(
+                    reader,
+                    global_imports,
+                    functions,
+                    0,
+                    section_end,
+                )?);
             }
             1 => {
                 // Mode passive
@@ -95,11 +112,15 @@ pub fn process_data_section(
                     global_imports,
                     functions,
                     memory_index,
+                    section_end,
                 )?);
             }
             _ => unreachable!(),
         }
     }
+    if reader.current_index() != start_of_section + section_size as usize {
+        return Err(ValidationError::SectionSizeMismatch);
+    };
     Ok(data_segments)
 }
 
@@ -108,6 +129,7 @@ fn create_data_segment(
     global_imports: &[GlobalImport],
     functions: &[FuncDecl],
     memory_index: u32,
+    section_end: usize,
 ) -> Result<DataSegment> {
     // Mode active with explicit memory index
     let start = reader.current_index();
@@ -115,10 +137,19 @@ fn create_data_segment(
     /* We need to validate the constant expression here, as the size of the expression body is implicit.
     We can't seek to the end (0x0b) byte because there may be a 0x0b byte before it.
     For example, i32.const(900b). */
-    validate_const_expr(reader, global_imports, &[ValType::I32], functions)?;
+    validate_const_expr(
+        reader,
+        global_imports,
+        &[ValType::I32],
+        functions,
+        section_end,
+    )?;
     let end = reader.current_index();
     let data_size = reader.next_leb128_u32()?;
-    let data = reader.next_chunk(data_size as usize)?;
+    let data = reader.next_chunk(data_size as usize).map_err(|e| match e {
+        ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEndOfFunctionOrSection,
+        _ => e,
+    })?;
     Ok(DataSegment {
         mode: SegmentMode::Active {
             memory_idx: memory_index,

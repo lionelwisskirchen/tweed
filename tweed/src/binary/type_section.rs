@@ -11,13 +11,16 @@ pub struct FuncType {
 }
 
 pub fn process_type_section(reader: &mut WasmReader) -> Result<Vec<FuncType>> {
-    reader.next_leb128_u32()?;
-    // Size is not required for decoding, so just check if size is present
+    let section_size = reader.next_leb128_u32()?;
+    let start_of_section = reader.current_index();
     let mut function_types = Vec::new();
     let number_of_types = reader.next_leb128_u32()?;
 
     for _ in 0..number_of_types {
-        match reader.next_byte()? {
+        match reader
+            .next_byte()
+            .map_err(|_| ValidationError::LengthOutOfBounds)?
+        {
             0x60 => {} // https://www.w3.org/TR/2025/CRD-wasm-core-2-20250616/#types%E2%91%A6
             _ => return Err(ValidationError::InvalidIntegerRepresentation),
         };
@@ -37,6 +40,9 @@ pub fn process_type_section(reader: &mut WasmReader) -> Result<Vec<FuncType>> {
             parameter: params,
             result: results,
         });
+    }
+    if reader.current_index() != start_of_section + section_size as usize {
+        return Err(ValidationError::SectionSizeMismatch);
     }
     Ok(function_types)
 }

@@ -288,3 +288,11 @@ fn spec_tests_utf8_invalid_encoding() {
         "./tests/spec/testsuite/utf8-invalid-encoding.wast",
     ));
 }
+#[test_log::test]
+fn spec_tests_binary() {
+    run_spec_test(Path::new("./tests/spec/testsuite/binary.wast"));
+}
+#[test_log::test]
+fn spec_tests_br_table() {
+    run_spec_test(Path::new("./tests/spec/testsuite/br_table.wast"));
+}

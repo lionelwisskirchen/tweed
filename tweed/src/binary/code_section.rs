@@ -8,6 +8,8 @@ use alloc::vec::Vec;
 use super::module_environment::ModuleEnvironment;
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
+pub const MAX_LOCALS: u32 = (2 ^ 32) - 1;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FuncCode {
     pub locals: Vec<ValType>,
@@ -40,18 +42,27 @@ pub fn process_code_section(
     reader: &mut WasmReader,
     environment: &ModuleEnvironment,
 ) -> Result<(Vec<FuncCode>, Vec<SideTable>)> {
-    reader.next_leb128_u32()?;
-    // Size is not required for decoding, so just check if size is present
+    let section_size = reader.next_leb128_u32()?;
+    let start_of_section = reader.current_index();
     let number_of_codes = reader.next_leb128_u32()?;
 
+    if environment.funcsec.len() < number_of_codes as usize {
+        return Err(ValidationError::InconsistentFunctionCodeSectionLengths);
+    }
     let mut aggregated_functions = Vec::new();
     let mut aggregated_sidetables = Vec::new();
+
     for code_index in 0..number_of_codes {
         let func_body_size = reader.next_leb128_u32()?;
+        let func_body_end = func_body_size as usize + reader.current_index();
         let number_of_locals = reader.next_leb128_u32()?;
+
         let mut locals = Vec::new();
         for _ in 0..number_of_locals {
             let count = reader.next_leb128_u32()?;
+            if count > MAX_LOCALS {
+                return Err(ValidationError::TooManyLocals);
+            }
             let local_type = ValType::lookup(&reader.next_byte()?)?;
             for _ in 0..count {
                 locals.push(local_type);
@@ -62,12 +73,27 @@ pub fn process_code_section(
 
         // get the offset where the functions of the module start
         let number_of_imported_functions = environment.importsec.functions.len();
-        let side_table =
-            validator.validate_code(&locals, code_index as usize + number_of_imported_functions)?;
-
-        if reader.current_index() > start_position + func_body_size as usize {
-            return Err(ValidationError::ReadingOutOfBounds);
-        }
+        let side_table = validator
+            .validate_code(
+                &locals,
+                code_index as usize + number_of_imported_functions,
+                func_body_end,
+            )
+            .map_err(|e| match e {
+                ValidationError::EndOpCodeExpected => {
+                    if code_index == number_of_codes - 1 {
+                        if !reader.rest().is_empty() {
+                            // Reading into next section
+                            return ValidationError::SectionSizeMismatch;
+                        } else {
+                            // Reading EOF
+                            return ValidationError::UnexpectedEndOfFunctionOrSection;
+                        }
+                    }
+                    e
+                }
+                e => e,
+            })?;
 
         let function = FuncCode {
             locals,
@@ -78,5 +104,8 @@ pub fn process_code_section(
         aggregated_functions.push(function);
         aggregated_sidetables.push(side_table);
     }
+    if reader.current_index() != start_of_section + section_size as usize {
+        return Err(ValidationError::SectionSizeMismatch);
+    };
     Ok((aggregated_functions, aggregated_sidetables))
 }

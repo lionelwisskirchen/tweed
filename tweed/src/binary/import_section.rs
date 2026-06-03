@@ -109,8 +109,8 @@ pub type Result<T> = core::result::Result<T, ValidationError>;
 ///   its mutability cannot be determined
 /// * `ValidationError::UnsupportedImportKind`: The kind of the import cannot be parsed
 pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
-    reader.next_leb128_u32()?;
-    // Size is not required for decoding, so just check if size is present
+    let section_size = reader.next_leb128_u32()?;
+    let start_of_section = reader.current_index();
     let number_of_imports = reader.next_leb128_u32()?;
 
     let mut imports = Imports::default();
@@ -205,5 +205,8 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
             _ => return Err(ValidationError::UnsupportedImportKind),
         }
     }
+    if reader.current_index() != start_of_section + section_size as usize {
+        return Err(ValidationError::SectionSizeMismatch);
+    };
     Ok(imports)
 }

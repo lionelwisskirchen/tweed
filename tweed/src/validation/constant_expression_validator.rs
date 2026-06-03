@@ -14,11 +14,17 @@ pub fn validate_const_expr(
     globals: &[GlobalImport],
     result: &[ValType],
     functions: &[FuncDecl],
+    section_end: usize,
 ) -> Result<()> {
     let mut abstract_value_stack: ValidationStack = ValidationStack::default();
     loop {
+        // Reading out of the section size
+        if reader.current_index() == section_end {
+            return Err(ValidationError::UnexpectedEndOfFunctionOrSection);
+        }
         let byte = reader.next_byte()?;
-        trace!("Validate Const Expression Byte: {byte:#04X}");
+        info!("Validate Const Expression Byte: {byte:#04X}");
+
         match byte {
             I32_CONST => {
                 reader.next_leb128_i32()?;
@@ -36,12 +42,12 @@ pub fn validate_const_expr(
                 reader.next_f64()?;
                 abstract_value_stack.push(ValType::F64);
             }
-            I32_ADD | I32_SUB => {
+            I32_ADD | I32_SUB | I32_MUL => {
                 abstract_value_stack.pop_expected(ValType::I32)?;
                 abstract_value_stack.pop_expected(ValType::I32)?;
                 abstract_value_stack.push(ValType::I32);
             }
-            I64_ADD | I64_SUB => {
+            I64_ADD | I64_SUB | I64_MUL => {
                 abstract_value_stack.pop_expected(ValType::I64)?;
                 abstract_value_stack.pop_expected(ValType::I64)?;
                 abstract_value_stack.push(ValType::I64);
@@ -53,7 +59,7 @@ pub fn validate_const_expr(
                     .ok_or(ValidationError::UnknownGlobal)?;
 
                 if global.context.is_mutable {
-                    return Err(ValidationError::UndefinedContantExpression);
+                    return Err(ValidationError::ConstantExpressionRequired);
                 }
                 abstract_value_stack.push(global.context.value_type);
             }
@@ -76,7 +82,13 @@ pub fn validate_const_expr(
                 }
                 return Ok(());
             }
-            _ => return Err(ValidationError::UndefinedContantExpression),
+            _ => {
+                if is_known_opcode(byte) {
+                    return Err(ValidationError::ConstantExpressionRequired);
+                } else {
+                    return Err(ValidationError::UndefinedConstantExpression);
+                }
+            }
         }
     }
 }

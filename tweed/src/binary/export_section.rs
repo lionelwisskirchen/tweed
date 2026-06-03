@@ -20,15 +20,20 @@ pub struct Export {
 }
 
 pub fn process_export_section(reader: &mut WasmReader) -> Result<Vec<Export>> {
-    reader.next_leb128_u32()?;
-    // Size is not required for decoding, so just check if size is present
+    let section_size = reader.next_leb128_u32()?;
+    let start_of_section = reader.current_index();
     let number_of_exports = reader.next_leb128_u32()?;
     let mut aggregated_exports = Vec::new();
     for _ in 0..number_of_exports {
         let length_of_export_name = reader.next_leb128_u32()?;
-        let export_name = reader.next_chunk_as_string(length_of_export_name as usize)?;
-
+        let export_name = reader
+            .next_chunk_as_string(length_of_export_name as usize)
+            .map_err(|e| match e {
+                ValidationError::ReadingOutOfBounds => ValidationError::LengthOutOfBounds,
+                _ => e,
+            })?;
         let export_kind = reader.next_byte()?;
+
         let index = reader.next_leb128_u32()?;
         match export_kind {
             0x00 => {
@@ -62,5 +67,8 @@ pub fn process_export_section(reader: &mut WasmReader) -> Result<Vec<Export>> {
             _ => return Err(ValidationError::UnsupportedExportKind),
         }
     }
+    if reader.current_index() != start_of_section + section_size as usize {
+        return Err(ValidationError::SectionSizeMismatch);
+    };
     Ok(aggregated_exports)
 }
