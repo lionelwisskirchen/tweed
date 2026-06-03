@@ -181,14 +181,12 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
 
             Section::Global => {
                 info!("Process Global Section");
-                module.globalsec =
-                    process_global_section(reader, &module.importsec.globals, &module.funcsec)
-                        .map_err(|e| match e {
-                            ValidationError::ReadingOutOfBounds => {
-                                ValidationError::UnexpectedEndOfFunctionOrSection
-                            }
-                            _ => e,
-                        })?;
+                process_global_section(reader, &mut module).map_err(|e| match e {
+                    ValidationError::ReadingOutOfBounds => {
+                        ValidationError::UnexpectedEndOfFunctionOrSection
+                    }
+                    _ => e,
+                })?;
             }
             Section::Export => {
                 info!("Process Export Section");
@@ -221,18 +219,18 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             Section::Element => {
                 info!("Process Element Section");
-
-                module.elementsec = process_element_section(
-                    reader,
-                    &module.importsec.globals,
-                    &module.funcsec,
-                    &module.tablesec,
-                    &module.importsec.tables,
-                )
-                .map_err(|e| match e {
-                    ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
-                    _ => e,
-                })?;
+                module.elementsec = process_element_section(reader, &mut module)
+                    // module.elementsec = process_element_section(
+                    //     reader,
+                    //     &module.importsec.globals,
+                    //     &module.funcsec,
+                    //     &module.tablesec,
+                    //     &module.importsec.tables,
+                    // )
+                    .map_err(|e| match e {
+                        ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
+                        _ => e,
+                    })?;
             }
             Section::Code => {
                 info!("Process Code Section");
@@ -250,12 +248,13 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             Section::Data => {
                 info!("Process Data Section");
-                module.datasec = process_data_section(reader, &module).map_err(|e| match e {
-                    ValidationError::ReadingOutOfBounds => {
-                        ValidationError::UnexpectedEndOfFunctionOrSection
-                    }
-                    _ => e,
-                })?;
+                module.datasec =
+                    process_data_section(reader, &mut module).map_err(|e| match e {
+                        ValidationError::ReadingOutOfBounds => {
+                            ValidationError::UnexpectedEndOfFunctionOrSection
+                        }
+                        _ => e,
+                    })?;
             }
             Section::DataCount => {
                 info!("Process Data Count Section");

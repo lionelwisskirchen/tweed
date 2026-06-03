@@ -92,6 +92,25 @@ impl Linker {
         self.imported_tables.insert(key, addr);
         Ok(())
     }
+    /// Registers a memory so it can be imported by other instances.
+    ///
+    /// The memory is exposed under the given module and memory name
+    /// and mapped to the provided memory address.
+    ///
+    /// # Parameters
+    /// - `module`: Name of the module under which the memory is exposed.
+    /// - `name`: Name of the exported memory.
+    /// - `addr`: Address of the memory in the store.
+    pub fn register_memory(
+        &mut self,
+        module: String,
+        name: String,
+        addr: MemoryAddr,
+    ) -> Result<()> {
+        let key = ImportName { module, name };
+        self.imported_memories.insert(key, addr);
+        Ok(())
+    }
     pub fn resolve_instance(&self, instance: &InstanceRef) -> Result<InstanceAddr> {
         match instance {
             InstanceRef::Addr(addr) => Ok(*addr),

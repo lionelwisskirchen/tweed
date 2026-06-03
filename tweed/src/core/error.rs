@@ -155,7 +155,7 @@ pub enum ValidationError {
     UndefinedOpCode(u8),
     UndefinedConstantExpression,
     UnknownLabel,
-    UnknownGlobal,
+    UnknownGlobal(Option<usize>),
     MalformedSectionId,
     UnsupportedExportKind,
     UnsupportedValueType,
@@ -243,7 +243,13 @@ impl Display for ValidationError {
             Self::MalformedSectionId => f.write_str("malformed section id"),
             Self::UnknownType => f.write_str("unknown type"),
 
-            Self::UnknownGlobal => f.write_str("unknown global"),
+            Self::UnknownGlobal(idx) => {
+                if let Some(i) = idx {
+                    f.write_fmt(format_args!("unknown global {i}"))
+                } else {
+                    f.write_str("unknown global")
+                }
+            }
             Self::UnknownTable => f.write_str("unknown table"),
             Self::UnsupportedExportKind => f.write_str("unsupported export kind"),
             Self::UnknownLabel => f.write_str("unknown label"),

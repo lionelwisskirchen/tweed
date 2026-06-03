@@ -303,18 +303,18 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     }
                 }
                 GLOBAL_GET => {
-                    let idx = self.reader.next_leb128_u32()?;
+                    let idx = self.reader.next_leb128_u32()? as usize;
                     let value = globals
-                        .get(idx as usize)
-                        .ok_or(ValidationError::UnknownGlobal)?
+                        .get(idx)
+                        .ok_or(ValidationError::UnknownGlobal(None))?
                         .value_type;
                     self.abstract_value_stack.push(value);
                 }
                 GLOBAL_SET => {
-                    let idx = self.reader.next_leb128_u32()?;
+                    let idx = self.reader.next_leb128_u32()? as usize;
                     let global = globals
-                        .get(idx as usize)
-                        .ok_or(ValidationError::UnknownGlobal)?;
+                        .get(idx)
+                        .ok_or(ValidationError::UnknownGlobal(None))?;
                     if !global.is_mutable {
                         return Err(ValidationError::GlobalIsImmutable);
                     }

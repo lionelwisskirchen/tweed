@@ -1,13 +1,10 @@
-use crate::binary::import_section::TableImport;
-use crate::binary::table_section::Table;
 use crate::core::error::ValidationError;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::constant_expression_validator::validate_const_expr;
 use alloc::vec::Vec;
 
-use super::function_section::FuncDecl;
-use super::import_section::GlobalImport;
+use super::module_environment::ModuleEnvironment;
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -77,10 +74,7 @@ pub struct ElementSegment {
 /// * `Error::UnknownFunction`: The elem references an unknown function
 pub fn process_element_section(
     reader: &mut WasmReader,
-    global_imports: &[GlobalImport],
-    functions: &[FuncDecl],
-    tables: &[Table],
-    table_imports: &[TableImport],
+    module: &mut ModuleEnvironment,
 ) -> Result<Vec<ElementSegment>> {
     let section_size = reader.next_leb128_u32()?;
     let section_end = reader.current_index() + section_size as usize;
@@ -88,14 +82,7 @@ pub fn process_element_section(
     let mut elements = Vec::new();
     let number_of_element_segments = reader.next_leb128_u32()?;
     for _ in 0..number_of_element_segments {
-        elements.push(process_element(
-            reader,
-            section_end,
-            global_imports,
-            functions,
-            tables,
-            table_imports,
-        )?);
+        elements.push(process_element(reader, section_end, module)?);
     }
     if reader.current_index() != section_end {
         return Err(ValidationError::SectionSizeMismatch);
@@ -105,13 +92,9 @@ pub fn process_element_section(
 fn process_element(
     reader: &mut WasmReader,
     section_end: usize,
-    global_imports: &[GlobalImport],
-    functions: &[FuncDecl],
-    tables: &[Table],
-    table_imports: &[TableImport],
+    module: &mut ModuleEnvironment,
 ) -> Result<ElementSegment> {
     let flag = reader.next_leb128_u32()?;
-
     match flag {
         // No specific table is used
         // Take the first possible and instantiate an element in it
@@ -120,17 +103,17 @@ fn process_element(
 
             validate_const_expr(
                 reader,
-                global_imports,
                 &[ValType::I32],
-                functions,
                 section_end,
+                module,
+                module.globalsec.len(),
             )?; // offset expression
 
             let end = reader.current_index();
 
             // no table idx is seen, so we check if there is an table at idx 0
             // if not we return an Error
-            if tables.is_empty() && table_imports.is_empty() {
+            if module.tablesec.is_empty() && module.importsec.tables.is_empty() {
                 return Err(ValidationError::UnknownTable);
             }
 
@@ -146,7 +129,7 @@ fn process_element(
             for _ in 0..number_of_elements {
                 let function_idx = reader.next_leb128_u32()?;
 
-                if functions.get(function_idx as usize).is_none() {
+                if module.funcsec.get(function_idx as usize).is_none() {
                     return Err(ValidationError::UnknownFunction);
                 }
                 function_references.push(function_idx);
@@ -187,10 +170,10 @@ fn process_element(
             let start = reader.current_index();
             validate_const_expr(
                 reader,
-                global_imports,
                 &[ValType::I32],
-                functions,
                 section_end,
+                module,
+                module.globalsec.len(),
             )?; // offset expression
             let end = reader.current_index();
             let mode = Mode::Active {
@@ -206,7 +189,7 @@ fn process_element(
                     for _ in 0..number_of_elements {
                         let function_idx = reader.next_leb128_u32()?;
 
-                        if functions.get(function_idx as usize).is_none() {
+                        if module.funcsec.get(function_idx as usize).is_none() {
                             return Err(ValidationError::UnknownFunction);
                         }
 
@@ -230,7 +213,7 @@ fn process_element(
                     let mut function_references = vec![];
                     for _ in 0..number_of_elements {
                         let function_idx = reader.next_leb128_u32()?;
-                        if functions.get(function_idx as usize).is_none() {
+                        if module.funcsec.get(function_idx as usize).is_none() {
                             return Err(ValidationError::UnknownFunction);
                         }
                         function_references.push(function_idx);
@@ -248,10 +231,10 @@ fn process_element(
             let start = reader.current_index();
             validate_const_expr(
                 reader,
-                global_imports,
                 &[ValType::I32],
-                functions,
                 section_end,
+                module,
+                module.globalsec.len(),
             )?; // offset expression
             let end = reader.current_index();
             let mode = Mode::Active {
@@ -265,10 +248,10 @@ fn process_element(
                 let start = reader.current_index();
                 validate_const_expr(
                     reader,
-                    global_imports,
-                    &[ValType::FuncRef],
-                    functions,
+                    &[ValType::I32],
                     section_end,
+                    module,
+                    module.globalsec.len(),
                 )?;
                 let end = reader.current_index();
                 function_references.push(Span { start, end })
@@ -287,11 +270,17 @@ fn process_element(
             let mut function_references = vec![];
             for _ in 0..number_of_elements {
                 let start = reader.current_index();
-                validate_const_expr(reader, global_imports, &[reftype], functions, section_end)
-                    .map_err(|e| match e {
-                        ValidationError::TypeMismatch => ValidationError::MalformedRefType,
-                        _ => e,
-                    })?;
+                validate_const_expr(
+                    reader,
+                    &[reftype],
+                    section_end,
+                    module,
+                    module.globalsec.len(),
+                )
+                .map_err(|e| match e {
+                    ValidationError::TypeMismatch => ValidationError::MalformedRefType,
+                    _ => e,
+                })?;
                 let end = reader.current_index();
                 function_references.push(Span { start, end })
             }
@@ -306,10 +295,10 @@ fn process_element(
             let start = reader.current_index();
             validate_const_expr(
                 reader,
-                global_imports,
                 &[ValType::I32],
-                functions,
                 section_end,
+                module,
+                module.globalsec.len(),
             )?; // offset expression
             let end = reader.current_index();
             let mode = Mode::Active {
@@ -323,7 +312,14 @@ fn process_element(
             let mut function_references = vec![];
             for _ in 0..number_of_elements {
                 let start = reader.current_index();
-                validate_const_expr(reader, global_imports, &[reftype], functions, section_end)?;
+                validate_const_expr(
+                    reader,
+                    &[reftype],
+                    section_end,
+                    module,
+                    module.globalsec.len(),
+                )?;
+
                 let end = reader.current_index();
                 function_references.push(Span { start, end })
             }
@@ -341,7 +337,14 @@ fn process_element(
             let mut function_references = vec![];
             for _ in 0..number_of_elements {
                 let start = reader.current_index();
-                validate_const_expr(reader, global_imports, &[reftype], functions, section_end)?;
+                validate_const_expr(
+                    reader,
+                    &[reftype],
+                    section_end,
+                    module,
+                    module.globalsec.len(),
+                )?;
+
                 let end = reader.current_index();
                 function_references.push(Span { start, end })
             }

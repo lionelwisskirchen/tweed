@@ -1,5 +1,4 @@
-use crate::binary::function_section::FuncDecl;
-use crate::binary::import_section::GlobalImport;
+use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::opcode::*;
 
 use crate::core::error::ValidationError;
@@ -11,10 +10,10 @@ pub type Result<T> = core::result::Result<T, ValidationError>;
 
 pub fn validate_const_expr(
     reader: &mut WasmReader,
-    globals: &[GlobalImport],
     result: &[ValType],
-    functions: &[FuncDecl],
     section_end: usize,
+    module: &mut ModuleEnvironment,
+    number_of_globals: usize,
 ) -> Result<()> {
     let mut abstract_value_stack: ValidationStack = ValidationStack::default();
     loop {
@@ -53,15 +52,23 @@ pub fn validate_const_expr(
                 abstract_value_stack.push(ValType::I64);
             }
             GLOBAL_GET => {
-                let idx = reader.next_leb128_u32()?;
-                let global = globals
-                    .get(idx as usize)
-                    .ok_or(ValidationError::UnknownGlobal)?;
-
-                if global.context.is_mutable {
-                    return Err(ValidationError::ConstantExpressionRequired);
+                let idx = reader.next_leb128_u32()? as usize;
+                let global = module.importsec.globals.get(idx);
+                match global {
+                    Some(gl) => {
+                        if gl.context.is_mutable {
+                            return Err(ValidationError::ConstantExpressionRequired);
+                        }
+                        abstract_value_stack.push(gl.context.value_type);
+                    }
+                    None => {
+                        let all_globals_len = module.importsec.globals.len() + number_of_globals;
+                        if idx < all_globals_len {
+                            return Err(ValidationError::UnknownGlobal(None));
+                        }
+                        return Err(ValidationError::UnknownGlobal(Some(idx)));
+                    }
                 }
-                abstract_value_stack.push(global.context.value_type);
             }
             REF_NULL => {
                 let ref_type = reader.next_byte()?;
@@ -70,7 +77,8 @@ pub fn validate_const_expr(
             REF_FUNC => {
                 let func_idx = reader.next_leb128_u32()? as usize;
 
-                functions
+                module
+                    .funcsec
                     .get(func_idx)
                     .ok_or(ValidationError::InvalidFunctionIndex)?;
                 abstract_value_stack.push(ValType::FuncRef);

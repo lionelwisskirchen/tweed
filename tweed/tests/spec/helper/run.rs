@@ -77,6 +77,9 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
     let mut module_registry = Environment::default();
     let mut engine: Engine = Default::default();
     engine
+        .add_memory_import("spectest".to_string(), "memory".to_string(), 1, Some(2))
+        .unwrap();
+    engine
         .add_global_import(
             "spectest".to_string(),
             "global_i32".to_string(),

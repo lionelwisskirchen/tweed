@@ -2,7 +2,7 @@ extern crate alloc;
 
 use super::adresses::InstanceAddr;
 use super::instances::function_instance::HostFunc;
-use super::instances::{FuncInstance, GlobalInstance, TableInstance};
+use super::instances::{FuncInstance, GlobalInstance, MemoryInstance, TableInstance};
 use super::store::{HostEnv, Store};
 
 use alloc::rc::Rc;
@@ -10,6 +10,7 @@ use core::cell::RefCell;
 
 use super::linker::Linker;
 use crate::binary::global_section::GlobalType;
+use crate::binary::memory_section::{Limits, WASM_PAGE_SIZE};
 use crate::binary::table_section::Table;
 use crate::binary::type_section::FuncType;
 use crate::core::error::ExecutionError;
@@ -186,7 +187,27 @@ impl Engine {
         let table_addr = self.store.tables.add_one(table_instance);
         self.linker.register_table(module, name, table_addr)
     }
-
+    /// Register a new memory, that can be imported by other modules
+    ///
+    /// This function takes a memory and inserts it into the Store
+    /// It also exposes it under the name to other instances in the Store.
+    ///
+    /// # Arguments
+    /// * `module`: the identifier of the module from which the table is imported.
+    /// * `name`: the name of the table.
+    /// * `memory`: the actual memory.
+    pub fn add_memory_import(
+        &mut self,
+        module: String,
+        name: String,
+        min: u32,
+        max: Option<u32>,
+    ) -> Result<()> {
+        let data = vec![0; (min * WASM_PAGE_SIZE) as usize];
+        let memory_instance = MemoryInstance::new(data, Limits { min, max });
+        let memory_addr = self.store.memories.add_one(memory_instance);
+        self.linker.register_memory(module, name, memory_addr)
+    }
     /// Returns a global instance by name from the given instance.
     ///
     /// # Parameters

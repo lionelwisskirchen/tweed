@@ -311,3 +311,8 @@ fn spec_tests_select() {
 fn spec_tests_stack() {
     run_spec_test(Path::new("./tests/spec/testsuite/stack.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_data() {
+    run_spec_test(Path::new("./tests/spec/testsuite/data.wast"));
+}

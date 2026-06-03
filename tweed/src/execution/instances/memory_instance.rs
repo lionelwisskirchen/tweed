@@ -60,7 +60,9 @@ impl MemoryInstance {
         let abs_address = offset
             .checked_add(address)
             .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
-        let end = abs_address + data.len();
+        let end = abs_address
+            .checked_add(data.len())
+            .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
         if end > self.bytes.len() {
             return Err(ExecutionError::MemoryAccessOutOfBounds);
         }
