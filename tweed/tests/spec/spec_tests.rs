@@ -301,3 +301,8 @@ fn spec_tests_br_table() {
 fn spec_tests_custom() {
     run_spec_test(Path::new("./tests/spec/testsuite/custom.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_select() {
+    run_spec_test(Path::new("./tests/spec/testsuite/select.wast"));
+}
