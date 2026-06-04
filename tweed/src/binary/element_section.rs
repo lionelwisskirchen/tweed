@@ -1,5 +1,6 @@
+use crate::binary::table_section::Table;
 use crate::core::error::ValidationError;
-use crate::core::value_types::ValType;
+use crate::core::value_types::{RefType, ValType};
 use crate::core::wasm_reader::WasmReader;
 use crate::validation::constant_expression_validator::validate_const_expr;
 use alloc::vec::Vec;
@@ -95,6 +96,9 @@ fn process_element(
     module: &mut ModuleEnvironment,
 ) -> Result<ElementSegment> {
     let flag = reader.next_leb128_u32()?;
+    let mut all_tables: Vec<Table> = Vec::new();
+    all_tables.extend(module.importsec.tables.iter().map(|t| t.context.clone()));
+    all_tables.extend(module.tablesec.iter().cloned());
     match flag {
         // No specific table is used
         // Take the first possible and instantiate an element in it
@@ -113,10 +117,10 @@ fn process_element(
 
             // no table idx is seen, so we check if there is an table at idx 0
             // if not we return an Error
-            if module.tablesec.is_empty() && module.importsec.tables.is_empty() {
-                return Err(ValidationError::UnknownTable);
+            let table = all_tables.first().ok_or(ValidationError::UnknownTable)?;
+            if table.ref_type != RefType::FuncRef {
+                return Err(ValidationError::TypeMismatch);
             }
-
             let mode = Mode::Active {
                 table: 0,
                 offset_start: start,
@@ -168,6 +172,12 @@ fn process_element(
         2 => {
             let tableidx = reader.next_leb128_u32()?;
             let start = reader.current_index();
+            let table = all_tables
+                .get(tableidx as usize)
+                .ok_or(ValidationError::UnknownTable)?;
+            if table.ref_type != RefType::FuncRef {
+                return Err(ValidationError::TypeMismatch);
+            };
             validate_const_expr(
                 reader,
                 &[ValType::I32],
@@ -236,6 +246,11 @@ fn process_element(
                 module,
                 module.globalsec.len(),
             )?; // offset expression
+            let table = all_tables.first().ok_or(ValidationError::UnknownTable)?;
+
+            if table.ref_type != RefType::FuncRef {
+                return Err(ValidationError::TypeMismatch);
+            };
             let end = reader.current_index();
             let mode = Mode::Active {
                 table: 0,
@@ -248,12 +263,13 @@ fn process_element(
                 let start = reader.current_index();
                 validate_const_expr(
                     reader,
-                    &[ValType::I32],
+                    &[ValType::FuncRef],
                     section_end,
                     module,
                     module.globalsec.len(),
                 )?;
                 let end = reader.current_index();
+
                 function_references.push(Span { start, end })
             }
             Ok(ElementSegment {
@@ -268,6 +284,7 @@ fn process_element(
             let reftype = ValType::lookup(&reftype_byte)?;
             let number_of_elements = reader.next_leb128_u32()?;
             let mut function_references = vec![];
+
             for _ in 0..number_of_elements {
                 let start = reader.current_index();
                 validate_const_expr(
@@ -310,6 +327,14 @@ fn process_element(
             let reftype = ValType::lookup(&reftype_byte)?;
             let number_of_elements = reader.next_leb128_u32()?;
             let mut function_references = vec![];
+            let table = all_tables
+                .get(tableidx as usize)
+                .ok_or(ValidationError::UnknownTable)?;
+
+            if table.ref_type.to_val_type() != reftype {
+                return Err(ValidationError::TypeMismatch);
+            };
+
             for _ in 0..number_of_elements {
                 let start = reader.current_index();
                 validate_const_expr(

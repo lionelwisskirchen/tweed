@@ -182,6 +182,7 @@ impl Linker {
                         .imported_globals
                         .get(&key)
                         .ok_or(ExecutionError::IncompatibleImportType)?;
+
                     resolved_import.push(ExternAddr::Global(*store_address));
                 }
                 Import::Memory(imp) => {
@@ -251,7 +252,6 @@ impl Linker {
     /// - `instance`: The instantiated module containing store addresses.
     pub fn register_exports(&mut self, name: String, instance: &ModuleInstance) -> Result<()> {
         let exports = &instance.exports;
-
         for (ent_name, entity) in exports {
             let import_name = ImportName {
                 module: name.clone(),

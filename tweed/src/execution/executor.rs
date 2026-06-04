@@ -774,7 +774,6 @@ impl Executor {
                 CALL_INDIRECT => {
                     let type_index = reader.next_leb128_u32();
                     let table_index = reader.next_leb128_u32();
-
                     let table_addr = instance
                         .tableaddr
                         .get(table_index as usize)
@@ -797,7 +796,6 @@ impl Executor {
                         Value::ExternRef(_) => return Err(ExecutionError::TypeMismatch),
                         _ => unreachable!(),
                     };
-
                     let function = store
                         .functions
                         .get_mut(index)
@@ -813,6 +811,7 @@ impl Executor {
                             let frame = self.build_frame(&instance)?;
                             current_frame.program_counter =
                                 reader.current_index() - current_frame.start + 1;
+
                             self.call_stack.push(current_frame.clone())?;
                             self.call_stack.push(frame)?;
                             break;
@@ -1837,6 +1836,36 @@ impl Executor {
 
                             let data_inst = store.datas.get_mut(*data_addr).unwrap(); // validated
                             data_inst.clear();
+                        }
+                        TABLE_INIT => {
+                            let element_idx = reader.next_leb128_u32();
+                            let table_idx = reader.next_leb128_u32();
+                            let table_addr = instance.tableaddr.get(table_idx as usize).unwrap(); // validated
+                            let tab = store.tables.get_mut(*table_addr).unwrap(); // validated
+
+                            // Not validated as `declare` elems are not present
+                            let element_addr = instance
+                                .elemaddr
+                                .get(element_idx as usize)
+                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
+
+                            let elem = store.elements.get(*element_addr).unwrap(); // validated
+                            let n = self.stack.pop_i32() as usize; // size
+                            let s = self.stack.pop_i32() as usize; // offset
+                            let d = self.stack.pop_i32() as usize; // destination
+
+                            let src_end = s
+                                .checked_add(n)
+                                .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
+
+                            let dst_end = d
+                                .checked_add(n)
+                                .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
+                            if src_end > elem.references.len() || dst_end > tab.reference_count() {
+                                return Err(ExecutionError::MemoryAccessOutOfBounds);
+                            }
+                            let elems_to_copy = &elem.references[s..src_end];
+                            tab.insert(d, elems_to_copy)?;
                         }
                         MEMORY_INIT => {
                             let data_index = reader.next_leb128_u32();

@@ -916,6 +916,27 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 EXTENSION_PREFIX => {
                     let byte = self.reader.next_leb128_u32()?;
                     match byte {
+                        TABLE_INIT => {
+                            let element_idx = self.reader.next_leb128_u32()? as usize;
+                            let table_idx = self.reader.next_leb128_u32()? as usize;
+                            let table = self
+                                .module_environment
+                                .tablesec
+                                .get(table_idx)
+                                .ok_or(ValidationError::TypeMismatch)?;
+                            let element = self
+                                .module_environment
+                                .elementsec
+                                .get(element_idx)
+                                .ok_or(ValidationError::TypeMismatch)?;
+
+                            if table.ref_type.to_val_type() != element.ref_type {
+                                return Err(ValidationError::IllegalSelectType);
+                            }
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                        }
                         I32_TRUNC_SAT_F32_S | I32_TRUNC_SAT_F32_U => {
                             self.abstract_value_stack.pop_expected(ValType::F32)?;
                             self.abstract_value_stack.push(ValType::I32);

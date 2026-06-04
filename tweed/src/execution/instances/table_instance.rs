@@ -29,6 +29,9 @@ impl TableInstance {
             .ok_or(ExecutionError::TableAccessOutOfBounds)?;
         Ok(*res)
     }
+    pub fn reference_count(&self) -> usize {
+        self.reference_values.len()
+    }
     pub fn insert(&mut self, offset: usize, vals: &[Value]) -> Result<()> {
         let end = offset
             .checked_add(vals.len())

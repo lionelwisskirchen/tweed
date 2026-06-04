@@ -154,6 +154,7 @@ impl ModuleInstantiator {
             .filter_map(|a| GlobalAddr::try_from(*a).ok())
             .collect();
         let mut local_globals = Vec::new();
+
         for global in module.globalsec.iter() {
             let expr = {
                 module.reader.seek(global.start + 1);
@@ -164,6 +165,7 @@ impl ModuleInstantiator {
                     &[global.global_type.value_type],
                     store,
                 )?;
+
                 *return_value.first().ok_or(ExecutionError::TypeMismatch)?
             };
             local_globals.push(GlobalInstance {
@@ -284,23 +286,12 @@ impl ModuleInstantiator {
                         )?
                         .first()
                         .ok_or(ExecutionError::TypeMismatch)?;
-
-                        match local_addr_value {
-                            Value::FuncRef(local_addr) => {
-                                let store_addr = all_function_idxs
-                                    .get(local_addr)
-                                    .ok_or(ExecutionError::FunctionNotFound)?;
-                                resolved_refs.push(Value::FuncRef(store_addr.0));
-                            }
-                            Value::RefNull(v) => {
-                                resolved_refs.push(Value::RefNull(v));
-                            }
-                            _ => {}
-                        };
+                        resolved_refs.push(local_addr_value);
                     }
                     ElementInstance::new(&element.ref_type, resolved_refs)
                 }
             };
+
             /*
              * Step 2: Store the element in the table
              * Here the element is either created by using the respective reference to a function on
@@ -323,6 +314,7 @@ impl ModuleInstantiator {
                     )?
                     .first()
                     .ok_or(ExecutionError::TypeMismatch)?;
+
                     let Value::I32(offset) = result else {
                         return Err(ExecutionError::TypeMismatch);
                     };
@@ -335,7 +327,6 @@ impl ModuleInstantiator {
                         error_in_element_instantiation = Some(err);
                         break;
                     }
-                    elements.push(instance);
                 }
                 Mode::Passive => elements.push(instance),
                 Mode::Declarative => {

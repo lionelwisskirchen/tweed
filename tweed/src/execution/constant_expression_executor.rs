@@ -6,6 +6,7 @@ use crate::core::{opcode::*, value_types::ValType};
 
 use crate::core::validated_wasm_reader::ValidatedWasmReader;
 use crate::core::values::Value;
+use crate::execution::adresses::Address;
 
 use super::adresses::{FuncAddr, GlobalAddr};
 use super::execution_stack::ExecutionStack;
@@ -58,8 +59,7 @@ pub fn execute_const_expr(
             }
             GLOBAL_GET => {
                 let idx = reader.next_leb128_u32();
-                let global = globals.get(idx as usize).unwrap(); // Validated?
-
+                let global = globals.get(idx as usize).unwrap();
                 // Validated:
                 // if global.global_type.is_mutable {
                 //     return Err(ValidationError::GlobalIsMutable);
@@ -88,10 +88,10 @@ pub fn execute_const_expr(
             }
             REF_FUNC => {
                 let func_idx = reader.next_leb128_u32() as usize;
-                let _func = functions
+                let func = functions
                     .get(func_idx)
                     .ok_or(ExecutionError::FunctionNotFound)?;
-                value_stack.push(Value::FuncRef(func_idx))?;
+                value_stack.push(Value::FuncRef(func.as_usize()))?;
             }
             END => {
                 let mut unpacked_result = vec![];
@@ -102,6 +102,7 @@ pub fn execute_const_expr(
                         return Err(ExecutionError::TypeMismatch);
                     };
                 }
+
                 return Ok(unpacked_result);
             }
             _ => return Err(ExecutionError::UndefinedContantExpression),

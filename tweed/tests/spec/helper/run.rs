@@ -251,12 +251,11 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                     engine.register_exports(instance_ref).unwrap();
                 }
                 Some(id) => {
-                    let name = module_registry.get(Some(id)).unwrap();
-                    engine
-                        .register_exports(tweed::execution::engine::InstanceRef::Name(
-                            name.to_string(),
-                        ))
-                        .unwrap();
+                    let inst = tweed::execution::engine::InstanceRef::Name(
+                        module_registry.get(Some(id)).unwrap().to_string(),
+                    );
+                    let new_name = engine.register(name, inst).unwrap();
+                    engine.register_exports(new_name).unwrap();
                 }
             },
             Module(mut module) => {
