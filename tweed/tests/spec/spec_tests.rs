@@ -331,3 +331,7 @@ fn spec_tests_exports() {
 fn spec_tests_imports() {
     run_spec_test(Path::new("./tests/spec/testsuite/imports.wast"));
 }
+#[test_log::test]
+fn spec_tests_func() {
+    run_spec_test(Path::new("./tests/spec/testsuite/func.wast"));
+}

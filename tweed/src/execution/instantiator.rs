@@ -131,7 +131,8 @@ impl ModuleInstantiator {
                 .get(index + imported_func_addr.len())
                 .ok_or(ExecutionError::InvalidFunctionIndex)?
                 .sig_index;
-            let signature = lookup_signature(signature_index, &module.typesec);
+            let signature = lookup_signature(signature_index, &module.typesec)
+                .map_err(|_| ExecutionError::TypeMismatch)?;
 
             local_functions.push(FuncInstance::Internal(Internal {
                 instance: instance_addr,

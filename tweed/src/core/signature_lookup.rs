@@ -2,7 +2,9 @@ use crate::binary::type_section::FuncType;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
+use super::error::ValidationError;
 use super::value_types::ValType;
+pub type Result<T> = core::result::Result<T, ValidationError>;
 
 fn shorthand_lookup(val: u32) -> Option<FuncType> {
     let lookup_map = BTreeMap::from([
@@ -52,17 +54,17 @@ fn shorthand_lookup(val: u32) -> Option<FuncType> {
     lookup_map.get(&val).cloned()
 }
 
-pub fn lookup_signature(func_idx: u32, type_section: &[FuncType]) -> FuncType {
+pub fn lookup_signature(func_idx: u32, type_section: &[FuncType]) -> Result<FuncType> {
     if func_idx == 0x40 {
-        return FuncType {
+        return Ok(FuncType {
             ..Default::default()
-        };
+        });
     };
     if let Some(signature) = shorthand_lookup(func_idx) {
-        return signature;
+        return Ok(signature);
     };
     type_section
         .get(func_idx as usize)
-        .expect("No func idx for sig in shorthand lookup")
-        .clone()
+        .cloned()
+        .ok_or(ValidationError::UnknownType)
 }

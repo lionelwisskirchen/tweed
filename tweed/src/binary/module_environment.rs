@@ -212,7 +212,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                     .funcsec
                     .get(start_function_idx as usize)
                     .ok_or(ValidationError::UnknownFunction)?;
-                let signature = lookup_signature(signature_index.sig_index, &module.typesec);
+                let signature = lookup_signature(signature_index.sig_index, &module.typesec)?;
                 if !signature.parameter.is_empty() || !signature.result.is_empty() {
                     return Err(ValidationError::InvalidStartFunctionSignature);
                 }

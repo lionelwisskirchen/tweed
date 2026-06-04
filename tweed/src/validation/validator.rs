@@ -176,7 +176,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             .ok_or(ValidationError::InvalidSignatureIndex)?
             .sig_index;
 
-        let func_signature = lookup_signature(signature_index, &self.module_environment.typesec);
+        let func_signature = lookup_signature(signature_index, &self.module_environment.typesec)?;
         self.push_ctrl(ControlType::Func {
             func_type: func_signature.clone(),
             sidetable_idxs: Vec::new(),
@@ -242,7 +242,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 IF => {
                     let index_of_if_bytecode = self.reader.current_index() as i32;
-                    let signature = self.read_block_type();
+                    let signature = self.read_block_type()?;
                     self.abstract_value_stack.pop_expected(ValType::I32)?; // bool value
                     self.abstract_value_stack
                         .pop_expected_vec(&signature.parameter)?;
@@ -524,7 +524,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     self.unreachable();
                 }
                 BLOCK => {
-                    let signature = self.read_block_type();
+                    let signature = self.read_block_type()?;
 
                     self.abstract_value_stack
                         .pop_expected_vec(&signature.parameter)?;
@@ -539,7 +539,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 LOOP => {
                     let index_of_loop_bytecode = self.reader.current_index();
-                    let signature = self.read_block_type();
+                    let signature = self.read_block_type()?;
                     self.abstract_value_stack
                         .pop_expected_vec(&signature.parameter)?;
 
@@ -1125,7 +1125,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
 
         Ok(target_control.clone())
     }
-    fn read_block_type(&mut self) -> FuncType {
+    fn read_block_type(&mut self) -> Result<FuncType> {
         let func_idx = self
             .reader
             .next_leb128_u32()
