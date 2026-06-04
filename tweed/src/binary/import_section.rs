@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 
 use super::function_section::FuncDecl;
 use super::global_section::GlobalType;
+use super::module_environment::ModuleEnvironment;
 
 #[derive(Debug, Clone)]
 pub struct GlobalImport {
@@ -108,7 +109,10 @@ pub type Result<T> = core::result::Result<T, ValidationError>;
 /// * `ValidationError::MalformedMutability`: The imported global is either declared as mutable or
 ///   its mutability cannot be determined
 /// * `ValidationError::UnsupportedImportKind`: The kind of the import cannot be parsed
-pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
+pub fn process_import_section(
+    reader: &mut WasmReader,
+    module: &ModuleEnvironment,
+) -> Result<Imports> {
     let section_size = reader.next_leb128_u32()?;
     let start_of_section = reader.current_index();
     let number_of_imports = reader.next_leb128_u32()?;
@@ -124,6 +128,10 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
             // Function Import
             0x00 => {
                 let index = reader.next_leb128_u32()?;
+                // Check if referenced type exists
+                if (index as usize) >= module.typesec.len() {
+                    return Err(ValidationError::UnknownType);
+                }
                 imports.functions.push(FunctionImport {
                     idx: idx as usize,
                     module: module_name,
@@ -177,7 +185,10 @@ pub fn process_import_section(reader: &mut WasmReader) -> Result<Imports> {
                     name: import_name,
                     context: memory,
                 };
-
+                // Multiple Memories are in v2 not allowed
+                if !imports.memories.is_empty() {
+                    return Err(ValidationError::MultipleMemories);
+                }
                 imports.memories.push(memory_import);
             }
             // Global Import

@@ -95,7 +95,22 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
             false,
         )
         .unwrap();
-
+    engine
+        .add_global_import(
+            "spectest".to_string(),
+            "global_f32".to_string(),
+            Value::F32(666.6),
+            false,
+        )
+        .unwrap();
+    engine
+        .add_global_import(
+            "spectest".to_string(),
+            "global_f64".to_string(),
+            Value::F64(666.6),
+            false,
+        )
+        .unwrap();
     engine
         .add_function_import(
             "spectest".to_string(),
@@ -201,7 +216,10 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
             "table".to_string(),
             Table {
                 ref_type: tweed::core::value_types::RefType::FuncRef,
-                limit: tweed::binary::memory_section::Limits { min: 10, max: None },
+                limit: tweed::binary::memory_section::Limits {
+                    min: 10,
+                    max: Some(20),
+                },
             },
         )
         .unwrap();

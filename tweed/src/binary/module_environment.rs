@@ -129,7 +129,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
 
             Section::Import => {
                 info!("Process Import Section");
-                let imports = process_import_section(reader).map_err(|e| match e {
+                let imports = process_import_section(reader, &module).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => {
                         ValidationError::UnexpectedEndOfFunctionOrSection
                     }

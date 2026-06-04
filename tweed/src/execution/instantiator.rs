@@ -85,7 +85,8 @@ impl ModuleInstantiator {
                         Import::Table(imp) => imp,
                         _ => return Err(ExecutionError::IncompatibleImportType),
                     };
-                    table_inst.ensure_ref_type_is_correct(&import_inst)?
+                    table_inst.ensure_ref_type_is_correct(&import_inst)?;
+                    table_inst.ensure_limits_are_correct(&import_inst)?
                 }
                 ExternAddr::Global(global_addr) => {
                     let global_inst = store.globals.get(*global_addr)?;
@@ -98,11 +99,12 @@ impl ModuleInstantiator {
                     }
                 }
                 ExternAddr::Memory(memory_addr) => {
-                    store.memories.get(*memory_addr)?;
-                    match import {
+                    let memory_inst = store.memories.get(*memory_addr)?;
+                    let import_inst = match import {
                         Import::Memory(imp) => imp,
                         _ => return Err(ExecutionError::IncompatibleImportType),
                     };
+                    memory_inst.ensure_limits_are_correct(&import_inst)?;
                 }
             }
         }

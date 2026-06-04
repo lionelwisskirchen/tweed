@@ -79,6 +79,36 @@ impl TableInstance {
             Err(ExecutionError::IncompatibleImportType)
         }
     }
+    /// Check if the given table has the same limits
+    ///
+    /// # Arguments
+    /// * `table_import`: reference to the import table.
+    ///
+    /// # Return
+    /// Error if the limits are not compatible
+    pub fn ensure_limits_are_correct(&self, table_import: &TableImport) -> Result<()> {
+        let export = &self.table_type.limit;
+        let import = &table_import.context.limit;
+
+        if export.min < import.min {
+            return Err(ExecutionError::IncompatibleImportType);
+        }
+
+        match (export.max, import.max) {
+            (Some(exp_max), Some(imp_max)) => {
+                if exp_max > imp_max {
+                    return Err(ExecutionError::IncompatibleImportType);
+                }
+            }
+
+            (None, Some(_)) => {
+                return Err(ExecutionError::IncompatibleImportType);
+            }
+
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 impl fmt::Debug for TableInstance {

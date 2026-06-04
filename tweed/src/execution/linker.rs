@@ -122,6 +122,14 @@ impl Linker {
         }
     }
 
+    /// Checks if an import name exists in the linking context.
+    pub fn import_exists(&self, key: &ImportName) -> bool {
+        self.imported_funcs.contains_key(key)
+            | self.imported_tables.contains_key(key)
+            | self.imported_globals.contains_key(key)
+            | self.imported_memories.contains_key(key)
+    }
+
     /// Resolves all imports declared by an instance into store addresses.
     ///
     /// Each import is looked up by its `(module, name)` pair and translated
@@ -148,10 +156,16 @@ impl Linker {
                         module: imp.module.clone(),
                         name: imp.name.clone(),
                     };
+                    // 1. Check if key exists in general
+                    if !self.import_exists(&key) {
+                        return Err(ExecutionError::MissingFunctionImport);
+                    };
+
+                    // 2. Check if key exists with the correct type
                     let store_address = self
                         .imported_funcs
                         .get(&key)
-                        .ok_or(ExecutionError::MissingFunctionImport)?;
+                        .ok_or(ExecutionError::IncompatibleImportType)?;
                     resolved_import.push(ExternAddr::Func(*store_address));
                 }
                 Import::Global(imp) => {
@@ -159,10 +173,15 @@ impl Linker {
                         module: imp.module.clone(),
                         name: imp.name.clone(),
                     };
+                    // 1. Check if key exists in general
+                    if !self.import_exists(&key) {
+                        return Err(ExecutionError::MissingGlobalImport);
+                    };
+                    // 2. Check if key exists with the correct type
                     let store_address = self
                         .imported_globals
                         .get(&key)
-                        .ok_or(ExecutionError::MissingGlobalImport)?;
+                        .ok_or(ExecutionError::IncompatibleImportType)?;
                     resolved_import.push(ExternAddr::Global(*store_address));
                 }
                 Import::Memory(imp) => {
@@ -170,10 +189,15 @@ impl Linker {
                         module: imp.module.clone(),
                         name: imp.name.clone(),
                     };
+                    // 1. Check if key exists in general
+                    if !self.import_exists(&key) {
+                        return Err(ExecutionError::MissingMemoryImport);
+                    };
+                    // 2. Check if key exists with the correct type
                     let store_address = self
                         .imported_memories
                         .get(&key)
-                        .ok_or(ExecutionError::MissingMemoryImport)?;
+                        .ok_or(ExecutionError::IncompatibleImportType)?;
                     resolved_import.push(ExternAddr::Memory(*store_address));
                 }
                 Import::Table(imp) => {
@@ -181,10 +205,15 @@ impl Linker {
                         module: imp.module.clone(),
                         name: imp.name.clone(),
                     };
+                    // 1. Check if key exists in general
+                    if !self.import_exists(&key) {
+                        return Err(ExecutionError::MissingTableImport);
+                    };
+                    // 2. Check if key exists with the correct type
                     let store_address = self
                         .imported_tables
                         .get(&key)
-                        .ok_or(ExecutionError::MissingTableImport)?;
+                        .ok_or(ExecutionError::IncompatibleImportType)?;
                     resolved_import.push(ExternAddr::Table(*store_address));
                 }
             }

@@ -1,3 +1,4 @@
+use crate::binary::import_section::MemoryImport;
 use crate::binary::memory_section::{Limits, Memory, MAX_MEM_PAGES, WASM_PAGE_SIZE};
 
 use crate::core::error::ExecutionError;
@@ -18,6 +19,37 @@ impl MemoryInstance {
             memory_type: Memory { limits },
             bytes,
         }
+    }
+
+    /// Check if the given memory has the same limits
+    ///
+    /// # Arguments
+    /// * `memory_import`: reference to the import memory.
+    ///
+    /// # Return
+    /// Error if the limits are not compatible
+    pub fn ensure_limits_are_correct(&self, memory_import: &MemoryImport) -> Result<()> {
+        let export = &self.memory_type.limits;
+        let import = &memory_import.context.limits;
+
+        if export.min < import.min {
+            return Err(ExecutionError::IncompatibleImportType);
+        }
+
+        match (export.max, import.max) {
+            (Some(exp_max), Some(imp_max)) => {
+                if exp_max > imp_max {
+                    return Err(ExecutionError::IncompatibleImportType);
+                }
+            }
+
+            (None, Some(_)) => {
+                return Err(ExecutionError::IncompatibleImportType);
+            }
+
+            _ => {}
+        }
+        Ok(())
     }
 
     pub fn load_slice(&mut self, address: usize, bytes: usize) -> Result<&[u8]> {
