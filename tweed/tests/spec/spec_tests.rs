@@ -316,3 +316,8 @@ fn spec_tests_stack() {
 fn spec_tests_data() {
     run_spec_test(Path::new("./tests/spec/testsuite/data.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_exports() {
+    run_spec_test(Path::new("./tests/spec/testsuite/exports.wast"));
+}

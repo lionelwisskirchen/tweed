@@ -124,6 +124,7 @@ impl Display for ExecutionError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValidationError {
+    DuplicateExportName,
     OffsetOutOfRange,
     UnexpectedContentAfterLastSection,
     MalformedRefType,
@@ -219,6 +220,7 @@ impl Display for ValidationError {
                     f.write_str("unknown data segment")
                 }
             }
+            Self::DuplicateExportName => f.write_str("duplicate export name"),
             Self::MalformedMutability => f.write_str("malformed mutability"),
             Self::InvalidMagic => f.write_str("magic header not detected"),
             Self::GlobalIsImmutable => f.write_str("global is immutable"),

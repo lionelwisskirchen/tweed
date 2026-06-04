@@ -190,12 +190,13 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             Section::Export => {
                 info!("Process Export Section");
-                module.exportsec = process_export_section(reader).map_err(|e| match e {
-                    ValidationError::ReadingOutOfBounds => {
-                        ValidationError::UnexpectedEndOfFunctionOrSection
-                    }
-                    _ => e,
-                })?;
+                module.exportsec =
+                    process_export_section(reader, &module).map_err(|e| match e {
+                        ValidationError::ReadingOutOfBounds => {
+                            ValidationError::UnexpectedEndOfFunctionOrSection
+                        }
+                        _ => e,
+                    })?;
             }
             Section::Start => {
                 info!("Process Start Section");
@@ -219,15 +220,8 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             Section::Element => {
                 info!("Process Element Section");
-                module.elementsec = process_element_section(reader, &mut module)
-                    // module.elementsec = process_element_section(
-                    //     reader,
-                    //     &module.importsec.globals,
-                    //     &module.funcsec,
-                    //     &module.tablesec,
-                    //     &module.importsec.tables,
-                    // )
-                    .map_err(|e| match e {
+                module.elementsec =
+                    process_element_section(reader, &mut module).map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
                         _ => e,
                     })?;
@@ -279,6 +273,6 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
     {
         return Err(ValidationError::InconsistentDataDataCountSectionLengths);
     }
-
+    info!("Finished Module parsing and validation");
     Ok(module)
 }
