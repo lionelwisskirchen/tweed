@@ -339,3 +339,58 @@ fn spec_tests_func() {
 fn spec_tests_elem() {
     run_spec_test(Path::new("./tests/spec/testsuite/elem.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_func_ptrs() {
+    run_spec_test(Path::new("./tests/spec/testsuite/func_ptrs.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_func_labels() {
+    run_spec_test(Path::new("./tests/spec/testsuite/labels.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_func_ref_is_null() {
+    run_spec_test(Path::new("./tests/spec/testsuite/ref_is_null.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_func_ref_null() {
+    run_spec_test(Path::new("./tests/spec/testsuite/ref_null.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_obsolete_keywords() {
+    run_spec_test(Path::new("./tests/spec/testsuite/obsolete-keywords.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_memory_copy() {
+    run_spec_test(Path::new("./tests/spec/testsuite/memory_copy.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_memory_fill() {
+    run_spec_test(Path::new("./tests/spec/testsuite/memory_fill.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_memory_grow() {
+    run_spec_test(Path::new("./tests/spec/testsuite/memory_grow.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_memory_redundancy() {
+    run_spec_test(Path::new("./tests/spec/testsuite/memory_redundancy.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_memory_size() {
+    run_spec_test(Path::new("./tests/spec/testsuite/memory_size.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_memory_trap() {
+    run_spec_test(Path::new("./tests/spec/testsuite/memory_trap.wast"));
+}

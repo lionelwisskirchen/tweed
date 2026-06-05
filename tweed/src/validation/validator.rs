@@ -701,13 +701,13 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                         .module_environment
                         .funcsec
                         .get(func_index as usize)
-                        .ok_or(ValidationError::UnknownFunction)?
+                        .ok_or(ValidationError::UnknownFunction(None))?
                         .sig_index;
                     let sig = self
                         .module_environment
                         .typesec
                         .get(type_idx as usize)
-                        .ok_or(ValidationError::UnknownFunction)?;
+                        .ok_or(ValidationError::UnknownFunction(None))?;
                     self.abstract_value_stack.pop_expected_vec(&sig.parameter)?;
                     self.abstract_value_stack.push_vec(&sig.result);
                 }
@@ -906,7 +906,6 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 REF_FUNC => {
                     let func_idx = self.reader.next_leb128_u32()? as usize;
-
                     self.module_environment
                         .funcsec
                         .get(func_idx)
@@ -1004,7 +1003,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             }
 
                             if memories.is_empty() {
-                                return Err(ValidationError::UndefinedMemory)?;
+                                return Err(ValidationError::UnknownMemoryIdx(dest.into()))?;
                             }
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -1017,9 +1016,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             }
 
                             if memories.is_empty() {
-                                return Err(ValidationError::UndefinedMemory)?;
+                                return Err(ValidationError::UnknownMemoryIdx(idx.into()));
                             }
-
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;

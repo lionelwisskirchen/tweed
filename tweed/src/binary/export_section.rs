@@ -47,7 +47,7 @@ pub fn process_export_section(
                 // The func section holds the signature to code mapping for imported and local functions.
                 // That's why the number of imported functions is not needed addtionally.
                 if (index as usize) >= module.funcsec.len() {
-                    return Err(ValidationError::UnknownFunction);
+                    return Err(ValidationError::UnknownFunction(None));
                 }
                 ExportContext::FunctionExport(index)
             }

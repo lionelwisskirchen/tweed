@@ -53,8 +53,12 @@ impl MemoryInstance {
     }
 
     pub fn load_slice(&mut self, address: usize, bytes: usize) -> Result<&[u8]> {
+        let dst_end = address
+            .checked_add(bytes)
+            .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
+
         self.bytes
-            .get(address..address + bytes)
+            .get(address..dst_end)
             .ok_or(ExecutionError::MemoryAccessOutOfBounds)
     }
 
@@ -77,6 +81,7 @@ impl MemoryInstance {
             }
         }
         self.bytes.resize((new_len * WASM_PAGE_SIZE) as usize, 0);
+        self.memory_type.limits.min += amount;
         Ok(())
     }
 
@@ -98,6 +103,7 @@ impl MemoryInstance {
         if end > self.bytes.len() {
             return Err(ExecutionError::MemoryAccessOutOfBounds);
         }
+
         self.bytes[abs_address..end].copy_from_slice(data);
         Ok(())
     }

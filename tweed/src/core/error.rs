@@ -140,7 +140,7 @@ pub enum ValidationError {
     NoDataSegmentFound(Option<usize>),
     UnknownMemoryIdx(usize),
     UnknownMemory,
-    UnknownFunction,
+    UnknownFunction(Option<usize>),
     UnknownType,
     UnknownTable,
     MultipleMemoriesNotImplemented,
@@ -229,7 +229,13 @@ impl Display for ValidationError {
             Self::TypeMismatch | Self::InvalidSignatureIndex => f.write_str("type mismatch"),
             Self::InvalidControlFlow => f.write_str("invalid control flow"),
             Self::InvalidLocalIndex => f.write_str("unknown local"),
-            Self::UnknownFunction => f.write_str("unknown function"),
+            Self::UnknownFunction(idx) => {
+                if let Some(i) = idx {
+                    f.write_fmt(format_args!("unknown function {i}"))
+                } else {
+                    f.write_str("unknown function")
+                }
+            }
 
             Self::InvalidFunctionIndex => f.write_str("invalid function index"),
             Self::UndefinedConstantExpression => f.write_str("illegal opcode"),

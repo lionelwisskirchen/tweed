@@ -4,7 +4,7 @@ use super::execution_stack::{CallStack, ExecutionStack};
 use super::instances::function_instance::Internal;
 use super::instances::{FuncInstance, MemoryInstance};
 use super::store::{map_memory, HostEnv, Store};
-use crate::execution::adresses::{FuncAddr, InstanceAddr};
+use crate::execution::adresses::{Address, FuncAddr, InstanceAddr};
 
 use crate::core::error::ExecutionError;
 use crate::core::opcode::*;
@@ -785,11 +785,11 @@ impl Executor {
                         .types
                         .get(type_index as usize)
                         .ok_or(ExecutionError::InvalidFunctionIndex)?;
-
                     let entry_index = self.stack.pop_i32() as usize;
                     let Ok(entry) = table.get(entry_index) else {
                         return Err(ExecutionError::UndefinedElement);
                     };
+
                     let index = match entry {
                         Value::RefNull(_) => return Err(ExecutionError::UninitializedReference),
                         Value::FuncRef(idx) => FuncAddr(idx),
@@ -801,7 +801,6 @@ impl Executor {
                         .get_mut(index)
                         .map_err(|_| ExecutionError::InvalidFunctionIndex)?
                         .clone();
-
                     if function.get_signature() != func_type {
                         return Err(ExecutionError::IndirectCallTypeMismatch);
                     };
@@ -1071,6 +1070,7 @@ impl Executor {
                 }
                 TABLE_SET => {
                     let table_idx = reader.next_leb128_u32() as usize;
+
                     let table_addr = instance
                         .tableaddr
                         .get(table_idx)
@@ -1079,7 +1079,7 @@ impl Executor {
                     let val = self.stack.pop();
                     let index = self.stack.pop_i32() as usize;
                     table.insert(index, &[val])?;
-                    trace!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val)
+                    info!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val)
                 }
 
                 I32_TRUNC_F32_S => {
@@ -1699,7 +1699,8 @@ impl Executor {
                 }
                 REF_FUNC => {
                     let func_idx = reader.next_leb128_u32() as usize;
-                    self.stack.push(Value::FuncRef(func_idx))?;
+                    let store_addr = instance.funcaddr.get(func_idx).unwrap(); // Validated
+                    self.stack.push(Value::FuncRef(store_addr.as_usize()))?;
                 }
                 MEMORY_SIZE => {
                     let idx = reader.next_byte();
@@ -1913,7 +1914,12 @@ impl Executor {
                                 map_memory(idx as usize, instance, &mut store.memories).unwrap(); // always 0
                             let number_of_bytes = self.stack.pop_i32() as usize;
                             let val = self.stack.pop_i32() as u8;
+
+                            if number_of_bytes > isize::MAX as usize {
+                                return Err(ExecutionError::MemoryAccessOutOfBounds);
+                            }
                             let data = vec![val; number_of_bytes];
+
                             let address = self.stack.pop_i32() as usize;
                             mem.store(address, 0, &data)?;
                             trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");

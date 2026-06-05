@@ -134,7 +134,7 @@ fn process_element(
                 let function_idx = reader.next_leb128_u32()?;
 
                 if module.funcsec.get(function_idx as usize).is_none() {
-                    return Err(ValidationError::UnknownFunction);
+                    return Err(ValidationError::UnknownFunction(None));
                 }
                 function_references.push(function_idx);
             }
@@ -200,7 +200,7 @@ fn process_element(
                         let function_idx = reader.next_leb128_u32()?;
 
                         if module.funcsec.get(function_idx as usize).is_none() {
-                            return Err(ValidationError::UnknownFunction);
+                            return Err(ValidationError::UnknownFunction(None));
                         }
 
                         function_references.push(function_idx);
@@ -224,7 +224,7 @@ fn process_element(
                     for _ in 0..number_of_elements {
                         let function_idx = reader.next_leb128_u32()?;
                         if module.funcsec.get(function_idx as usize).is_none() {
-                            return Err(ValidationError::UnknownFunction);
+                            return Err(ValidationError::UnknownFunction(None));
                         }
                         function_references.push(function_idx);
                     }

@@ -80,7 +80,7 @@ pub fn validate_const_expr(
                 module
                     .funcsec
                     .get(func_idx)
-                    .ok_or(ValidationError::InvalidFunctionIndex)?;
+                    .ok_or(ValidationError::UnknownFunction(Some(func_idx)))?;
                 abstract_value_stack.push(ValType::FuncRef);
             }
             END => {
