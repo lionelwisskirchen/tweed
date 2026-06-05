@@ -73,6 +73,11 @@ fn spec_tests_endianess() {
 }
 
 #[test_log::test]
+fn spec_tests_fac() {
+    run_spec_test(Path::new("./tests/spec/testsuite/fac.wast"));
+}
+
+#[test_log::test]
 fn spec_tests_f32() {
     run_spec_test(Path::new("./tests/spec/testsuite/f32.wast"));
 }

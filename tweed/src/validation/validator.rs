@@ -1116,7 +1116,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 let ip = *instruction_pointer as i32 - index_of_start_bytecode;
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
-                entry.vals = func_type.result.len();
+                entry.vals = func_type.parameter.len();
                 entry.ip = ip;
                 entry.stp = stp;
                 self.abstract_value_stack.push_vec(&func_type.parameter);

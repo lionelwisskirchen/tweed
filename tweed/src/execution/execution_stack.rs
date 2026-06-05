@@ -4,8 +4,8 @@ use crate::core::{error::ExecutionError, values::Value};
 
 use super::executor::Frame;
 
-pub const MAX_VALUE_STACK_SIZE: usize = 0xf1000;
-pub const MAX_CALL_STACK_SIZE: usize = 0xf1000;
+pub const MAX_VALUE_STACK_SIZE: usize = 0x1000;
+pub const MAX_CALL_STACK_SIZE: usize = 0x800; // Should be smaller than 'MAX_VALUE_STACK_SIZE'
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Debug)]
