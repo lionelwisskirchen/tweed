@@ -789,9 +789,10 @@ impl Executor {
                     let Ok(entry) = table.get(entry_index) else {
                         return Err(ExecutionError::UndefinedElement);
                     };
-
                     let index = match entry {
-                        Value::RefNull(_) => return Err(ExecutionError::UninitializedReference),
+                        Value::RefNull(_) => {
+                            return Err(ExecutionError::UninitializedElement(None))
+                        }
                         Value::FuncRef(idx) => FuncAddr(idx),
                         Value::ExternRef(_) => return Err(ExecutionError::TypeMismatch),
                         _ => unreachable!(),
@@ -1727,6 +1728,16 @@ impl Executor {
                 EXTENSION_PREFIX => {
                     let byte = reader.next_leb128_u32();
                     match byte {
+                        ELEM_DROP => {
+                            let element_idx = reader.next_leb128_u32();
+                            // Not validated as `declare` elems are not present
+                            let element_addr = instance
+                                .elemaddr
+                                .get(element_idx as usize)
+                                .ok_or(ExecutionError::UndefinedElement)?;
+                            let elem = store.elements.get_mut(*element_addr).unwrap(); // validated
+                            elem.references.clear();
+                        }
                         I32_TRUNC_SAT_F32_S => {
                             let val = self.stack.pop_f32();
                             let res = if val.is_nan() {
@@ -1857,13 +1868,12 @@ impl Executor {
 
                             let src_end = s
                                 .checked_add(n)
-                                .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
-
+                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
                             let dst_end = d
                                 .checked_add(n)
-                                .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
+                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
                             if src_end > elem.references.len() || dst_end > tab.reference_count() {
-                                return Err(ExecutionError::MemoryAccessOutOfBounds);
+                                return Err(ExecutionError::TableAccessOutOfBounds);
                             }
                             let elems_to_copy = &elem.references[s..src_end];
                             tab.insert(d, elems_to_copy)?;

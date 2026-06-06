@@ -916,6 +916,13 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                     let byte = self.reader.next_leb128_u32()?;
                     trace!("Validating Byte: {byte:#04X}");
                     match byte {
+                        ELEM_DROP => {
+                            let element_idx = self.reader.next_leb128_u32()? as usize;
+                            self.module_environment
+                                .elementsec
+                                .get(element_idx)
+                                .ok_or(ValidationError::UnknownElem)?;
+                        }
                         TABLE_INIT => {
                             let element_idx = self.reader.next_leb128_u32()? as usize;
                             let table_idx = self.reader.next_leb128_u32()? as usize;
@@ -925,7 +932,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                                 .module_environment
                                 .elementsec
                                 .get(element_idx)
-                                .ok_or(ValidationError::TypeMismatch)?;
+                                .ok_or(ValidationError::UnknownElem)?;
 
                             if table.to_val_type() != element.ref_type {
                                 return Err(ValidationError::IllegalSelectType);

@@ -72,7 +72,7 @@ pub enum ExecutionError {
     UnknownGlobal,
     UnknownTable,
     UndefinedElement,
-    UninitializedReference,
+    UninitializedElement(Option<usize>),
     InvalidSidetableIndex,
     IndirectCallTypeMismatch,
     InvalidConversionToInt,
@@ -110,7 +110,13 @@ impl Display for ExecutionError {
             Self::DivisionByZero => f.write_str("integer divide by zero"),
             Self::IntegerOverflow => f.write_str("integer overflow"),
             Self::UndefinedElement => f.write_str("undefined element"),
-            Self::UninitializedReference => f.write_str("uninitialized element"),
+            Self::UninitializedElement(idx) => {
+                if let Some(i) = idx {
+                    f.write_fmt(format_args!("uninitialized element {i}"))
+                } else {
+                    f.write_str("uninitialized element")
+                }
+            }
             Self::InvalidSidetableIndex => f.write_str("invalid sidetable entry index"),
             Self::IndirectCallTypeMismatch => f.write_str("indirect call type mismatch"),
             Self::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
@@ -143,6 +149,7 @@ pub enum ValidationError {
     UnknownFunction(Option<usize>),
     UnknownType,
     UnknownTable,
+    UnknownElem,
     MultipleMemoriesNotImplemented,
     MultipleMemories,
     MalformedMutability,
@@ -195,6 +202,8 @@ impl Display for ValidationError {
             Self::InconsistentFunctionCodeSectionLengths => {
                 f.write_str("function and code section have inconsistent lengths")
             }
+            Self::UnknownElem => f.write_str("unknown elem"),
+
             Self::MalformedRefType => f.write_str("malformed reference type"),
             Self::InconsistentDataDataCountSectionLengths => {
                 f.write_str("data count and data section have inconsistent lengths")
