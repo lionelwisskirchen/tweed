@@ -198,10 +198,10 @@ pub mod extensions {
     pub const MEMORY_FILL: u32 = 0x0B;
     pub const TABLE_INIT: u32 = 0x0C;
     // pub const ELEM_DROP: u32 = 0x0D;
-    // pub const TABLE_COPY: u32 = 0x0E;
-    // pub const TABLE_GROW: u32 = 0x0F;
-    // pub const TABLE_SIZE: u32 = 0x10;
-    // pub const TABLE_FILL: u32 = 0x11;
+    pub const TABLE_COPY: u32 = 0x0E;
+    pub const TABLE_GROW: u32 = 0x0F;
+    pub const TABLE_SIZE: u32 = 0x10;
+    pub const TABLE_FILL: u32 = 0x11;
 }
 
 pub fn is_known_opcode(byte: u8) -> bool {

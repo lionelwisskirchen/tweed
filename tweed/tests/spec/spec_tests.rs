@@ -394,3 +394,20 @@ fn spec_tests_memory_size() {
 fn spec_tests_memory_trap() {
     run_spec_test(Path::new("./tests/spec/testsuite/memory_trap.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_table_size() {
+    run_spec_test(Path::new("./tests/spec/testsuite/table_size.wast"));
+}
+#[test_log::test]
+fn spec_tests_table_grow() {
+    run_spec_test(Path::new("./tests/spec/testsuite/table_grow.wast"));
+}
+#[test_log::test]
+fn spec_tests_table_fill() {
+    run_spec_test(Path::new("./tests/spec/testsuite/table_fill.wast"));
+}
+#[test_log::test]
+fn spec_tests_table_copy() {
+    run_spec_test(Path::new("./tests/spec/testsuite/table_copy.wast"));
+}

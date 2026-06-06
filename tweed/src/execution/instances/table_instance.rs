@@ -11,8 +11,8 @@ use core::fmt::{self};
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 #[derive(PartialEq, Clone)]
 pub struct TableInstance {
-    table_type: Table,
-    reference_values: Vec<Value>,
+    pub table_type: Table,
+    pub reference_values: Vec<Value>,
 }
 impl TableInstance {
     pub fn new(table: Table) -> Self {
@@ -21,6 +21,9 @@ impl TableInstance {
             table_type: table.clone(),
             reference_values: data,
         }
+    }
+    pub fn get_slice(&self, addr: usize, length: usize) -> Result<&[Value]> {
+        Ok(&self.reference_values[addr..addr + length])
     }
     pub fn get(&self, index: usize) -> Result<Value> {
         let res = self
@@ -43,6 +46,15 @@ impl TableInstance {
             self.reference_values[offset + i] = *val;
         }
 
+        Ok(())
+    }
+    pub fn fill(&mut self, start: usize, end: usize, val: Value) -> Result<()> {
+        self.reference_values[start..end].fill(val);
+
+        Ok(())
+    }
+    pub fn grow(&mut self, size: usize, val: Value) -> Result<()> {
+        self.reference_values.extend(vec![val; size]);
         Ok(())
     }
 

@@ -195,7 +195,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 return Err(ValidationError::EndOpCodeExpected);
             }
             let byte = self.reader.next_byte()?;
-            info!("Validating Byte: {byte:#04X}");
+            trace!("Validating Byte: {byte:#04X}");
             trace!("Stack: {:?}", self.abstract_value_stack);
             match byte {
                 I32_CONST => {
@@ -476,7 +476,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 TABLE_GET => {
                     let table_idx = self.reader.next_leb128_u32()? as usize;
 
-                    if self.module_environment.tablesec.len() <= table_idx {
+                    if tables.len() <= table_idx {
                         return Err(ValidationError::UndefinedTable);
                     }
                     let ref_type = tables.get(table_idx).unwrap();
@@ -486,7 +486,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 TABLE_SET => {
                     let table_idx = self.reader.next_leb128_u32()? as usize;
 
-                    if self.module_environment.tablesec.len() <= table_idx {
+                    if tables.len() <= table_idx {
                         return Err(ValidationError::UndefinedTable);
                     }
 
@@ -914,27 +914,64 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 EXTENSION_PREFIX => {
                     let byte = self.reader.next_leb128_u32()?;
+                    trace!("Validating Byte: {byte:#04X}");
                     match byte {
                         TABLE_INIT => {
                             let element_idx = self.reader.next_leb128_u32()? as usize;
                             let table_idx = self.reader.next_leb128_u32()? as usize;
-                            let table = self
-                                .module_environment
-                                .tablesec
-                                .get(table_idx)
-                                .ok_or(ValidationError::TypeMismatch)?;
+                            let table =
+                                tables.get(table_idx).ok_or(ValidationError::TypeMismatch)?;
                             let element = self
                                 .module_environment
                                 .elementsec
                                 .get(element_idx)
                                 .ok_or(ValidationError::TypeMismatch)?;
 
-                            if table.ref_type.to_val_type() != element.ref_type {
+                            if table.to_val_type() != element.ref_type {
                                 return Err(ValidationError::IllegalSelectType);
                             }
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
                             self.abstract_value_stack.pop_expected(ValType::I32)?;
+                        }
+                        TABLE_SIZE => {
+                            let table_idx = self.reader.next_leb128_u32()? as usize;
+                            tables.get(table_idx).ok_or(ValidationError::UnknownTable)?;
+                            self.abstract_value_stack.push(ValType::I32);
+                        }
+                        TABLE_COPY => {
+                            let table_idx_x = self.reader.next_leb128_u32()? as usize;
+                            let table_idx_y = self.reader.next_leb128_u32()? as usize;
+                            let table_x = tables
+                                .get(table_idx_x)
+                                .ok_or(ValidationError::UnknownTable)?;
+                            let table_y = tables
+                                .get(table_idx_y)
+                                .ok_or(ValidationError::UnknownTable)?;
+                            if table_x != table_y {
+                                return Err(ValidationError::TypeMismatch);
+                            }
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                        }
+                        TABLE_FILL => {
+                            let table_idx = self.reader.next_leb128_u32()? as usize;
+                            let table =
+                                tables.get(table_idx).ok_or(ValidationError::UnknownTable)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack
+                                .pop_expected(table.to_val_type())?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                        }
+                        TABLE_GROW => {
+                            let table_idx = self.reader.next_leb128_u32()? as usize;
+                            let table =
+                                tables.get(table_idx).ok_or(ValidationError::UnknownTable)?;
+                            self.abstract_value_stack.pop_expected(ValType::I32)?;
+                            self.abstract_value_stack
+                                .pop_expected(table.to_val_type())?;
+                            self.abstract_value_stack.push(ValType::I32);
                         }
                         I32_TRUNC_SAT_F32_S | I32_TRUNC_SAT_F32_U => {
                             self.abstract_value_stack.pop_expected(ValType::F32)?;

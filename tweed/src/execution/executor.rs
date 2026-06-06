@@ -1079,7 +1079,7 @@ impl Executor {
                     let val = self.stack.pop();
                     let index = self.stack.pop_i32() as usize;
                     table.insert(index, &[val])?;
-                    info!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val)
+                    trace!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val)
                 }
 
                 I32_TRUNC_F32_S => {
@@ -1867,6 +1867,93 @@ impl Executor {
                             }
                             let elems_to_copy = &elem.references[s..src_end];
                             tab.insert(d, elems_to_copy)?;
+                        }
+                        TABLE_SIZE => {
+                            let table_idx = reader.next_leb128_u32();
+                            let table_addr = instance.tableaddr.get(table_idx as usize).unwrap(); // validated
+                            let tab = store.tables.get_mut(*table_addr).unwrap(); // validated
+                            info!("TABLE_SIZE {:?}", tab.reference_count());
+
+                            self.stack.push(Value::I32(tab.reference_count() as i32))?;
+                        }
+                        TABLE_COPY => {
+                            let table_idx_x = reader.next_leb128_u32(); // Destination
+                            let table_idx_y = reader.next_leb128_u32(); // Source
+                            let table_x_addr =
+                                instance.tableaddr.get(table_idx_x as usize).unwrap();
+                            let table_y_addr =
+                                instance.tableaddr.get(table_idx_y as usize).unwrap();
+
+                            let n = self.stack.pop_i32() as usize; // size
+                            let s = self.stack.pop_i32() as usize; // source
+                            let d = self.stack.pop_i32() as usize; // destination
+
+                            let src_end = s
+                                .checked_add(n)
+                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
+
+                            let dst_end = d
+                                .checked_add(n)
+                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
+                            let src_data = {
+                                let table_y = store.tables.get(*table_y_addr).unwrap();
+                                let len = table_y.reference_values.len();
+                                if src_end > len {
+                                    return Err(ExecutionError::TableAccessOutOfBounds);
+                                };
+
+                                let data = table_y.get_slice(s, n)?.to_vec();
+                                data
+                            };
+
+                            let table_x = store.tables.get_mut(*table_x_addr).unwrap(); // validated
+                            if dst_end > table_x.reference_values.len() {
+                                return Err(ExecutionError::TableAccessOutOfBounds);
+                            }
+                            table_x.insert(d, &src_data)?;
+                        }
+                        TABLE_FILL => {
+                            let table_idx = reader.next_leb128_u32();
+                            let table_addr = instance.tableaddr.get(table_idx as usize).unwrap(); // validated
+                            let tab = store.tables.get_mut(*table_addr).unwrap(); // validated
+                            let n = self.stack.pop_i32() as usize; // size
+                            let val = self.stack.pop();
+                            let i = self.stack.pop_i32() as usize; // dest
+                            let end = i
+                                .checked_add(n)
+                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
+                            if end > tab.reference_count() {
+                                return Err(ExecutionError::TableAccessOutOfBounds);
+                            }
+                            tab.fill(i, end, val)?;
+                        }
+                        TABLE_GROW => {
+                            let table_idx = reader.next_leb128_u32();
+                            let table_addr = instance.tableaddr.get(table_idx as usize).unwrap(); // validated
+                            let tab = store.tables.get_mut(*table_addr).unwrap(); // validated
+
+                            let sz = tab.reference_count();
+
+                            let n = self.stack.pop_i32() as usize; // size
+                            let val = self.stack.pop();
+
+                            let lens = sz.checked_add(n);
+                            let Some(len) = lens else {
+                                self.stack.push(Value::I32(u32::MAX as i32))?;
+                                continue;
+                            };
+
+                            if let Some(max) = tab.table_type.limit.max {
+                                if len > max as usize {
+                                    self.stack.push(Value::I32(u32::MAX as i32))?;
+                                    continue;
+                                }
+                            }
+                            tab.grow(n, val)?;
+                            trace!("GROW n:{:?}, val:{:?}", n, val);
+
+                            tab.table_type.limit.min = len as u32;
+                            self.stack.push(Value::I32(sz as i32))?;
                         }
                         MEMORY_INIT => {
                             let data_index = reader.next_leb128_u32();
