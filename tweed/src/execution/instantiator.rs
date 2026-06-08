@@ -24,7 +24,9 @@ use crate::execution::instances::{
 
 use crate::validation::module::Module;
 
-use crate::execution::adresses::{FuncAddr, GlobalAddr, InstanceAddr, MemoryAddr, TableAddr};
+use crate::execution::adresses::{
+    DataAddr, ElementAddr, FuncAddr, GlobalAddr, InstanceAddr, MemoryAddr, TableAddr,
+};
 
 use crate::Value;
 
@@ -208,52 +210,56 @@ impl ModuleInstantiator {
         /*---------------------------------
          * DATA
          *---------------------------------*/
-        let mut data = Vec::new();
+        let mut datas: Vec<Option<DataAddr>> = vec![];
         let mut error_in_data_instantiation = None;
         for data_segment in module.datasec.iter() {
-            if let SegmentMode::Active {
-                memory_idx,
-                offset_start,
-                offset_end: _,
-            } = data_segment.mode
-            {
-                // find the address of the data in the memory
-                let data_address = {
-                    module.reader.seek(offset_start + 1);
-                    let return_values = execute_const_expr(
-                        &mut module.reader,
-                        &imported_global_addr,
-                        &all_function_idxs,
-                        &[ValType::I32],
-                        store,
-                    )?;
-                    let Value::I32(value) =
-                        return_values.first().ok_or(ExecutionError::TypeMismatch)?
-                    else {
-                        return Err(ExecutionError::TypeMismatch);
+            match data_segment.mode {
+                SegmentMode::Active {
+                    memory_idx,
+                    offset_start,
+                    offset_end: _,
+                } => {
+                    // find the address of the data in the memory
+                    let data_address = {
+                        module.reader.seek(offset_start + 1);
+                        let return_values = execute_const_expr(
+                            &mut module.reader,
+                            &imported_global_addr,
+                            &all_function_idxs,
+                            &[ValType::I32],
+                            store,
+                        )?;
+                        let Value::I32(value) =
+                            return_values.first().ok_or(ExecutionError::TypeMismatch)?
+                        else {
+                            return Err(ExecutionError::TypeMismatch);
+                        };
+                        *value
                     };
-                    *value
-                };
 
-                let memory_instance_addr = all_memory_idxs
-                    .get(memory_idx as usize)
-                    .ok_or(ExecutionError::InvalidMemoryIndex)?;
-                let instance = store.memories.get_mut(*memory_instance_addr)?;
-                if let Err(err) = instance.store(data_address as usize, 0, &data_segment.init) {
-                    error_in_data_instantiation = Some(err);
-                    break;
+                    let memory_instance_addr = all_memory_idxs
+                        .get(memory_idx as usize)
+                        .ok_or(ExecutionError::InvalidMemoryIndex)?;
+                    let instance = store.memories.get_mut(*memory_instance_addr)?;
+                    datas.push(None);
+                    if let Err(err) = instance.store(data_address as usize, 0, &data_segment.init) {
+                        error_in_data_instantiation = Some(err);
+                        break;
+                    }
+                }
+                SegmentMode::Passive => {
+                    let store_addr = store.datas.add_one(DataInstance {
+                        data: data_segment.init.clone(),
+                    });
+                    datas.push(Some(store_addr));
                 }
             }
-            data.push(DataInstance {
-                data: data_segment.init.clone(),
-            });
         }
-        let all_data_idxs = store.datas.add(data);
 
         /*---------------------------------
          * ELEMENTS
          *---------------------------------*/
-        let mut elements = Vec::new();
+        let mut elements: Vec<Option<ElementAddr>> = vec![];
         let mut error_in_element_instantiation = None;
         for element in module.elementsec.iter() {
             /*
@@ -322,19 +328,22 @@ impl ModuleInstantiator {
                         .get(table as usize)
                         .ok_or(ExecutionError::TypeMismatch)?;
                     let table_instance = store.tables.get_mut(*table_address)?;
-
+                    elements.push(None);
                     if let Err(err) = table_instance.insert(offset as usize, &instance.references) {
                         error_in_element_instantiation = Some(err);
                         break;
                     }
                 }
-                Mode::Passive => elements.push(instance),
+                Mode::Passive => {
+                    let store_addr = store.elements.add_one(instance);
+                    elements.push(Some(store_addr));
+                }
                 Mode::Declarative => {
-                    // do nothing
+                    elements.push(None);
                 }
             }
         }
-        let all_elem_idxs = store.elements.add(elements);
+
         let mut exports = BTreeMap::new();
         for export in &module.exportsec {
             exports.insert(export.name.clone(), export.context.clone());
@@ -350,8 +359,8 @@ impl ModuleInstantiator {
             tableaddr: all_table_idxs,
             memaddr: all_memory_idxs,
             globaladdr: all_global_idxs,
-            elemaddr: all_elem_idxs,
-            dataddr: all_data_idxs,
+            elemaddr: elements,
+            dataddr: datas,
             exports,
             reader: *store.reader.add(vec![module.reader]).first().unwrap(),
             start: start_address,

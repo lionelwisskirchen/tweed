@@ -1729,12 +1729,15 @@ impl Executor {
                     let byte = reader.next_leb128_u32();
                     match byte {
                         ELEM_DROP => {
-                            let element_idx = reader.next_leb128_u32();
-                            // Not validated as `declare` elems are not present
-                            let element_addr = instance
+                            let element_idx = reader.next_leb128_u32() as usize;
+
+                            let element_addr_res = instance
                                 .elemaddr
-                                .get(element_idx as usize)
-                                .ok_or(ExecutionError::UndefinedElement)?;
+                                .get(element_idx)
+                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
+                            let Some(element_addr) = element_addr_res else {
+                                continue;
+                            };
                             let elem = store.elements.get_mut(*element_addr).unwrap(); // validated
                             elem.references.clear();
                         }
@@ -1843,25 +1846,36 @@ impl Executor {
                             self.stack.push(Value::I64(res as i64))?;
                         }
                         DATA_DROP => {
-                            let data_index = reader.next_leb128_u32();
-                            let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
-
+                            let data_index = reader.next_leb128_u32() as usize;
+                            let data_addr_res = instance
+                                .dataddr
+                                .get(data_index)
+                                .ok_or(ExecutionError::MemoryAccessOutOfBounds)?; // validated
+                            let Some(data_addr) = data_addr_res else {
+                                continue;
+                            };
                             let data_inst = store.datas.get_mut(*data_addr).unwrap(); // validated
                             data_inst.clear();
                         }
                         TABLE_INIT => {
-                            let element_idx = reader.next_leb128_u32();
+                            let element_idx = reader.next_leb128_u32() as usize;
                             let table_idx = reader.next_leb128_u32();
-                            let table_addr = instance.tableaddr.get(table_idx as usize).unwrap(); // validated
-                            let tab = store.tables.get_mut(*table_addr).unwrap(); // validated
-
-                            // Not validated as `declare` elems are not present
-                            let element_addr = instance
-                                .elemaddr
-                                .get(element_idx as usize)
+                            let table_addr = instance
+                                .tableaddr
+                                .get(table_idx as usize)
                                 .ok_or(ExecutionError::TableAccessOutOfBounds)?;
 
-                            let elem = store.elements.get(*element_addr).unwrap(); // validated
+                            let tab = store.tables.get_mut(*table_addr).unwrap(); // validated
+
+                            let element_addr_res = instance
+                                .elemaddr
+                                .get(element_idx)
+                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
+                            let Some(element_addr) = *element_addr_res else {
+                                return Err(ExecutionError::TableAccessOutOfBounds);
+                            };
+
+                            let elem = store.elements.get(element_addr).unwrap(); // validated
                             let n = self.stack.pop_i32() as usize; // size
                             let s = self.stack.pop_i32() as usize; // offset
                             let d = self.stack.pop_i32() as usize; // destination
@@ -1966,13 +1980,20 @@ impl Executor {
                             self.stack.push(Value::I32(sz as i32))?;
                         }
                         MEMORY_INIT => {
-                            let data_index = reader.next_leb128_u32();
+                            let data_index = reader.next_leb128_u32() as usize;
                             let memory_index = reader.next_byte();
                             let number_of_bytes = self.stack.pop_i32() as usize;
                             let start_in_data_segment = self.stack.pop_i32() as usize;
                             let dest_address = self.stack.pop_i32() as usize;
 
-                            let data_addr = instance.dataddr.get(data_index as usize).unwrap(); // validated
+                            let data_addr_res = instance
+                                .dataddr
+                                .get(data_index)
+                                .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
+                            let Some(data_addr) = data_addr_res else {
+                                return Err(ExecutionError::MemoryAccessOutOfBounds);
+                            };
+
                             let data_inst = store.datas.get_mut(*data_addr).unwrap(); // validated
                             if start_in_data_segment + number_of_bytes > data_inst.data.len() {
                                 return Err(ExecutionError::MemoryAccessOutOfBounds);
