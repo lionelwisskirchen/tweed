@@ -415,3 +415,7 @@ fn spec_tests_table_copy() {
 fn spec_tests_table_sub() {
     run_spec_test(Path::new("./tests/spec/testsuite/table-sub.wast"));
 }
+#[test_log::test]
+fn spec_tests_bulk() {
+    run_spec_test(Path::new("./tests/spec/testsuite/bulk.wast"));
+}

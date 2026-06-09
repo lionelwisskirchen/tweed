@@ -210,7 +210,7 @@ impl ModuleInstantiator {
         /*---------------------------------
          * DATA
          *---------------------------------*/
-        let mut datas: Vec<Option<DataAddr>> = vec![];
+        let mut datas: Vec<DataAddr> = vec![];
         let mut error_in_data_instantiation = None;
         for data_segment in module.datasec.iter() {
             match data_segment.mode {
@@ -241,8 +241,14 @@ impl ModuleInstantiator {
                         .get(memory_idx as usize)
                         .ok_or(ExecutionError::InvalidMemoryIndex)?;
                     let instance = store.memories.get_mut(*memory_instance_addr)?;
-                    datas.push(None);
-                    if let Err(err) = instance.store(data_address as usize, 0, &data_segment.init) {
+                    let mut data_inst = DataInstance {
+                        data: data_segment.init.clone(),
+                    };
+                    let data_elems = data_inst.data.clone();
+                    data_inst.clear();
+                    let store_addr = store.datas.add_one(data_inst);
+                    datas.push(store_addr);
+                    if let Err(err) = instance.store(data_address as usize, 0, &data_elems) {
                         error_in_data_instantiation = Some(err);
                         break;
                     }
@@ -251,7 +257,7 @@ impl ModuleInstantiator {
                     let store_addr = store.datas.add_one(DataInstance {
                         data: data_segment.init.clone(),
                     });
-                    datas.push(Some(store_addr));
+                    datas.push(store_addr);
                 }
             }
         }
@@ -259,7 +265,7 @@ impl ModuleInstantiator {
         /*---------------------------------
          * ELEMENTS
          *---------------------------------*/
-        let mut elements: Vec<Option<ElementAddr>> = vec![];
+        let mut elements: Vec<ElementAddr> = vec![];
         let mut error_in_element_instantiation = None;
         for element in module.elementsec.iter() {
             /*
@@ -267,7 +273,7 @@ impl ModuleInstantiator {
              * Here the element is either created by using the respective reference to a function on
              * the store or by resolving a const expression
              */
-            let instance = match &element.items {
+            let mut instance = match &element.items {
                 ElementItems::RefFuncs(refs) => {
                     let mut resolved_refs: Vec<Value> = Vec::new();
                     for idx in refs {
@@ -328,18 +334,23 @@ impl ModuleInstantiator {
                         .get(table as usize)
                         .ok_or(ExecutionError::TypeMismatch)?;
                     let table_instance = store.tables.get_mut(*table_address)?;
-                    elements.push(None);
-                    if let Err(err) = table_instance.insert(offset as usize, &instance.references) {
+                    let refs = instance.references.clone();
+                    instance.references.clear();
+                    let store_addr = store.elements.add_one(instance);
+                    elements.push(store_addr);
+                    if let Err(err) = table_instance.insert(offset as usize, &refs) {
                         error_in_element_instantiation = Some(err);
                         break;
                     }
                 }
                 Mode::Passive => {
                     let store_addr = store.elements.add_one(instance);
-                    elements.push(Some(store_addr));
+                    elements.push(store_addr);
                 }
                 Mode::Declarative => {
-                    elements.push(None);
+                    instance.references.clear();
+                    let store_addr = store.elements.add_one(instance);
+                    elements.push(store_addr);
                 }
             }
         }

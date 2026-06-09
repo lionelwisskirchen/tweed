@@ -1730,15 +1730,12 @@ impl Executor {
                     match byte {
                         ELEM_DROP => {
                             let element_idx = reader.next_leb128_u32() as usize;
-
-                            let element_addr_res = instance
-                                .elemaddr
-                                .get(element_idx)
-                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
-                            let Some(element_addr) = element_addr_res else {
-                                continue;
-                            };
-                            let elem = store.elements.get_mut(*element_addr).unwrap(); // validated
+                            // 2. Assert: due to validation, 𝐹.module.elemaddrs[𝑥] exists.
+                            // 3. Let 𝑎 be the element address 𝐹.module.elemaddrs[𝑥].
+                            let element_addr = instance.elemaddr.get(element_idx).unwrap();
+                            // 4. Assert: due to validation, 𝑆.elems[𝑎] exists.
+                            let elem = store.elements.get_mut(*element_addr).unwrap();
+                            // Replace 𝑆.elems[𝑎].elem with 𝜖.
                             elem.references.clear();
                         }
                         I32_TRUNC_SAT_F32_S => {
@@ -1846,39 +1843,42 @@ impl Executor {
                             self.stack.push(Value::I64(res as i64))?;
                         }
                         DATA_DROP => {
+                            // 2. Assert: due to validation, 𝐹.module.dataaddrs[𝑥] exists.
+                            // 3. Let 𝑎 be the data address 𝐹.module.dataaddrs[𝑥].
                             let data_index = reader.next_leb128_u32() as usize;
-                            let data_addr_res = instance
-                                .dataddr
-                                .get(data_index)
-                                .ok_or(ExecutionError::MemoryAccessOutOfBounds)?; // validated
-                            let Some(data_addr) = data_addr_res else {
-                                continue;
-                            };
-                            let data_inst = store.datas.get_mut(*data_addr).unwrap(); // validated
+                            let data_addr = instance.dataddr.get(data_index).unwrap();
+                            // 4. Assert: due to validation, 𝑆.datas[𝑎] exists.
+                            let data_inst = store.datas.get_mut(*data_addr).unwrap();
+                            // 5. Replace 𝑆.datas[𝑎] with the data instance {data 𝜖}.
                             data_inst.clear();
                         }
                         TABLE_INIT => {
                             let element_idx = reader.next_leb128_u32() as usize;
                             let table_idx = reader.next_leb128_u32();
-                            let table_addr = instance
-                                .tableaddr
-                                .get(table_idx as usize)
-                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
 
+                            // 2. Assert: due to validation, 𝐹.module.tableaddrs[𝑥] exists.
+                            // 3. Let ta be the table address 𝐹.module.tableaddrs[𝑥]
+                            let table_addr = instance.tableaddr.get(table_idx as usize).unwrap();
+                            // 4. Assert: due to validation, 𝑆.tables[ta] exists.
+                            // 5. Let tab be the table instance 𝑆.tables[ta]
                             let tab = store.tables.get_mut(*table_addr).unwrap(); // validated
 
-                            let element_addr_res = instance
-                                .elemaddr
-                                .get(element_idx)
-                                .ok_or(ExecutionError::TableAccessOutOfBounds)?;
-                            let Some(element_addr) = *element_addr_res else {
-                                return Err(ExecutionError::TableAccessOutOfBounds);
-                            };
+                            // 6. Assert: due to validation, 𝐹.module.elemaddrs[𝑦] exists
+                            // 7. Let ea be the element address 𝐹.module.elemaddrs[𝑦].
+                            let element_addr = instance.elemaddr.get(element_idx).unwrap();
+                            // 8. Assert: due to validation, 𝑆.elems[ea] exists.
+                            // 9. Let elem be the element instance 𝑆.elems[ea]
+                            let elem = store.elements.get(*element_addr).unwrap(); // validated
 
-                            let elem = store.elements.get(element_addr).unwrap(); // validated
-                            let n = self.stack.pop_i32() as usize; // size
-                            let s = self.stack.pop_i32() as usize; // offset
-                            let d = self.stack.pop_i32() as usize; // destination
+                            // 10. Assert: due to validation, a value of value type i32 is on the top of the stack.
+                            // 11. Pop the value i32.const 𝑛 from the stack.
+                            let n = self.stack.pop_i32() as usize;
+                            // 12. Assert: due to validation, a value of value type i32 is on the top of the stack.
+                            // 13. Pop the value i32.const 𝑠 from the stack.
+                            let s = self.stack.pop_i32() as usize;
+                            // 14. Assert: due to validation, a value of value type i32 is on the top of the stack.
+                            // 15. Pop the value i32.const 𝑑 from the stack.
+                            let d = self.stack.pop_i32() as usize;
 
                             let src_end = s
                                 .checked_add(n)
@@ -1886,9 +1886,14 @@ impl Executor {
                             let dst_end = d
                                 .checked_add(n)
                                 .ok_or(ExecutionError::TableAccessOutOfBounds)?;
+
+                            // If 𝑠 + 𝑛 is larger than the length of elem.elem or 𝑑 + 𝑛 is larger
+                            // than the length of tab.elem, then:
+                            // a. Trap.
                             if src_end > elem.references.len() || dst_end > tab.reference_count() {
                                 return Err(ExecutionError::TableAccessOutOfBounds);
                             }
+
                             let elems_to_copy = &elem.references[s..src_end];
                             tab.insert(d, elems_to_copy)?;
                         }
@@ -1981,31 +1986,43 @@ impl Executor {
                         }
                         MEMORY_INIT => {
                             let data_index = reader.next_leb128_u32() as usize;
-                            let memory_index = reader.next_byte();
-                            let number_of_bytes = self.stack.pop_i32() as usize;
-                            let start_in_data_segment = self.stack.pop_i32() as usize;
-                            let dest_address = self.stack.pop_i32() as usize;
+                            let memory_index = reader.next_byte() as usize;
+                            // 2. Assert: due to validation, 𝐹.module.memaddrs[0] exists.
+                            // 3. Let ma be the memory address 𝐹.module.memaddrs[0].
+                            let mem_addr = instance.memaddr.get(memory_index).unwrap();
 
-                            let data_addr_res = instance
-                                .dataddr
-                                .get(data_index)
+                            // 4. Assert: due to validation, 𝑆.mems[ma] exists.
+                            // 5. Let mem be the memory instance 𝑆.mems[ma]
+                            let mem = store.memories.get_mut(*mem_addr).unwrap();
+                            // 6. Assert: due to validation, 𝐹.module.dataaddrs[𝑥] exists.
+                            // 7. Let da be the data address 𝐹.module.dataaddrs[𝑥].
+                            let data_addr = instance.dataddr.get(data_index).unwrap();
+                            // 8. Assert: due to validation, 𝑆.datas[da] exists.
+                            // 9. Let data be the data instance 𝑆.datas[da].
+                            let data = store.datas.get_mut(*data_addr).unwrap();
+
+                            // 10. Assert: due to validation, a value of value type i32 is on the top of the stack.
+                            // 11. Pop the value i32.const 𝑛 from the stack.
+                            let n = self.stack.pop_i32() as usize;
+                            // 12. Assert: due to validation, a value of value type i32 is on the top of the stack.
+                            // 13. Pop the value i32.const 𝑠 from the stack
+                            let s = self.stack.pop_i32() as usize;
+                            // 14. Assert: due to validation, a value of value type i32 is on the top of the stack.
+                            // 15. Pop the value i32.const 𝑑 from the stack
+                            let d = self.stack.pop_i32() as usize;
+                            let src_end = s
+                                .checked_add(n)
                                 .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
-                            let Some(data_addr) = data_addr_res else {
+                            let dst_end = d
+                                .checked_add(n)
+                                .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
+                            // 16. If 𝑠 + 𝑛 is larger than the length of data.data or 𝑑 + 𝑛 is larger than the length of mem.data, then:
+                            // a. Trap.
+                            if src_end > data.data.len() || dst_end > mem.bytes.len() {
                                 return Err(ExecutionError::MemoryAccessOutOfBounds);
                             };
-
-                            let data_inst = store.datas.get_mut(*data_addr).unwrap(); // validated
-                            if start_in_data_segment + number_of_bytes > data_inst.data.len() {
-                                return Err(ExecutionError::MemoryAccessOutOfBounds);
-                            }
-                            let data =
-                                data_inst.load_slice(start_in_data_segment, number_of_bytes)?;
-
-                            let mem =
-                                map_memory(memory_index as usize, instance, &mut store.memories)
-                                    .unwrap();
-                            // Destination bound check happens in store function
-                            mem.store(dest_address, 0, &data)?;
+                            let data = data.load_slice(s, n)?;
+                            mem.store(d, 0, &data)?;
                         }
 
                         MEMORY_COPY => {
