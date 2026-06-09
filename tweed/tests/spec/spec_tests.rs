@@ -429,3 +429,10 @@ fn spec_tests_utf8_custom_section_id() {
 fn spec_tests_utf8_import_field() {
     run_spec_test(Path::new("./tests/spec/testsuite/utf8-import-field.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_skip_stack_guard_page() {
+    run_spec_test(Path::new(
+        "./tests/spec/testsuite/skip-stack-guard-page.wast",
+    ));
+}

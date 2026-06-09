@@ -8,8 +8,6 @@ use alloc::vec::Vec;
 use super::module_environment::ModuleEnvironment;
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
-pub const MAX_LOCALS: u32 = (2 ^ 32) - 1;
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FuncCode {
     pub locals: Vec<ValType>,
@@ -56,18 +54,25 @@ pub fn process_code_section(
         let func_body_size = reader.next_leb128_u32()?;
         let func_body_end = func_body_size as usize + reader.current_index();
         let number_of_locals = reader.next_leb128_u32()?;
-
-        let mut locals = Vec::new();
+        let mut aggregated = Vec::new();
+        let mut sum_count: u32 = 0;
         for _ in 0..number_of_locals {
             let count = reader.next_leb128_u32()?;
-            if count > MAX_LOCALS {
-                return Err(ValidationError::TooManyLocals);
-            }
+
             let local_type = ValType::lookup(&reader.next_byte()?)?;
+            sum_count = sum_count // No more than 2^32-1 locals.
+                .checked_add(count)
+                .ok_or(ValidationError::TooManyLocals)?;
+
+            aggregated.push((count, local_type));
+        }
+        let mut locals = Vec::new();
+        for (count, local_type) in aggregated {
             for _ in 0..count {
                 locals.push(local_type);
             }
         }
+
         let start_position = reader.current_index() + 1;
         let mut validator = CodeValidator::new(reader, environment);
 
