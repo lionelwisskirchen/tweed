@@ -130,6 +130,7 @@ impl Display for ExecutionError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValidationError {
+    MalformedUTF8Encoding,
     DuplicateExportName,
     OffsetOutOfRange,
     UnexpectedContentAfterLastSection,
@@ -193,6 +194,7 @@ pub enum ValidationError {
 impl Display for ValidationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::MalformedUTF8Encoding => f.write_str("malformed UTF-8 encoding"),
             Self::OffsetOutOfRange => f.write_str("offset out of range"),
 
             Self::MalformedOneByteFlag => f.write_str("malformed limits flags"),

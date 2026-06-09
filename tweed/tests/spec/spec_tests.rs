@@ -419,3 +419,13 @@ fn spec_tests_table_sub() {
 fn spec_tests_bulk() {
     run_spec_test(Path::new("./tests/spec/testsuite/bulk.wast"));
 }
+#[test_log::test]
+fn spec_tests_utf8_custom_section_id() {
+    run_spec_test(Path::new(
+        "./tests/spec/testsuite/utf8-custom-section-id.wast",
+    ));
+}
+#[test_log::test]
+fn spec_tests_utf8_import_field() {
+    run_spec_test(Path::new("./tests/spec/testsuite/utf8-import-field.wast"));
+}

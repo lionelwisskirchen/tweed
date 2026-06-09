@@ -44,7 +44,7 @@ impl WasmReader {
     }
     pub fn next_chunk_as_string(&mut self, number_of_bytes: usize) -> Result<String> {
         let bytes = self.next_chunk(number_of_bytes)?;
-        String::from_utf8(bytes.to_vec()).map_err(|_| ValidationError::InvalidStringRepresentation)
+        String::from_utf8(bytes.to_vec()).map_err(|_| ValidationError::MalformedUTF8Encoding)
     }
 
     pub fn next_byte(&mut self) -> Result<u8> {
