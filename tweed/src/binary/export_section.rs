@@ -1,5 +1,5 @@
 extern crate alloc;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::core::error::ValidationError;
 use crate::core::wasm_reader::WasmReader;
@@ -26,6 +26,7 @@ pub struct Export {
 pub fn process_export_section(
     reader: &mut WasmReader,
     module: &ModuleEnvironment,
+    refs: &mut BTreeSet<usize>,
 ) -> Result<Vec<Export>> {
     let section_size = reader.next_leb128_u32()?;
     let start_of_section = reader.current_index();
@@ -49,6 +50,7 @@ pub fn process_export_section(
                 if (index as usize) >= module.funcsec.len() {
                     return Err(ValidationError::UnknownFunction(None));
                 }
+                refs.insert(index as usize);
                 ExportContext::FunctionExport(index)
             }
             0x01 => {

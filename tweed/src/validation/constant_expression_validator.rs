@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::opcode::*;
 
@@ -14,6 +16,7 @@ pub fn validate_const_expr(
     section_end: usize,
     module: &mut ModuleEnvironment,
     number_of_globals: usize,
+    refs: &mut BTreeSet<usize>,
 ) -> Result<()> {
     let mut abstract_value_stack: ValidationStack = ValidationStack::default();
     loop {
@@ -76,7 +79,7 @@ pub fn validate_const_expr(
             }
             REF_FUNC => {
                 let func_idx = reader.next_leb128_u32()? as usize;
-
+                refs.insert(func_idx);
                 module
                     .funcsec
                     .get(func_idx)

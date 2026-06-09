@@ -130,6 +130,7 @@ impl Display for ExecutionError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValidationError {
+    UndeclaredFunctionRef,
     MalformedUTF8Encoding,
     DuplicateExportName,
     OffsetOutOfRange,
@@ -194,6 +195,7 @@ pub enum ValidationError {
 impl Display for ValidationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::UndeclaredFunctionRef => f.write_str("undeclared function reference"),
             Self::MalformedUTF8Encoding => f.write_str("malformed UTF-8 encoding"),
             Self::OffsetOutOfRange => f.write_str("offset out of range"),
 

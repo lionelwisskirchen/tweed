@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::{
     binary::{
         data_count_section::process_data_count_section, element_section::process_element_section,
@@ -100,6 +102,16 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             _ => ValidationError::InvalidVersion,
         })?;
     let mut number_of_internal_funcs = 0;
+
+    // The list of function indices that occur in the module outside functions
+    // and can hence be used to form references inside them.
+    // 𝐶.refs is the set funcidx(module with funcs = 𝜖 with start = 𝜖), i.e., the set of function indices
+    // occurring in the module, except in its functions or start function.
+    //
+    // https://webassembly.github.io/spec/versions/core/WebAssembly-2.0.pdf Page 48
+    //
+    let mut refs: BTreeSet<usize> = BTreeSet::new();
+
     while let Ok(section_code) = reader.next_byte() {
         let next_section = Section::try_from(section_code)?;
         // Custom Section can be at any place
@@ -181,7 +193,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
 
             Section::Global => {
                 info!("Process Global Section");
-                process_global_section(reader, &mut module).map_err(|e| match e {
+                process_global_section(reader, &mut module, &mut refs).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => {
                         ValidationError::UnexpectedEndOfFunctionOrSection
                     }
@@ -191,7 +203,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             Section::Export => {
                 info!("Process Export Section");
                 module.exportsec =
-                    process_export_section(reader, &module).map_err(|e| match e {
+                    process_export_section(reader, &module, &mut refs).map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => {
                             ValidationError::UnexpectedEndOfFunctionOrSection
                         }
@@ -220,8 +232,8 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
             Section::Element => {
                 info!("Process Element Section");
-                module.elementsec =
-                    process_element_section(reader, &mut module).map_err(|e| match e {
+                module.elementsec = process_element_section(reader, &mut module, &mut refs)
+                    .map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
                         _ => e,
                     })?;
@@ -229,8 +241,8 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             Section::Code => {
                 info!("Process Code Section");
 
-                let (functions, sidetables) =
-                    process_code_section(reader, &module).map_err(|e| match e {
+                let (functions, sidetables) = process_code_section(reader, &module, &mut refs)
+                    .map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => {
                             ValidationError::UnexpectedEndOfFunctionOrSection
                         }
@@ -243,7 +255,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             Section::Data => {
                 info!("Process Data Section");
                 module.datasec =
-                    process_data_section(reader, &mut module).map_err(|e| match e {
+                    process_data_section(reader, &mut module, &mut refs).map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => {
                             ValidationError::UnexpectedEndOfFunctionOrSection
                         }

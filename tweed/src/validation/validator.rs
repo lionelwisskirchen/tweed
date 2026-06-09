@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::alloc::borrow::ToOwned;
 use crate::binary::global_section::GlobalType;
 use crate::binary::memory_section::Limits;
@@ -27,16 +29,22 @@ pub struct CodeValidator<'a, 'b> {
     abstract_control_stack: ControlStack,
     abstract_value_stack: ValidationStack,
     side_table: SideTable,
+    refs: &'b BTreeSet<usize>,
 }
 
 impl<'a, 'b> CodeValidator<'a, 'b> {
-    pub fn new(reader: &'a mut WasmReader, module_environment: &'b ModuleEnvironment) -> Self {
+    pub fn new(
+        reader: &'a mut WasmReader,
+        module_environment: &'b ModuleEnvironment,
+        refs: &'b BTreeSet<usize>,
+    ) -> Self {
         CodeValidator {
             reader,
             module_environment,
             abstract_control_stack: ControlStack::default(),
             abstract_value_stack: ValidationStack::default(),
             side_table: SideTable::default(),
+            refs,
         }
     }
 
@@ -195,7 +203,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 return Err(ValidationError::EndOpCodeExpected);
             }
             let byte = self.reader.next_byte()?;
-            trace!("Validating Byte: {byte:#04X}");
+            info!("Validating Byte: {byte:#04X}");
             trace!("Stack: {:?}", self.abstract_value_stack);
             match byte {
                 I32_CONST => {
@@ -906,6 +914,10 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 REF_FUNC => {
                     let func_idx = self.reader.next_leb128_u32()? as usize;
+                    info!("{:?}", self.refs);
+                    if !self.refs.contains(&func_idx) {
+                        return Err(ValidationError::UndeclaredFunctionRef);
+                    };
                     self.module_environment
                         .funcsec
                         .get(func_idx)

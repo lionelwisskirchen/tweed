@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use alloc::vec::Vec;
 
 use crate::core::error::ValidationError;
@@ -48,6 +50,7 @@ pub struct DataSegment {
 pub fn process_data_section(
     reader: &mut WasmReader,
     module: &mut ModuleEnvironment,
+    refs: &mut BTreeSet<usize>,
 ) -> Result<Vec<DataSegment>> {
     let section_size = reader.next_leb128_u32()?;
     let start_of_section = reader.current_index();
@@ -72,7 +75,7 @@ pub fn process_data_section(
                     return Err(ValidationError::UnknownMemoryIdx(memory_index));
                 }
 
-                data_segments.push(create_data_segment(reader, module, 0, section_end)?);
+                data_segments.push(create_data_segment(reader, module, 0, section_end, refs)?);
             }
             1 => {
                 // Mode passive
@@ -98,6 +101,7 @@ pub fn process_data_section(
                     module,
                     memory_index,
                     section_end,
+                    refs,
                 )?);
             }
             _ => unreachable!(),
@@ -114,6 +118,7 @@ fn create_data_segment(
     module: &mut ModuleEnvironment,
     memory_index: u32,
     section_end: usize,
+    refs: &mut BTreeSet<usize>,
 ) -> Result<DataSegment> {
     // Mode active with explicit memory index
     let start = reader.current_index();
@@ -127,6 +132,7 @@ fn create_data_segment(
         section_end,
         module,
         module.globalsec.len(),
+        refs,
     )?;
     let end = reader.current_index();
     let data_size = reader.next_leb128_u32()?;

@@ -436,3 +436,7 @@ fn spec_tests_skip_stack_guard_page() {
         "./tests/spec/testsuite/skip-stack-guard-page.wast",
     ));
 }
+#[test_log::test]
+fn spec_tests_ref_func() {
+    run_spec_test(Path::new("./tests/spec/testsuite/ref_func.wast"));
+}

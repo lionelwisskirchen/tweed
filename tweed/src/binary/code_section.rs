@@ -1,4 +1,6 @@
 extern crate alloc;
+use std::collections::BTreeSet;
+
 use crate::core::error::ValidationError;
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};
 use crate::validation::side_table::SideTable;
@@ -39,6 +41,7 @@ pub struct FuncCode {
 pub fn process_code_section(
     reader: &mut WasmReader,
     environment: &ModuleEnvironment,
+    refs: &mut BTreeSet<usize>,
 ) -> Result<(Vec<FuncCode>, Vec<SideTable>)> {
     let section_size = reader.next_leb128_u32()?;
     let start_of_section = reader.current_index();
@@ -74,7 +77,7 @@ pub fn process_code_section(
         }
 
         let start_position = reader.current_index() + 1;
-        let mut validator = CodeValidator::new(reader, environment);
+        let mut validator = CodeValidator::new(reader, environment, refs);
 
         // get the offset where the functions of the module start
         let number_of_imported_functions = environment.importsec.functions.len();

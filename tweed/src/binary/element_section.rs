@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::binary::table_section::Table;
 use crate::core::error::ValidationError;
 use crate::core::value_types::{RefType, ValType};
@@ -76,6 +78,7 @@ pub struct ElementSegment {
 pub fn process_element_section(
     reader: &mut WasmReader,
     module: &mut ModuleEnvironment,
+    refs: &mut BTreeSet<usize>,
 ) -> Result<Vec<ElementSegment>> {
     let section_size = reader.next_leb128_u32()?;
     let section_end = reader.current_index() + section_size as usize;
@@ -83,7 +86,7 @@ pub fn process_element_section(
     let mut elements = Vec::new();
     let number_of_element_segments = reader.next_leb128_u32()?;
     for _ in 0..number_of_element_segments {
-        elements.push(process_element(reader, section_end, module)?);
+        elements.push(process_element(reader, section_end, module, refs)?);
     }
     if reader.current_index() != section_end {
         return Err(ValidationError::SectionSizeMismatch);
@@ -94,6 +97,7 @@ fn process_element(
     reader: &mut WasmReader,
     section_end: usize,
     module: &mut ModuleEnvironment,
+    refs: &mut BTreeSet<usize>,
 ) -> Result<ElementSegment> {
     let flag = reader.next_leb128_u32()?;
     let mut all_tables: Vec<Table> = Vec::new();
@@ -111,6 +115,7 @@ fn process_element(
                 section_end,
                 module,
                 module.globalsec.len(),
+                refs,
             )?; // offset expression
 
             let end = reader.current_index();
@@ -132,10 +137,10 @@ fn process_element(
 
             for _ in 0..number_of_elements {
                 let function_idx = reader.next_leb128_u32()?;
-
                 if module.funcsec.get(function_idx as usize).is_none() {
                     return Err(ValidationError::UnknownFunction(None));
                 }
+                refs.insert(function_idx as usize);
                 function_references.push(function_idx);
             }
 
@@ -159,6 +164,7 @@ fn process_element(
                     for _ in 0..number_of_elements {
                         let function_idx = reader.next_leb128_u32()?;
                         function_references.push(function_idx);
+                        refs.insert(function_idx as usize);
                     }
                     Ok(ElementSegment {
                         ref_type: ValType::FuncRef,
@@ -184,6 +190,7 @@ fn process_element(
                 section_end,
                 module,
                 module.globalsec.len(),
+                refs,
             )?; // offset expression
             let end = reader.current_index();
             let mode = Mode::Active {
@@ -202,7 +209,7 @@ fn process_element(
                         if module.funcsec.get(function_idx as usize).is_none() {
                             return Err(ValidationError::UnknownFunction(None));
                         }
-
+                        refs.insert(function_idx as usize);
                         function_references.push(function_idx);
                     }
                     Ok(ElementSegment {
@@ -226,6 +233,7 @@ fn process_element(
                         if module.funcsec.get(function_idx as usize).is_none() {
                             return Err(ValidationError::UnknownFunction(None));
                         }
+                        refs.insert(function_idx as usize);
                         function_references.push(function_idx);
                     }
                     Ok(ElementSegment {
@@ -245,6 +253,7 @@ fn process_element(
                 section_end,
                 module,
                 module.globalsec.len(),
+                refs,
             )?; // offset expression
             let table = all_tables.first().ok_or(ValidationError::UnknownTable)?;
 
@@ -267,6 +276,7 @@ fn process_element(
                     section_end,
                     module,
                     module.globalsec.len(),
+                    refs,
                 )?;
                 let end = reader.current_index();
 
@@ -293,6 +303,7 @@ fn process_element(
                     section_end,
                     module,
                     module.globalsec.len(),
+                    refs,
                 )
                 .map_err(|e| match e {
                     ValidationError::TypeMismatch => ValidationError::MalformedRefType,
@@ -316,6 +327,7 @@ fn process_element(
                 section_end,
                 module,
                 module.globalsec.len(),
+                refs,
             )?; // offset expression
             let end = reader.current_index();
             let mode = Mode::Active {
@@ -343,6 +355,7 @@ fn process_element(
                     section_end,
                     module,
                     module.globalsec.len(),
+                    refs,
                 )?;
 
                 let end = reader.current_index();
@@ -368,6 +381,7 @@ fn process_element(
                     section_end,
                     module,
                     module.globalsec.len(),
+                    refs,
                 )?;
 
                 let end = reader.current_index();

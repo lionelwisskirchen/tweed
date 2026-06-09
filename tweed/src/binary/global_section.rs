@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::core::error::ValidationError;
 use crate::core::value_types::ValType;
 use crate::core::wasm_reader::WasmReader;
@@ -22,6 +24,7 @@ pub struct GlobalType {
 pub fn process_global_section(
     reader: &mut WasmReader,
     module: &mut ModuleEnvironment,
+    refs: &mut BTreeSet<usize>,
 ) -> Result<()> {
     let section_size = reader.next_leb128_u32()?;
     let section_end = reader.current_index() + section_size as usize;
@@ -47,8 +50,9 @@ pub fn process_global_section(
             section_end,
             module,
             number_of_globals as usize,
+            refs,
         )?;
-
+        info!("{:?}", refs);
         let end = reader.current_index();
         let global_type = GlobalType {
             value_type,
