@@ -1,5 +1,5 @@
 extern crate alloc;
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use crate::core::error::ValidationError;
 use crate::core::{value_types::ValType, wasm_reader::WasmReader};

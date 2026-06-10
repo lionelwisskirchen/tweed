@@ -1,5 +1,5 @@
 extern crate alloc;
-use std::collections::{BTreeMap, BTreeSet};
+use alloc::collections::{BTreeMap, BTreeSet};
 
 use crate::core::error::ValidationError;
 use crate::core::wasm_reader::WasmReader;

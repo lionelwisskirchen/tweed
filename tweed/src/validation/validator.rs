@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use crate::alloc::borrow::ToOwned;
 use crate::binary::global_section::GlobalType;

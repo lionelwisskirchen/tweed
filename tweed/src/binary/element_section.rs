@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use crate::binary::table_section::Table;
 use crate::core::error::ValidationError;

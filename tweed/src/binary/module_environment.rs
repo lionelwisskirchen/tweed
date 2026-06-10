@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use crate::{
     binary::{
@@ -101,6 +101,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
             _ => ValidationError::InvalidVersion,
         })?;
+
     let mut number_of_internal_funcs = 0;
 
     // The list of function indices that occur in the module outside functions

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 use crate::binary::module_environment::ModuleEnvironment;
 use crate::core::opcode::*;
