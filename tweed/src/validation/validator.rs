@@ -238,10 +238,13 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 LOCAL_TEE => {
                     let idx = self.reader.next_leb128_u32()?;
+
                     let value = locals
                         .get(idx as usize)
                         .ok_or(ValidationError::InvalidLocalIndex)?;
-                    self.abstract_value_stack.is_on_top(value)?;
+
+                    self.abstract_value_stack.pop_expected(*value)?;
+                    self.abstract_value_stack.push(*value);
                 }
                 I32_ADD | I32_SUB | I32_MUL | I32_DIV_S | I32_DIV_U | I32_REM_S | I32_REM_U => {
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
@@ -283,7 +286,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             side_table_entry,
                             height_of_value_stack,
                             has_else,
-                            ..
+                            reachable,
                         } => {
                             sidetable_idxs.push(index_of_else_sidetable_entry);
                             let expected_results = func_type.result.clone();
@@ -295,6 +298,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                                 return Err(ValidationError::TypeMismatch);
                             }
                             *has_else = true;
+                            *reachable = true;
 
                             self.abstract_value_stack.push_vec(&func_type.parameter);
 
@@ -304,6 +308,9 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                             entry.ip = (self.reader.current_index() + 1) as i32 - entry.ip;
                             // branch if will skip all sidetable entries from if to else
                             entry.stp = side_table_len as i32 - *side_table_entry as i32;
+
+                            self.abstract_value_stack
+                                .update(*height_of_value_stack, true);
                         }
                         _ => {
                             return Err(ValidationError::InvalidControlFlow);
@@ -567,59 +574,78 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
 
                     let depth = self.read_depth();
 
-                    self.create_sidetable_entry(depth, index_of_br_if_bytecode)?;
+                    // Pop the expected control types, so the validation stack to get the result types
+                    // According to ref algorithm: https://webassembly.github.io/spec/versions/core/WebAssembly-2.0.pdf p.184
+                    let control_types =
+                        self.abstract_control_stack.get_control_type(depth)?.types();
+                    self.abstract_value_stack.pop_expected_vec(control_types)?;
+
+                    let control_type =
+                        self.create_sidetable_entry(depth, index_of_br_if_bytecode)?;
+
+                    self.abstract_value_stack.push_vec(control_type.types());
                 }
                 BR_TABLE => {
-                    // 1) br_table always consumes an i32 index from the stack.
-                    //    This index decides at runtime which label to jump to.
                     self.abstract_value_stack.pop_expected(ValType::I32)?;
 
-                    // 2) Number of explicit branch targets (excluding the default case handling logic)
                     let number_of_branches = self.reader.next_leb128_u32()?;
-
-                    // 3) Remember current bytecode position for sidetable
-                    // We jump from here because we need to parse the number of branches during execution
-                    // (because the default branch can be any i32 and could move the stp to a wrong entry).
                     let index_of_br_table_bytecode = self.reader.current_index() as i32;
 
-                    // 4) Read all branch target control block indices (including default target)
                     let target_ctrl_block_idxs =
-                        self.reader.next_leb128_u32_vec(number_of_branches + 1)?;
+                        self.reader.next_leb128_u32_vec(number_of_branches)?;
+                    let target_ctrl_block_default_idx = self.reader.next_leb128_u32()?;
 
-                    // 5) Resolve all control-flow targets into typed control entries
-                    //    Each entry contains a FuncType (params -> results)
-                    let mut target_controls = vec![];
+                    let arity_len = self
+                        .abstract_control_stack
+                        .get_control_type(target_ctrl_block_default_idx)?
+                        .types()
+                        .len();
 
                     for ctrl_block_idx in target_ctrl_block_idxs.iter() {
-                        let control_block = self
-                            .create_sidetable_entry(*ctrl_block_idx, index_of_br_table_bytecode)?;
-                        target_controls.push(control_block);
-                    }
-                    // 6) Take the first target as reference type
-                    //    WebAssembly requires all br_table targets to have identical types
-                    if let Some(first) = target_controls.first() {
-                        // 7) Ensure all targets have exactly the same expected type
-                        //    (loops -> Parameter, the rest -> result)
-                        for target in &target_controls {
-                            if target.types() != first.types() {
-                                return Err(ValidationError::TypeMismatch);
-                            }
+                        // Pop the expected control type, so the validation stack to get the result types
+                        // According to ref algorithm: https://webassembly.github.io/spec/versions/core/WebAssembly-2.0.pdf p.184
+                        let control_types = self
+                            .abstract_control_stack
+                            .get_control_type(*ctrl_block_idx)?
+                            .types();
+
+                        let popped_types =
+                            self.abstract_value_stack.pop_expected_vec(control_types)?;
+
+                        if control_types.len() != arity_len {
+                            return Err(ValidationError::TypeMismatch);
                         }
 
-                        // 8) Stack check:
-                        //    Before br_table, the stack must match the shared label signature:
-                        //    (params..., i32 index)
-                        self.abstract_value_stack.are_on_top(first.types())?
-                    };
+                        self.create_sidetable_entry(*ctrl_block_idx, index_of_br_table_bytecode)?;
 
-                    // 9) After br_table, control flow does not continue normally
-                    //    (execution jumps away, so the current path becomes unreachable)
+                        self.abstract_value_stack.push_vec(&popped_types);
+                    }
+                    let default_control_block = self
+                        .abstract_control_stack
+                        .get_control_type(target_ctrl_block_default_idx)?;
+
+                    self.abstract_value_stack
+                        .pop_expected_vec(default_control_block.types())?;
+
+                    self.create_sidetable_entry(
+                        target_ctrl_block_default_idx,
+                        index_of_br_table_bytecode,
+                    )?;
+
                     self.unreachable();
                 }
                 BR => {
                     let index_of_br_bytecode = self.reader.current_index() as i32;
                     let depth = self.read_depth();
+
+                    // Pop the expected control type, so the validation stack to get the result types
+                    // According to ref algorithm: https://webassembly.github.io/spec/versions/core/WebAssembly-2.0.pdf p.184
+                    let control_types =
+                        self.abstract_control_stack.get_control_type(depth)?.types();
+
+                    self.abstract_value_stack.pop_expected_vec(control_types)?;
                     self.create_sidetable_entry(depth, index_of_br_bytecode)?;
+
                     self.unreachable();
                 }
                 END => {
@@ -880,7 +906,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 REF_IS_NULL => {
                     let value = self.abstract_value_stack.pop_val()?;
-                    if !value.is_ref() {
+
+                    if !value.is_ref() && self.abstract_control_stack.top_is_reachable() {
                         return Err(ValidationError::TypeMismatch);
                     }
                     self.abstract_value_stack.push(ValType::I32);
@@ -1169,13 +1196,9 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             } => {
                 sidetable_idxs.push(index_of_br_sidetable_entry);
 
-                self.abstract_value_stack
-                    .pop_expected_vec(&func_type.result)?;
-
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
                 entry.pop = (self.abstract_value_stack.height() - *height_of_value_stack) as usize;
                 entry.vals = func_type.result.len();
-                self.abstract_value_stack.push_vec(&func_type.result);
             }
             ControlType::For {
                 func_type,
@@ -1184,9 +1207,6 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 height_of_value_stack,
                 ..
             } => {
-                self.abstract_value_stack
-                    .pop_expected_vec(&func_type.parameter)?;
-
                 let stp = *side_table_entry as i32 - (self.side_table.len() as i32) + 1;
                 let ip = *instruction_pointer as i32 - index_of_start_bytecode;
                 let entry = self.side_table.get_entry(index_of_br_sidetable_entry);
@@ -1194,12 +1214,12 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 entry.vals = func_type.parameter.len();
                 entry.ip = ip;
                 entry.stp = stp;
-                self.abstract_value_stack.push_vec(&func_type.parameter);
             }
         };
 
         Ok(target_control.clone())
     }
+
     fn read_block_type(&mut self) -> Result<FuncType> {
         let func_idx = self
             .reader

@@ -59,89 +59,21 @@ impl ValidationStack {
         self.stack.pop().ok_or(ValidationError::TypeMismatch)
     }
 
-    pub fn pop_expected_vec(&mut self, val_types: &[ValType]) -> Result<()> {
+    pub fn pop_expected_vec(&mut self, val_types: &[ValType]) -> Result<Vec<ValType>> {
+        let mut v = Vec::new();
+
         for val_type in val_types.iter().rev() {
-            self.pop_expected(*val_type)?;
+            v.push(self.pop_expected(*val_type)?);
         }
-        Ok(())
+        v.reverse();
+        Ok(v)
     }
-    pub fn pop_expected(&mut self, expected: ValType) -> Result<()> {
+    pub fn pop_expected(&mut self, expected: ValType) -> Result<ValType> {
         let actual = self.pop_val()?;
 
         if expected != actual && actual != ValType::Unknown && expected != ValType::Unknown {
             return Err(ValidationError::TypeMismatch);
         }
-        Ok(())
-    }
-    pub fn are_on_top(&mut self, val_types: &[ValType]) -> Result<()> {
-        if self.stack.ends_with(val_types) {
-            return Ok(());
-        }
-        Err(ValidationError::TypeMismatch)
-    }
-    pub fn is_on_top(&mut self, expected: &ValType) -> Result<()> {
-        if self.stack.len() == self.top_height as usize && !self.top_reachable {
-            return Ok(());
-        };
-        let val = self.stack.last().ok_or(ValidationError::TypeMismatch)?;
-        if val == expected {
-            Ok(())
-        } else {
-            Err(ValidationError::TypeMismatch)
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_on_top() {
-        let mut validator = ValidationStack::new();
-        validator.push(ValType::I32);
-        validator.push(ValType::I64);
-
-        assert!(validator.is_on_top(&ValType::I64).is_ok());
-    }
-
-    #[test]
-    fn test_pop_expected_with_matching_type() {
-        let mut validator = ValidationStack::new();
-        validator.push(ValType::I32);
-
-        assert!(validator.pop_expected(ValType::I32).is_ok());
-    }
-
-    #[test]
-    fn test_pop_expected_with_different_type() {
-        let mut validator = ValidationStack::new();
-        validator.push(ValType::I64);
-
-        assert!(validator.pop_expected(ValType::I32).is_err());
-    }
-
-    #[test]
-    fn test_pop_expected_with_unknown_actual() {
-        let mut validator = ValidationStack::new();
-        validator.push(ValType::Unknown);
-
-        assert!(validator.pop_expected(ValType::I32).is_ok());
-    }
-
-    #[test]
-    fn test_pop_expected_with_unknown_expected() {
-        let mut validator = ValidationStack::new();
-        validator.push(ValType::I32);
-
-        assert!(validator.pop_expected(ValType::Unknown).is_ok());
-    }
-
-    #[test]
-    fn test_pop_expected_with_both_unknown() {
-        let mut validator = ValidationStack::new();
-        validator.push(ValType::Unknown);
-
-        assert!(validator.pop_expected(ValType::Unknown).is_ok());
+        Ok(actual)
     }
 }

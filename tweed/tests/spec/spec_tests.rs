@@ -440,3 +440,13 @@ fn spec_tests_skip_stack_guard_page() {
 fn spec_tests_ref_func() {
     run_spec_test(Path::new("./tests/spec/testsuite/ref_func.wast"));
 }
+
+#[test_log::test]
+fn spec_tests_unreached_invalid() {
+    run_spec_test(Path::new("./tests/spec/testsuite/unreached-invalid.wast"));
+}
+
+#[test_log::test]
+fn spec_tests_unreached_valid() {
+    run_spec_test(Path::new("./tests/spec/testsuite/unreached-valid.wast"));
+}
