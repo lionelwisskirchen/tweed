@@ -295,7 +295,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 let function = invoke_confs.name.to_string();
                 engine
                     .invoke(
-                        tweed::execution::engine::InstanceRef::Name(module),
+                        &tweed::execution::engine::InstanceRef::Name(module),
                         function,
                         args,
                     )
@@ -366,7 +366,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         let module = module_registry.get(invoke_confs.module).unwrap();
                         let actual_results = engine
                             .invoke(
-                                tweed::execution::engine::InstanceRef::Name(module),
+                                &tweed::execution::engine::InstanceRef::Name(module),
                                 invoke_confs.name.to_string(),
                                 args,
                             )
@@ -449,7 +449,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                         .collect();
                     let name = module_registry.get(invoke_confs.module).unwrap();
                     let result = engine.invoke(
-                        tweed::execution::engine::InstanceRef::Name(name.to_string()),
+                        &tweed::execution::engine::InstanceRef::Name(name.to_string()),
                         invoke_confs.name.to_string(),
                         args,
                     );
@@ -504,7 +504,7 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                 let module = module_registry.get(call.module).unwrap();
                 let function = call.name.to_string();
                 let result = engine.invoke(
-                    tweed::execution::engine::InstanceRef::Name(module),
+                    &tweed::execution::engine::InstanceRef::Name(module),
                     function,
                     args,
                 );

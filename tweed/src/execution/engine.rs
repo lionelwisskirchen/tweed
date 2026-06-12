@@ -109,11 +109,11 @@ impl Engine {
     /// The result values returned by the executed function.
     pub fn invoke(
         &mut self,
-        instance: InstanceRef,
+        instance: &InstanceRef,
         function_name: String,
         params: Vec<Value>,
     ) -> Result<Vec<Value>> {
-        let instance_addr = self.linker.resolve_instance(&instance)?;
+        let instance_addr = self.linker.resolve_instance(instance)?;
         let func_addr = self
             .store
             .instances
@@ -219,5 +219,22 @@ impl Engine {
         let instance = self.store.instances.get(instance_addr)?;
         let global_addr = instance.get_global_by_name(&name)?;
         self.store.globals.get(global_addr)
+    }
+
+    /// Returns a memory instance by index from the given instance.
+    ///
+    /// # Parameters
+    /// - `instance`: Reference to the instance (name or address) that owns the memory.
+    /// - `memory_idx`: Index of the memory to retrieve.
+    pub fn get_memory(&self, instance: &InstanceRef, memory_idx: usize) -> Result<&MemoryInstance> {
+        if memory_idx > 0 {
+            return Err(ExecutionError::MultipleMemories);
+        }
+
+        let instance_addr = self.linker.resolve_instance(instance)?;
+        let instance = self.store.instances.get(instance_addr)?;
+        let mem_addr = instance.memaddr[memory_idx];
+
+        self.store.memories.get(mem_addr)
     }
 }

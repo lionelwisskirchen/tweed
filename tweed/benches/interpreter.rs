@@ -65,7 +65,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                     panic!("Instantiation failed: {e}");
                 });
                 let result = engine
-                    .invoke(instance, "_run".to_string(), vec![])
+                    .invoke(&instance, "_run".to_string(), vec![])
                     .expect("Execution failed");
                 if result != vec![Value::I32(0)] {
                     panic!("Embench program failed!");
