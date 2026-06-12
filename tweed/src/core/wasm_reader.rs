@@ -9,6 +9,50 @@ const VALUE_BIT_MASK: u8 = 0x7F;
 const PADDING_BIT_MASK_32: u8 = 0b01110000;
 const PADDING_BIT_MASK_64: u8 = 0b01111110;
 
+#[cfg(feature = "custom_page_size")]
+const MAX_MEMORY_TYPE_FLAG_INT: u32 = 0x0F; // bits 0–3 valid
+#[cfg(not(feature = "custom_page_size"))]
+const MAX_MEMORY_TYPE_FLAG_INT: u32 = 0x01;
+
+#[derive(Debug)]
+pub struct MemoryTypeFlags(pub u32);
+
+impl MemoryTypeFlags {
+    /// Bit 0: a `limits.max` field (u32 or u64) follows `limits.min`.
+    pub const HAS_MAX: u32 = 0x01;
+    /// Bit 1 [threads]: memory is shared (requires HAS_MAX).
+    pub const IS_SHARED: u32 = 0x02;
+    /// Bit 2 [memory64]: memory uses 64-bit (i64) index type instead of i32.
+    pub const IS_64: u32 = 0x04;
+    /// Bit 3 [custom-page-sizes]: a LEB128-encoded page_sizefollows the limits.
+    /// Valid values: 0 (1-byte pages), 16 (64 KiB pages).
+    pub const HAS_PAGE_SIZE: u32 = 0x08;
+
+    pub fn has_max(&self) -> bool {
+        self.0 & Self::HAS_MAX != 0
+    }
+    pub fn is_shared(&self) -> bool {
+        self.0 & Self::IS_SHARED != 0
+    }
+    pub fn is_64(&self) -> bool {
+        self.0 & Self::IS_64 != 0
+    }
+    pub fn has_page_size(&self) -> bool {
+        self.0 & Self::HAS_PAGE_SIZE != 0
+    }
+}
+#[derive(Debug)]
+pub struct TableTypeFlags(pub u32);
+
+impl TableTypeFlags {
+    /// Bit 0: a `limits.max` field (u32 or u64) follows `limits.min`.
+    pub const HAS_MAX: u32 = 0x01;
+
+    pub fn has_max(&self) -> bool {
+        self.0 & Self::HAS_MAX != 0
+    }
+}
+
 /// A **safe** bytecode reader for WebAssembly modules.
 ///
 /// `WasmReader` provides sequential read access to a byte vector
@@ -70,14 +114,15 @@ impl WasmReader {
     /// Value not 0 or 1 are rejected with [`ValidationError::IntegerTooLarge`].
     pub fn next_flag(&mut self) -> Result<u32> {
         let before_reading = self.byte_pointer;
-        let res = self.next_leb128_u32()?;
+        let flag = self.next_leb128_u32()?;
         if self.byte_pointer - before_reading != 1 {
             return Err(ValidationError::InvalidIntegerRepresentation);
         };
-        if res > 1 {
+        if flag > MAX_MEMORY_TYPE_FLAG_INT {
             return Err(ValidationError::IntegerTooLarge);
         }
-        Ok(res)
+
+        Ok(flag)
     }
     /// Decodes the next `count` unsigned LEB128-encoded `u32`.
     pub fn next_leb128_u32_vec(&mut self, count: u32) -> Result<Vec<u32>> {

@@ -1,13 +1,17 @@
-use crate::core::{error::ValidationError, wasm_reader::WasmReader};
+use crate::core::{
+    error::ValidationError,
+    wasm_reader::{MemoryTypeFlags, WasmReader},
+};
 use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
-pub const WASM_PAGE_SIZE: u32 = 65536; // 64 KiB
-pub const MAX_MEM_PAGES: u32 = 65536;
+pub const DEFAULT_WASM_PAGE_SIZE: u32 = 65536; // 64 KiB
+pub const MAX_MEMORY: usize = (DEFAULT_WASM_PAGE_SIZE as usize) * 65536;
 
 #[derive(Debug, Clone)]
 pub struct Memory {
     pub limits: Limits,
+    pub mempagesize: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -53,25 +57,42 @@ pub fn process_memory_section(reader: &mut WasmReader) -> Result<Vec<Memory>> {
     Ok(memories)
 }
 fn process_memory(reader: &mut WasmReader) -> Result<Memory> {
-    let flags = reader.next_flag()?;
+    let flags = MemoryTypeFlags(reader.next_flag()?);
     let min = reader.next_leb128_u32()?;
-    let max = if flags != 0 {
-        let max_val = reader.next_leb128_u32()?;
-        if max_val < min {
-            return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
-        }
-        if max_val > MAX_MEM_PAGES {
-            return Err(ValidationError::MemorySizeExceeded);
-        }
-        Some(max_val)
-    } else {
-        None
+    let mut max = None;
+    if flags.has_max() {
+        max = Some(reader.next_leb128_u32()?);
     };
 
-    if min > MAX_MEM_PAGES {
+    let mempagesize = if flags.has_page_size() {
+        let exp = reader.next_leb128_u32()?;
+        1u32.checked_shl(exp)
+            .ok_or(ValidationError::InvalidCustomPageSize)
+    } else {
+        Ok(DEFAULT_WASM_PAGE_SIZE)
+    }?;
+
+    // The pagesize must be the value 1 or the value 65536.
+    if mempagesize != 1 && mempagesize != DEFAULT_WASM_PAGE_SIZE {
+        return Err(ValidationError::InvalidCustomPageSize);
+    }
+
+    if min as usize * mempagesize as usize > MAX_MEMORY {
         return Err(ValidationError::MemorySizeExceeded);
     }
 
+    if let Some(max_val) = max {
+        if max_val < min {
+            return Err(ValidationError::SizeMinimumMustNotBeGreaterThanMaximum);
+        }
+        if max_val > u32::MAX - 1 || max_val > u32::MAX.div_ceil(mempagesize) {
+            return Err(ValidationError::MemorySizeExceeded);
+        }
+    }
+
     let limits = Limits { min, max };
-    Ok(Memory { limits })
+    Ok(Memory {
+        limits,
+        mempagesize,
+    })
 }

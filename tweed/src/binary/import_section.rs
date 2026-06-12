@@ -1,9 +1,13 @@
+use core::ops::Shl;
+
 use crate::binary::memory_section::Limits;
 use crate::binary::memory_section::Memory;
+use crate::binary::memory_section::DEFAULT_WASM_PAGE_SIZE;
 use crate::binary::table_section::Table;
 use crate::core::error::ValidationError;
 use crate::core::value_types::RefType;
 use crate::core::value_types::ValType;
+use crate::core::wasm_reader::MemoryTypeFlags;
 use crate::core::wasm_reader::WasmReader;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -167,17 +171,28 @@ pub fn process_import_section(
             }
             // Memory Import
             0x02 => {
-                let flags = reader.next_leb128_u32()?;
+                let flags = MemoryTypeFlags(reader.next_flag()?);
+
                 let min = reader.next_leb128_u32()?;
-                let max = if flags != 0 {
+                let max = if flags.has_max() {
                     let max_val = reader.next_leb128_u32()?;
                     Some(max_val)
                 } else {
                     None
                 };
 
+                let mempagesize = if flags.has_page_size() {
+                    let exp = reader.next_leb128_u32()?;
+                    1u32.shl(exp)
+                } else {
+                    DEFAULT_WASM_PAGE_SIZE
+                };
+
                 let limits = Limits { min, max };
-                let memory = Memory { limits };
+                let memory = Memory {
+                    limits,
+                    mempagesize,
+                };
 
                 let memory_import = MemoryImport {
                     idx: idx as usize,

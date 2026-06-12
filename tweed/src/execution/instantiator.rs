@@ -11,7 +11,6 @@ use super::constant_expression_executor::execute_const_expr;
 use crate::binary::data_section::SegmentMode;
 use crate::binary::element_section::{ElementItems, Mode};
 use crate::binary::import_section::Import;
-use crate::binary::memory_section::WASM_PAGE_SIZE;
 use crate::core::error::ExecutionError;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::value_types::ValType;
@@ -65,6 +64,7 @@ impl ModuleInstantiator {
         if module_imports.len() != external.len() {
             Err(ExecutionError::IncompatibleNumberOfImports)?
         }
+
         // Step 5: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
         for (external, import) in external.iter().zip(module_imports) {
             match external {
@@ -187,8 +187,12 @@ impl ModuleInstantiator {
             .collect();
         let mut local_memories = vec![];
         for memory in module.memorysec.iter() {
-            let data = vec![0; (memory.limits.min * WASM_PAGE_SIZE) as usize];
-            local_memories.push(MemoryInstance::new(data, memory.limits.clone()));
+            let data = vec![0; memory.limits.min as usize * memory.mempagesize as usize];
+            local_memories.push(MemoryInstance::new(
+                data,
+                memory.limits.clone(),
+                memory.mempagesize,
+            ));
         }
         let local_memory_addr = store.memories.add(local_memories);
         let all_memory_idxs = [imported_memory_addr, local_memory_addr].concat();

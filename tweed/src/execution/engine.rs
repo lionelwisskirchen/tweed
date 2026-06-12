@@ -10,7 +10,7 @@ use core::cell::RefCell;
 
 use super::linker::Linker;
 use crate::binary::global_section::GlobalType;
-use crate::binary::memory_section::{Limits, WASM_PAGE_SIZE};
+use crate::binary::memory_section::Limits;
 use crate::binary::table_section::Table;
 use crate::binary::type_section::FuncType;
 use crate::core::error::ExecutionError;
@@ -202,9 +202,10 @@ impl Engine {
         name: String,
         min: u32,
         max: Option<u32>,
+        mempagesize: u32,
     ) -> Result<()> {
-        let data = vec![0; (min * WASM_PAGE_SIZE) as usize];
-        let memory_instance = MemoryInstance::new(data, Limits { min, max });
+        let data = vec![0; (min * mempagesize) as usize];
+        let memory_instance = MemoryInstance::new(data, Limits { min, max }, mempagesize);
         let memory_addr = self.store.memories.add_one(memory_instance);
         self.linker.register_memory(module, name, memory_addr)
     }

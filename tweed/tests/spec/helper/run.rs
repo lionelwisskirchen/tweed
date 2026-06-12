@@ -1,6 +1,7 @@
 use log::{error, info};
 use std::collections::HashMap;
 use std::{self, f32, fs};
+use tweed::binary::memory_section::DEFAULT_WASM_PAGE_SIZE;
 use tweed::binary::table_section::Table;
 use tweed::binary::type_section::FuncType;
 use tweed::core::value_types::ValType;
@@ -77,7 +78,13 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
     let mut module_registry = Environment::default();
     let mut engine: Engine = Default::default();
     engine
-        .add_memory_import("spectest".to_string(), "memory".to_string(), 1, Some(2))
+        .add_memory_import(
+            "spectest".to_string(),
+            "memory".to_string(),
+            1,
+            Some(2),
+            DEFAULT_WASM_PAGE_SIZE,
+        )
         .unwrap();
     engine
         .add_global_import(
@@ -640,6 +647,7 @@ fn args_to_runtime_value(expr: &WastArg) -> Value {
                 }
                 _ => todo!("`GC` proposal not yet implemented"),
             },
+            HeapType::Exact(_index) => todo!("`GC` proposal not yet implemented"),
         },
         _ => unreachable!("{:?}", expr),
     }

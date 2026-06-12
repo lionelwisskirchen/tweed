@@ -71,6 +71,7 @@ impl Executor {
         self.stack.push_vec(args)?;
         let mut func_inst = store.functions.get(func_addr)?.clone();
         let mut env: HostEnv = (store).into();
+
         match func_inst {
             FuncInstance::Internal(instance) => {
                 let frame = self.build_frame(&instance)?;
@@ -101,6 +102,7 @@ impl Executor {
         let reader_address = instance.reader;
         let reader = store.reader.get_mut(reader_address).unwrap();
         reader.seek(current_frame.start + current_frame.program_counter);
+
         loop {
             let instruction = reader.next_byte();
             match instruction {
@@ -1706,21 +1708,20 @@ impl Executor {
                 MEMORY_SIZE => {
                     let idx = reader.next_byte();
                     let mem = map_memory(idx as usize, instance, &mut store.memories).unwrap();
-                    // always 0
-                    let size = mem.size();
+                    let size_in_pages = mem.pages() as i32;
 
-                    self.stack.push(Value::I32(size))?;
-                    trace!("Instruction: memory.size [] -> [{}]", size);
+                    self.stack.push(Value::I32(size_in_pages))?;
                 }
                 MEMORY_GROW => {
                     let idx = reader.next_byte();
                     let mem = map_memory(idx as usize, instance, &mut store.memories).unwrap();
-                    // always 0
-                    let size = mem.pages();
+                    let size_in_pages = mem.pages() as i32;
+
                     let amount = self.stack.pop_i32() as u32;
-                    trace!("Instruction: memory.grow {}", size);
+                    trace!("Instruction: memory.grow {}", size_in_pages);
+
                     if mem.grow(amount).is_ok() {
-                        self.stack.push(Value::I32(size as i32))?;
+                        self.stack.push(Value::I32(size_in_pages))?;
                     } else {
                         self.stack.push(Value::I32(-1))?;
                     }

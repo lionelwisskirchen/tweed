@@ -1,5 +1,5 @@
 use crate::binary::import_section::MemoryImport;
-use crate::binary::memory_section::{Limits, Memory, MAX_MEM_PAGES, WASM_PAGE_SIZE};
+use crate::binary::memory_section::{Limits, Memory, DEFAULT_WASM_PAGE_SIZE};
 
 use crate::core::error::ExecutionError;
 use crate::core::values::FromLeBytes;
@@ -14,9 +14,12 @@ pub struct MemoryInstance {
 }
 
 impl MemoryInstance {
-    pub fn new(bytes: Vec<u8>, limits: Limits) -> Self {
+    pub fn new(bytes: Vec<u8>, limits: Limits, mempagesize: u32) -> Self {
         MemoryInstance {
-            memory_type: Memory { limits },
+            memory_type: Memory {
+                limits,
+                mempagesize,
+            },
             bytes,
         }
     }
@@ -62,26 +65,48 @@ impl MemoryInstance {
             .ok_or(ExecutionError::MemoryAccessOutOfBounds)
     }
 
-    pub fn size(&self) -> i32 {
-        (self.bytes.len() as u32 / WASM_PAGE_SIZE) as i32
+    /// The size of the memory in bytes
+    pub fn size(&self) -> u32 {
+        self.bytes.len() as u32
     }
 
+    /// The number of pages the memory holds
     pub fn pages(&self) -> u32 {
-        (self.bytes.len() / WASM_PAGE_SIZE as usize) as u32
+        (self
+            .bytes
+            .len()
+            .div_ceil(self.memory_type.mempagesize as usize)) as u32
     }
 
+    ///  Grow the memory by n pages
+    ///
+    /// # Arguments
+    /// * `amount`: the number of pages appended to the memory.
+    ///
+    /// # Return
+    /// Ok() if everything is fine.
+    ///
+    /// # Error
+    /// * `ExecutionError::MemoryAccessOutOfBounds`: The memory is grown by too much.
     pub fn grow(&mut self, amount: u32) -> Result<()> {
-        let new_len = amount + self.pages();
-        if new_len > MAX_MEM_PAGES {
+        let mempagesize = self.memory_type.mempagesize;
+        // Assert due to validation that pagesize is either the value 1 or the value 65536
+        debug_assert!(mempagesize == 1 || mempagesize == DEFAULT_WASM_PAGE_SIZE);
+
+        let len = amount + self.pages();
+        if len > u32::MAX.div_ceil(mempagesize) {
             return Err(ExecutionError::MemoryAccessOutOfBounds);
         }
+
         if let Some(max) = self.memory_type.limits.max {
-            if new_len > max {
+            if len > max {
                 return Err(ExecutionError::MemoryAccessOutOfBounds);
             }
         }
-        self.bytes.resize((new_len * WASM_PAGE_SIZE) as usize, 0);
+        self.bytes
+            .resize((len * self.memory_type.mempagesize) as usize, 0);
         self.memory_type.limits.min += amount;
+
         Ok(())
     }
 

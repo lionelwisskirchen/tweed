@@ -1,6 +1,6 @@
 use crate::core::error::ValidationError;
 use crate::core::value_types::RefType;
-use crate::core::wasm_reader::WasmReader;
+use crate::core::wasm_reader::{TableTypeFlags, WasmReader};
 use alloc::vec::Vec;
 
 use super::memory_section::Limits;
@@ -42,9 +42,9 @@ pub fn process_table_section(reader: &mut WasmReader) -> Result<Vec<Table>> {
 }
 fn process_table(reader: &mut WasmReader) -> Result<Table> {
     let ref_type = reader.next_byte()?;
-    let flags = reader.next_flag()?;
+    let flags = TableTypeFlags(reader.next_flag()?);
     let min = reader.next_leb128_u32()?;
-    let max = if flags != 0 {
+    let max = if flags.has_max() {
         let max_val = reader.next_leb128_u32().map_err(|e| match e {
             ValidationError::ReadingOutOfBounds => ValidationError::IntegerTooLarge,
             _ => e,

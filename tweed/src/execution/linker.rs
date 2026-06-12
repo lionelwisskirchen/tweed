@@ -146,7 +146,7 @@ impl Linker {
     /// - [`ExecutionError::MissingFunctionImport`] for missing function imports.
     /// - [`ExecutionError::MissingGlobalImport`] for missing global imports
     /// - [`ExecutionError::MissingMemoryimport`] for missing memory imports.
-    /// - [`ExecutionError::MissingTableimport`] for missing table imports.    
+    /// - [`ExecutionError::MissingTableimport`] for missing table imports.
     pub fn resolve(&mut self, imports: &Imports) -> Result<Vec<ExternAddr>> {
         let mut resolved_import = vec![];
         for import in imports.imports() {

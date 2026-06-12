@@ -190,6 +190,7 @@ pub enum ValidationError {
     LengthOutOfBounds,
     ConstantExpressionRequired,
     MalformedOneByteFlag,
+    InvalidCustomPageSize,
 }
 
 impl Display for ValidationError {
@@ -298,6 +299,7 @@ impl Display for ValidationError {
             }
 
             Self::EndOpCodeExpected => f.write_str("END opcode expected"),
+            Self::InvalidCustomPageSize => f.write_str("invalid custom page size"),
         }
     }
 }
