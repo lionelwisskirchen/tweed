@@ -36,6 +36,11 @@ impl From<f64> for Value {
         Value::F64(value)
     }
 }
+impl Default for Value {
+    fn default() -> Self {
+        Value::I32(0)
+    }
+}
 
 impl From<ValType> for Value {
     fn from(value: ValType) -> Self {

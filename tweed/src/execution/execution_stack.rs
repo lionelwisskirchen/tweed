@@ -4,6 +4,9 @@ use crate::core::{error::ExecutionError, values::Value};
 
 use super::executor::Frame;
 
+// use crate::core::custom_types::base_stack::BaseStack;
+type BaseStack<T, const N: usize> = Vec<T>;
+
 pub const MAX_VALUE_STACK_SIZE: usize = 0x1000;
 pub const MAX_CALL_STACK_SIZE: usize = 0x800; // Should be smaller than 'MAX_VALUE_STACK_SIZE'
 pub type Result<T> = core::result::Result<T, ExecutionError>;
@@ -41,7 +44,7 @@ impl CallStack {
 
 #[derive(Debug)]
 pub struct ExecutionStack {
-    stack: Vec<Value>,
+    stack: BaseStack<Value, MAX_VALUE_STACK_SIZE>,
 }
 impl Default for ExecutionStack {
     fn default() -> Self {
@@ -51,7 +54,9 @@ impl Default for ExecutionStack {
 
 impl ExecutionStack {
     pub fn new() -> Self {
-        Self { stack: Vec::new() }
+        Self {
+            stack: BaseStack::new(),
+        }
     }
 
     pub fn reset(&mut self) {
@@ -93,7 +98,8 @@ impl ExecutionStack {
     pub fn len(&self) -> usize {
         self.stack.len()
     }
-    pub fn rest(&mut self) -> Vec<Value> {
+
+    pub fn rest(&mut self) -> BaseStack<Value, MAX_CALL_STACK_SIZE> {
         self.stack.clone()
     }
     pub fn is_empty(&self) -> bool {
@@ -138,6 +144,7 @@ impl ExecutionStack {
         if count > self.stack.len() {
             return Err(ExecutionError::ExpectedAValueOnTheStack);
         }
-        Ok(self.stack.split_off(self.stack.len() - count))
+        let val = self.stack.split_off(self.stack.len() - count);
+        Ok(val)
     }
 }
