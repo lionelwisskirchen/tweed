@@ -4,8 +4,8 @@ use crate::core::{error::ExecutionError, values::Value};
 
 use super::executor::Frame;
 
-// use crate::core::custom_types::base_stack::BaseStack;
-type BaseStack<T, const N: usize> = Vec<T>;
+use crate::core::custom_types::base_stack::BaseStack;
+// type BaseStack<T, const N: usize> = Vec<T>;
 
 pub const MAX_VALUE_STACK_SIZE: usize = 0x1000;
 pub const MAX_CALL_STACK_SIZE: usize = 0x800; // Should be smaller than 'MAX_VALUE_STACK_SIZE'
@@ -63,10 +63,7 @@ impl ExecutionStack {
         self.stack.clear();
     }
     pub fn push(&mut self, value: Value) -> Result<()> {
-        if self.stack.len() > MAX_VALUE_STACK_SIZE {
-            return Err(ExecutionError::StackExhaustion);
-        }
-        self.stack.push(value);
+        self.stack.push(value)?;
         Ok(())
     }
     pub fn push_vec(&mut self, values: &[Value]) -> Result<()> {
@@ -99,7 +96,7 @@ impl ExecutionStack {
         self.stack.len()
     }
 
-    pub fn rest(&mut self) -> BaseStack<Value, MAX_CALL_STACK_SIZE> {
+    pub fn rest(&mut self) -> BaseStack<Value, MAX_VALUE_STACK_SIZE> {
         self.stack.clone()
     }
     pub fn is_empty(&self) -> bool {

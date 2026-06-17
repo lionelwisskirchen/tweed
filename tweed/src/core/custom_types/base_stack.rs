@@ -1,3 +1,7 @@
+use crate::core::error::ExecutionError;
+
+pub type Result<T> = core::result::Result<T, ExecutionError>;
+
 /// A fixed-capacity stack.
 ///
 /// `BaseStack<T, N>` stores up to `N` elements of type `T` on the stack,
@@ -41,9 +45,15 @@ impl<T: Default + Clone + Copy, const N: usize> BaseStack<T, N> {
     ///
     /// # Panics
     /// Panics if the stack is already at capacity (`len() == N`).
-    pub fn push(&mut self, val: T) {
-        self.data[self.top] = val;
-        self.top += 1;
+    pub fn push(&mut self, val: T) -> Result<()> {
+        match self.data.get_mut(self.top) {
+            Some(x) => {
+                *x = val;
+                self.top += 1;
+            }
+            None => return Err(ExecutionError::StackExhaustion),
+        }
+        Ok(())
     }
 
     /// Removes and returns the top element, or `None` if the stack is empty.
@@ -119,7 +129,7 @@ mod tests {
         let mut v: Vec<i32> = Vec::new();
 
         for i in 0..100 {
-            stack.push(i);
+            stack.push(i).unwrap();
             v.push(i);
         }
 
@@ -134,7 +144,7 @@ mod tests {
         let mut v: Vec<i32> = Vec::new();
 
         for i in 0..100 {
-            stack.push(i);
+            stack.push(i).unwrap();
             v.push(i);
             assert_eq!(stack.len(), v.len())
         }
@@ -146,7 +156,7 @@ mod tests {
         let mut v: Vec<i32> = Vec::new();
 
         for i in 0..100 {
-            stack.push(i);
+            stack.push(i).unwrap();
             v.push(i);
         }
 
@@ -164,7 +174,7 @@ mod tests {
         let mut v: Vec<i32> = Vec::new();
 
         for i in 0..100 {
-            stack.push(i);
+            stack.push(i).unwrap();
             v.push(i);
         }
 
@@ -182,7 +192,7 @@ mod tests {
         let mut v: Vec<i32> = Vec::new();
 
         for i in 0..100 {
-            stack.push(i);
+            stack.push(i).unwrap();
             v.push(i);
         }
 
