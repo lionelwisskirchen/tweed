@@ -6,7 +6,9 @@ use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
 pub const DEFAULT_WASM_PAGE_SIZE: u32 = 65536; // 64 KiB
-pub const MAX_MEMORY: usize = (DEFAULT_WASM_PAGE_SIZE as usize) * 65536;
+pub const MAX_WASM_PAGES: u64 = 65536;
+// For 32-bit systems usize would overflow
+pub const MAX_MEMORY: u64 = (DEFAULT_WASM_PAGE_SIZE as u64) * MAX_WASM_PAGES;
 
 #[derive(Debug, Clone)]
 pub struct Memory {
@@ -77,7 +79,7 @@ fn process_memory(reader: &mut WasmReader) -> Result<Memory> {
         return Err(ValidationError::InvalidCustomPageSize);
     }
 
-    if min as usize * mempagesize as usize > MAX_MEMORY {
+    if min as u64 * mempagesize as u64 > MAX_MEMORY {
         return Err(ValidationError::MemorySizeExceeded);
     }
 
