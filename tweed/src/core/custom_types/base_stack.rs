@@ -1,5 +1,5 @@
 use crate::core::error::ExecutionError;
-
+use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 /// A fixed-capacity stack.
