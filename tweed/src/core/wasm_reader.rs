@@ -63,12 +63,12 @@ impl TableTypeFlags {
 /// is detected early.
 #[derive(Debug, Default, Clone)]
 pub struct WasmReader {
-    bytecode: Vec<u8>,
+    bytecode: Box<[u8]>,
     byte_pointer: usize,
 }
 
 impl WasmReader {
-    pub fn new(input: Vec<u8>) -> Self {
+    pub fn new(input: Box<[u8]>) -> Self {
         Self {
             bytecode: input,
             byte_pointer: 0,

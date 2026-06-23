@@ -5,7 +5,6 @@ use crate::core::{error::ExecutionError, values::Value};
 use super::executor::Frame;
 
 use crate::core::custom_types::base_stack::BaseStack;
-// type BaseStack<T, const N: usize> = Vec<T>;
 
 pub const MAX_VALUE_STACK_SIZE: usize = 0x1000;
 pub const MAX_CALL_STACK_SIZE: usize = 0x800; // Should be smaller than 'MAX_VALUE_STACK_SIZE'
@@ -13,7 +12,7 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Debug)]
 pub struct CallStack {
-    stack: Vec<Frame>,
+    stack: BaseStack<Frame, MAX_CALL_STACK_SIZE>,
 }
 
 impl Default for CallStack {
@@ -24,13 +23,14 @@ impl Default for CallStack {
 
 impl CallStack {
     pub fn new() -> Self {
-        Self { stack: Vec::new() }
+        Self {
+            stack: BaseStack::new(),
+        }
     }
     pub fn push(&mut self, value: Frame) -> Result<()> {
-        if self.stack.len() > MAX_CALL_STACK_SIZE {
-            return Err(ExecutionError::CallStackExhaustion);
-        }
-        self.stack.push(value);
+        self.stack
+            .push(value)
+            .map_err(|_| ExecutionError::CallStackExhaustion)?;
         Ok(())
     }
     pub fn pop(&mut self) -> Option<Frame> {

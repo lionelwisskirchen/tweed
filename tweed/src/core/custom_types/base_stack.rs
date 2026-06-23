@@ -24,16 +24,16 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 /// assert_eq!(stack.len(), 1);
 /// ```
 #[derive(Clone, Debug)]
-pub struct BaseStack<T: Default + Clone + Copy, const N: usize> {
-    data: [T; N],
+pub struct BaseStack<T: Default + Clone, const N: usize> {
+    data: Box<[T; N]>,
     top: usize,
 }
 
-impl<T: Default + Clone + Copy, const N: usize> BaseStack<T, N> {
+impl<T: Default + Clone, const N: usize> BaseStack<T, N> {
     /// Creates an empty `BaseStack`, initializing all slots to `T::default()`.
     pub fn new() -> Self {
         Self {
-            data: core::array::from_fn(|_| T::default()),
+            data: Box::new(core::array::from_fn(|_| T::default())),
             top: 0,
         }
     }
@@ -62,7 +62,7 @@ impl<T: Default + Clone + Copy, const N: usize> BaseStack<T, N> {
             return None;
         }
         self.top -= 1;
-        Some(self.data[self.top])
+        Some(self.data[self.top].clone())
     }
 
     /// Returns the number of elements currently on the stack.
@@ -134,7 +134,7 @@ mod tests {
         }
 
         for _ in 0..100 {
-            assert_eq!(stack.pop(), v.pop());
+            assert_eq!(stack.pop().unwrap(), v.pop().unwrap());
         }
     }
 
@@ -182,7 +182,7 @@ mod tests {
         stack.drain(50..);
 
         for _ in 0..50 {
-            assert_eq!(stack.pop(), v.pop());
+            assert_eq!(stack.pop().unwrap(), v.pop().unwrap());
         }
     }
 

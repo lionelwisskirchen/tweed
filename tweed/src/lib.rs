@@ -32,7 +32,7 @@ pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>,
 }
 pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
     trace!("Initialize module");
-    let mut reader = WasmReader::new(input.to_vec());
+    let mut reader = WasmReader::new(input.into());
     let module_environment = create_module_environment(&mut reader)?;
 
     Ok(Module {

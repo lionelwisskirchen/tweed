@@ -19,6 +19,10 @@ test-log = "0.2.17"
 name = "interpreter"
 harness = false
 
+[profile.bench]
+inherits = "release"
+debug = true
+
 [profile.profiling]
 inherits = "release"
 debug = true
