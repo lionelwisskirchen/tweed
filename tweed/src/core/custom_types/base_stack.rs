@@ -1,3 +1,5 @@
+use core::hint::cold_path;
+
 use crate::core::error::ExecutionError;
 use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ExecutionError>;
@@ -51,7 +53,10 @@ impl<T: Default + Clone, const N: usize> BaseStack<T, N> {
                 *x = val;
                 self.top += 1;
             }
-            None => return Err(ExecutionError::StackExhaustion),
+            None => {
+                cold_path();
+                return Err(ExecutionError::StackExhaustion);
+            }
         }
         Ok(())
     }
@@ -59,6 +64,7 @@ impl<T: Default + Clone, const N: usize> BaseStack<T, N> {
     /// Removes and returns the top element, or `None` if the stack is empty.
     pub fn pop(&mut self) -> Option<T> {
         if self.top == 0 {
+            cold_path();
             return None;
         }
         self.top -= 1;
@@ -102,6 +108,7 @@ impl<T: Default + Clone, const N: usize> BaseStack<T, N> {
     pub fn split_off(&mut self, at: usize) -> Vec<T> {
         // this error is the same as in Vec
         if self.top < at {
+            cold_path();
             panic!(
                 "'at' split index (is {}) should be <= len (is {})",
                 at, self.top
