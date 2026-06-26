@@ -6,9 +6,9 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 /// A fixed-capacity stack.
 ///
-/// `BaseStack<T, N>` stores up to `N` elements of type `T` on the stack,
-/// with *no* heap allocation. It mirrors the interface of [`Vec`] for common
-/// operations but panics on overflow instead of reallocating.
+/// `BaseStack<T, N>` stores up to `N` elements of type `T` on the heap.
+/// It mirrors the interface of [`Vec`] for common operations but panics
+/// on overflow instead of reallocating.
 ///
 /// # Type Parameters
 /// - `T` — Element type. Must implement [`Default`] (used to initialize the
