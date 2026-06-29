@@ -23,21 +23,6 @@ pub struct DependencyInstance {
     pub implements: Vec<InterfaceBinding>,
 }
 
-impl DependencyInstance {
-    pub fn module_name(&self) -> Option<String> {
-        if let Some(imp) = self.implements.first() {
-            return Some(format!(
-                "{:?}:{:?}@{}",
-                imp.interface.namespace, imp.interface.package, imp.interface.version
-            ));
-        }
-        None
-    }
-    pub fn has_information(&self) -> bool {
-        !self.implements.is_empty()
-    }
-}
-
 // An instantiated Module
 #[derive(Debug, Clone, Default)]
 #[allow(dead_code)]

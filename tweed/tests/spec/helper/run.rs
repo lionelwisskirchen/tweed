@@ -255,14 +255,14 @@ pub fn execute_spec_test(path: &str) -> Result<WastReport, Box<dyn std::error::E
                             tweed::execution::engine::InstanceRef::Name(last.to_string()),
                         )
                         .unwrap();
-                    engine.register_exports(instance_ref).unwrap();
+                    engine.register_exports(&instance_ref).unwrap();
                 }
                 Some(id) => {
                     let inst = tweed::execution::engine::InstanceRef::Name(
                         module_registry.get(Some(id)).unwrap().to_string(),
                     );
                     let new_name = engine.register(name, inst).unwrap();
-                    engine.register_exports(new_name).unwrap();
+                    engine.register_exports(&new_name).unwrap();
                 }
             },
             Module(mut module) => {

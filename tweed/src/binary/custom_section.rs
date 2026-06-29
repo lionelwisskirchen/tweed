@@ -29,22 +29,27 @@ pub struct InterfaceSpec {
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FunctionName(pub String);
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InterfaceKey {
+    pub namespace: String,
+    pub package: String,
+    pub interface: String,
+}
+
 /// Uniquely identifies a WIT interface within a package.
 ///
 /// An InterfaceId is the canonical identifier used for linking,
 /// resolution, and dependency tracking across modules.
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InterfaceId {
-    pub namespace: String,
-    pub package: String,
-    pub interface: String,
+    pub key: InterfaceKey,
     pub version: String,
 }
 impl InterfaceId {
     pub fn interface_name(&self) -> String {
         format!(
             "{}:{}:{}@{}",
-            self.namespace, self.package, self.interface, self.version
+            self.key.namespace, self.key.package, self.key.interface, self.version
         )
     }
 }
@@ -66,9 +71,11 @@ impl TryFrom<String> for InterfaceId {
         };
 
         Ok(Self {
-            namespace: (*namespace).into(),
-            package: (*package).into(),
-            interface: (*interface).into(),
+            key: InterfaceKey {
+                namespace: (*namespace).into(),
+                package: (*package).into(),
+                interface: (*interface).into(),
+            },
             version: version.into(),
         })
     }
@@ -114,7 +121,8 @@ pub fn process_custom_section(reader: &mut WasmReader) -> Result<Option<LinkingI
                             }
                             functions.push(FunctionName(function.to_string()));
                         }
-                        package_name = format!("{:?}:{:?}", interface.namespace, interface.package);
+                        package_name =
+                            format!("{:?}:{:?}", interface.key.namespace, interface.key.package);
                         implements.push(InterfaceSpec {
                             interface,
                             functions,

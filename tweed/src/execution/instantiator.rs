@@ -395,6 +395,7 @@ impl ModuleInstantiator {
                 module_instance.implementations.push(InterfaceBinding {
                     interface: iface.interface,
                     functions: funcs,
+                    instance_addr,
                 });
             }
         }

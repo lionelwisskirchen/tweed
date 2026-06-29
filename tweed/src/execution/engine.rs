@@ -51,6 +51,8 @@ impl Engine {
     pub fn instantiate(&mut self, module: Module) -> Result<InstanceRef> {
         let mut instantiator = ModuleInstantiator {};
         let imports = &module.importsec;
+
+        // TODO: Modules without linking infos aren't allowed to be linked with interfaces
         let external = self.linker.resolve(imports)?;
 
         // Register new interface definitions to the linker
@@ -102,8 +104,8 @@ impl Engine {
     /// # Errors
     /// Returns [`ExecutionError::UnknownInstance`] if the provided
     /// `name` is an address.
-    pub fn register_exports(&mut self, name: InstanceRef) -> Result<()> {
-        let target_instance_addr = self.linker.resolve_instance(&name)?;
+    pub fn register_exports(&mut self, name: &InstanceRef) -> Result<()> {
+        let target_instance_addr = self.linker.resolve_instance(name)?;
         let instance = self.store.instances.get(target_instance_addr)?;
 
         let InstanceRef::Name(instance_name) = name else {
@@ -116,7 +118,8 @@ impl Engine {
             }
             return Err(ExecutionError::UnknownInstance);
         };
-        self.linker.register_exports(instance_name, instance)
+        self.linker
+            .register_exports(instance_name.to_string(), instance)
     }
     /// Invokes a function exported by an instance.
     ///
@@ -257,8 +260,25 @@ impl Engine {
 
         let instance_addr = self.linker.resolve_instance(instance)?;
         let instance = self.store.instances.get(instance_addr)?;
+
         let mem_addr = instance.memaddr[memory_idx];
 
         self.store.memories.get(mem_addr)
+    }
+    pub fn upgrade_interface(&mut self, instance: &InstanceRef) -> Result<()> {
+        let instance_addr = self.linker.resolve_instance(instance)?;
+        let instance = self.store.instances.get(instance_addr)?;
+        let mut upgrade_infos = vec![];
+        for implementation in &instance.implementations {
+            upgrade_infos.push(self.linker.prepare_upgrade(&implementation.interface)?);
+        }
+        for upgrade_info in upgrade_infos {
+            self.linker.apply_upgrade(&upgrade_info)?;
+        }
+        Ok(())
+    }
+
+    pub fn to_dot(&self) -> String {
+        self.linker.to_dot()
     }
 }

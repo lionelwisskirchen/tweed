@@ -1,5 +1,6 @@
 use crate::alloc::string::ToString;
 use crate::binary::custom_section::FunctionName;
+use crate::binary::custom_section::InterfaceId;
 use crate::binary::custom_section::LinkingInformation;
 use crate::binary::export_section::ExportContext;
 use crate::binary::import_section::Import;
@@ -14,6 +15,7 @@ use super::adresses::{FuncAddr, GlobalAddr, InstanceAddr, MemoryAddr, TableAddr}
 
 use super::dependency_graph::DependencyGraph;
 use super::dependency_graph::InterfaceBinding;
+use super::dependency_graph::UpgradeInfos;
 use super::engine::InstanceRef;
 use super::instances::module_instance::ModuleInstance;
 use alloc::vec::Vec;
@@ -84,6 +86,7 @@ impl Linker {
         self.imported_globals.insert(key, addr);
         Ok(())
     }
+
     /// Registers a table so it can be imported by other instances.
     ///
     /// The table is exposed under the given module and table name
@@ -321,5 +324,21 @@ impl Linker {
         }
 
         Ok(())
+    }
+    pub fn prepare_upgrade(&mut self, interface: &InterfaceId) -> Result<UpgradeInfos> {
+        let current_binding = self.dependency_graph.get_binding(interface)?;
+        let target_binding = self.dependency_graph.get_upgrade_binding(interface)?;
+        let dependent_bindings = self.dependency_graph.get_dependent_bindings(interface)?;
+        Ok(UpgradeInfos {
+            current_binding,
+            target_binding,
+            dependent_bindings,
+        })
+    }
+    pub fn apply_upgrade(&mut self, upgrade_info: &UpgradeInfos) -> Result<()> {
+        self.dependency_graph.apply_upgrade(upgrade_info)
+    }
+    pub fn to_dot(&self) -> String {
+        self.dependency_graph.to_dot()
     }
 }
