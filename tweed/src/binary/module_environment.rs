@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use super::{
     code_section::{process_code_section, FuncCode},
-    custom_section::process_custom_section,
+    custom_section::{process_custom_section, LinkingInformation},
     data_section::{process_data_section, DataSegment},
     element_section::ElementSegment,
     export_section::{process_export_section, Export},
@@ -40,6 +40,7 @@ pub struct ModuleEnvironment {
     pub datacountsec: Option<u32>,
     pub startsec: Option<u32>,
     pub sidetables: Vec<SideTable>,
+    pub linking_sec: Option<LinkingInformation>,
 }
 
 /// Defines the Order of the sections:
@@ -125,10 +126,14 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             Section::Custom => {
                 info!("Process Custom Section");
 
-                process_custom_section(reader).map_err(|e| match e {
+                let res = process_custom_section(reader).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
                     _ => e,
                 })?;
+
+                if res.is_some() {
+                    module.linking_sec = res;
+                }
             }
             Section::Type => {
                 info!("Process Type Section");
@@ -287,5 +292,6 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
         return Err(ValidationError::InconsistentDataDataCountSectionLengths);
     }
     info!("Finished Module parsing and validation");
+
     Ok(module)
 }

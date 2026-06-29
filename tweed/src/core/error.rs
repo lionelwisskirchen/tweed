@@ -78,6 +78,7 @@ pub enum ExecutionError {
     InvalidConversionToInt,
     InvalidSignatureIndex,
     FunctionNotFound,
+    InterfaceNotFound,
     MultipleMemories,
 }
 
@@ -122,6 +123,7 @@ impl Display for ExecutionError {
             Self::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
             Self::InvalidSignatureIndex => f.write_str("invalid signature index"),
             Self::FunctionNotFound => f.write_str("function not found"),
+            Self::InterfaceNotFound => f.write_str("interface not found"),
             Self::MultipleMemories => f.write_str("multiple memories"),
             Self::IncompatibleNumberOfImports => f.write_str("incompatible number of imports"),
         }
@@ -189,6 +191,8 @@ pub enum ValidationError {
     InconsistentDataDataCountSectionLengths,
     LengthOutOfBounds,
     ConstantExpressionRequired,
+    MalformedInterfaceDefinition,
+
     MalformedOneByteFlag,
     InvalidCustomPageSize,
 }
@@ -199,7 +203,7 @@ impl Display for ValidationError {
             Self::UndeclaredFunctionRef => f.write_str("undeclared function reference"),
             Self::MalformedUTF8Encoding => f.write_str("malformed UTF-8 encoding"),
             Self::OffsetOutOfRange => f.write_str("offset out of range"),
-
+            Self::MalformedInterfaceDefinition => f.write_str("malformed interface definition"),
             Self::MalformedOneByteFlag => f.write_str("malformed limits flags"),
             Self::UnexpectedContentAfterLastSection => {
                 f.write_str("unexpected content after last section")

@@ -1,7 +1,10 @@
+use crate::binary::custom_section::InterfaceId;
 use crate::binary::export_section::ExportContext;
 
 use crate::binary::type_section::FuncType;
 use crate::core::error::ExecutionError;
+
+use crate::execution::dependency_graph::InterfaceBinding;
 use crate::execution::instances::MemoryInstance;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
@@ -13,6 +16,27 @@ use crate::execution::adresses::{
 use crate::execution::store::Store;
 
 pub type Result<T> = core::result::Result<T, ExecutionError>;
+
+#[derive(Debug, Default, Clone)]
+pub struct DependencyInstance {
+    pub depends: Vec<InterfaceId>,
+    pub implements: Vec<InterfaceBinding>,
+}
+
+impl DependencyInstance {
+    pub fn module_name(&self) -> Option<String> {
+        if let Some(imp) = self.implements.first() {
+            return Some(format!(
+                "{:?}:{:?}@{}",
+                imp.interface.namespace, imp.interface.package, imp.interface.version
+            ));
+        }
+        None
+    }
+    pub fn has_information(&self) -> bool {
+        !self.implements.is_empty()
+    }
+}
 
 // An instantiated Module
 #[derive(Debug, Clone, Default)]
@@ -28,6 +52,7 @@ pub struct ModuleInstance {
     pub exports: BTreeMap<String, ExportContext>,
     pub reader: ReaderAddr,
     pub start: Option<FuncAddr>,
+    pub implementations: Vec<InterfaceBinding>,
 }
 
 impl ModuleInstance {

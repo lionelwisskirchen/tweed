@@ -1,9 +1,9 @@
 use crate::{
     binary::{
-        code_section::FuncCode, data_section::DataSegment, element_section::ElementSegment,
-        export_section::Export, function_section::FuncDecl, global_section::Global,
-        import_section::Imports, memory_section::Memory, table_section::Table,
-        type_section::FuncType,
+        code_section::FuncCode, custom_section::LinkingInformation, data_section::DataSegment,
+        element_section::ElementSegment, export_section::Export, function_section::FuncDecl,
+        global_section::Global, import_section::Imports, memory_section::Memory,
+        table_section::Table, type_section::FuncType,
     },
     core::validated_wasm_reader::ValidatedWasmReader,
 };
@@ -26,4 +26,5 @@ pub struct Module {
     pub elementsec: Vec<ElementSegment>,
     pub startsec: Option<u32>,
     pub sidetables: Vec<SideTable>,
+    pub linkingsec: Option<LinkingInformation>,
 }

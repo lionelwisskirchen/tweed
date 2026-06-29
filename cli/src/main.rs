@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
                 .into_iter()
                 .map(|arg0: i32| Value::I32(arg0))
                 .collect();
-            let result = engine.invoke(instance, function, values)
+            let result = engine.invoke(&instance, function, values)
                 .map_err(|e| anyhow::anyhow!("Function invocation failed: {:?}", e))?;
 
             println!("Result: {:?}", result);

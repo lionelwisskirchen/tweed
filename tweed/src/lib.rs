@@ -30,6 +30,9 @@ pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>,
     let result = engine.invoke(&instance_addr, name, params)?;
     Ok(result)
 }
+pub fn instantiate(module: Module, engine: &mut Engine) -> Result<InstanceRef, TweedError> {
+    Ok(engine.instantiate(module)?)
+}
 pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
     trace!("Initialize module");
     let mut reader = WasmReader::new(input.to_vec());
@@ -49,6 +52,7 @@ pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
         elementsec: module_environment.elementsec,
         startsec: module_environment.startsec,
         sidetables: module_environment.sidetables,
+        linkingsec: module_environment.linking_sec,
     })
 }
 

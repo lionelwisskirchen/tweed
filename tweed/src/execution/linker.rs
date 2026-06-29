@@ -1,4 +1,6 @@
 use crate::alloc::string::ToString;
+use crate::binary::custom_section::FunctionName;
+use crate::binary::custom_section::LinkingInformation;
 use crate::binary::export_section::ExportContext;
 use crate::binary::import_section::Import;
 use crate::binary::import_section::Imports;
@@ -9,6 +11,9 @@ use core::hash::Hash;
 
 use super::adresses::ExternAddr;
 use super::adresses::{FuncAddr, GlobalAddr, InstanceAddr, MemoryAddr, TableAddr};
+
+use super::dependency_graph::DependencyGraph;
+use super::dependency_graph::InterfaceBinding;
 use super::engine::InstanceRef;
 use super::instances::module_instance::ModuleInstance;
 use alloc::vec::Vec;
@@ -24,6 +29,7 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 #[derive(Default, Debug)]
 pub struct Linker {
     instances: BTreeMap<String, InstanceAddr>,
+    dependency_graph: DependencyGraph,
     imported_globals: BTreeMap<ImportName, GlobalAddr>,
     imported_funcs: BTreeMap<ImportName, FuncAddr>,
     imported_tables: BTreeMap<ImportName, TableAddr>,
@@ -149,6 +155,7 @@ impl Linker {
     /// - [`ExecutionError::MissingTableimport`] for missing table imports.
     pub fn resolve(&mut self, imports: &Imports) -> Result<Vec<ExternAddr>> {
         let mut resolved_import = vec![];
+
         for import in imports.imports() {
             match import {
                 Import::Function(imp) => {
@@ -156,17 +163,36 @@ impl Linker {
                         module: imp.module.clone(),
                         name: imp.name.clone(),
                     };
-                    // 1. Check if key exists in general
-                    if !self.import_exists(&key) {
-                        return Err(ExecutionError::MissingFunctionImport);
-                    };
+                    if let Ok(interface) = imp.module.clone().try_into() {
+                        let store_address = self
+                            .dependency_graph
+                            .find(&interface, FunctionName(imp.name.clone()))
+                            .or(self
+                                .imported_funcs
+                                .get(&key)
+                                .ok_or(ExecutionError::MissingFunctionImport));
 
-                    // 2. Check if key exists with the correct type
-                    let store_address = self
-                        .imported_funcs
-                        .get(&key)
-                        .ok_or(ExecutionError::IncompatibleImportType)?;
-                    resolved_import.push(ExternAddr::Func(*store_address));
+                        // 1. Check if key exists in general
+                        if store_address.is_err() {
+                            if !self.import_exists(&key) {
+                                return Err(ExecutionError::MissingFunctionImport);
+                            } else {
+                                return Err(ExecutionError::IncompatibleImportType);
+                            }
+                        };
+                        resolved_import.push(ExternAddr::Func(*store_address.unwrap()));
+                    } else {
+                        // 1. Check if key exists in general
+                        if !self.import_exists(&key) {
+                            return Err(ExecutionError::MissingFunctionImport);
+                        }
+                        // 2. Check if key exists with the correct type
+                        let store_address = self
+                            .imported_funcs
+                            .get(&key)
+                            .ok_or(ExecutionError::IncompatibleImportType)?;
+                        resolved_import.push(ExternAddr::Func(*store_address));
+                    }
                 }
                 Import::Global(imp) => {
                     let key = ImportName {
@@ -240,6 +266,16 @@ impl Linker {
         self.instances.insert(instance_name.to_string(), instance);
         Ok(instance_name.to_string())
     }
+
+    pub fn register_interface(&mut self, linking_information: LinkingInformation) -> Result<()> {
+        self.dependency_graph.add_interface(linking_information)
+    }
+    pub fn register_interface_bindings(&mut self, bindings: Vec<InterfaceBinding>) -> Result<()> {
+        for binding in bindings {
+            self.dependency_graph.add_binding(binding)?;
+        }
+        Ok(())
+    }
     /// Publishes all exports of an instance so they can be imported
     /// by other instances.
     ///
@@ -251,6 +287,11 @@ impl Linker {
     /// - `name`: Name for the instance.
     /// - `instance`: The instantiated module containing store addresses.
     pub fn register_exports(&mut self, name: String, instance: &ModuleInstance) -> Result<()> {
+        let has_interface_definitions = !instance.implementations.is_empty();
+        if has_interface_definitions {
+            self.register_interface_bindings(instance.implementations.clone())?;
+        }
+
         let exports = &instance.exports;
         for (ent_name, entity) in exports {
             let import_name = ImportName {
@@ -259,8 +300,10 @@ impl Linker {
             };
             match entity {
                 ExportContext::FunctionExport(id) => {
-                    let store_addr = instance.funcaddr.get(*id as usize).unwrap();
-                    self.imported_funcs.insert(import_name, *store_addr);
+                    if !has_interface_definitions {
+                        let store_addr = instance.funcaddr.get(*id as usize).unwrap();
+                        self.imported_funcs.insert(import_name, *store_addr);
+                    }
                 }
                 ExportContext::GlobalExport(id) => {
                     let store_addr = instance.globaladdr.get(*id as usize).unwrap();

@@ -43,23 +43,38 @@ pub struct Engine {
 impl Engine {
     /// Instantiates a module, resolves its imports, and invokes the start function if present.
     /// The imports are automatically wired into other modules via the linker.
+    /// When the Module contains dependency information it automatically registers itself,
+    /// under the given name.
     ///
     /// # Returns
     /// The store address of the instantiated module instance.
     pub fn instantiate(&mut self, module: Module) -> Result<InstanceRef> {
         let mut instantiator = ModuleInstantiator {};
         let imports = &module.importsec;
-
         let external = self.linker.resolve(imports)?;
 
+        // Register new interface definitions to the linker
+        if let Some(ref linking_infos) = module.linkingsec {
+            self.linker.register_interface(linking_infos.clone())?;
+        }
+        let linking_infos = &module.linkingsec.clone();
         let store_addr = instantiator.module_instantiate(&mut self.store, module, &external)?;
-        let start = self.store.instances.get(store_addr)?.start;
+
+        let instance = self.store.instances.get(store_addr)?;
+        let start = instance.start;
+
+        // When dependency infos are available automatically register the instance
+        if let Some(linking_info) = linking_infos {
+            self.register(&linking_info.package_name, InstanceRef::Addr(store_addr))?;
+        }
+
         if let Some(func_addr) = start {
             info!("Invoke start function with store address {func_addr}");
             self.executor.invoke(func_addr, &[], &mut self.store)?;
         }
         Ok(InstanceRef::Addr(store_addr))
     }
+
     /// Registers an instance under the given name in the linker.
     /// The engine itself does not support name-based invocation.
     ///
@@ -82,16 +97,25 @@ impl Engine {
     ///
     /// Export registration is performed via the linker, which operates on named instances only.
     /// Therefore, only instances identified by a module name can expose their exports.
+    /// It tries to resolve the Module name by checking the dependency information;
     ///
     /// # Errors
     /// Returns [`ExecutionError::UnknownInstance`] if the provided
     /// `name` is an address.
     pub fn register_exports(&mut self, name: InstanceRef) -> Result<()> {
         let target_instance_addr = self.linker.resolve_instance(&name)?;
+        let instance = self.store.instances.get(target_instance_addr)?;
+
         let InstanceRef::Name(instance_name) = name else {
+            // If no explicit name is given, try to resolve
+            // from the linking information
+            if !&instance.implementations.is_empty() {
+                self.linker
+                    .register_interface_bindings(instance.implementations.clone())?;
+                return Ok(());
+            }
             return Err(ExecutionError::UnknownInstance);
         };
-        let instance = self.store.instances.get(target_instance_addr)?;
         self.linker.register_exports(instance_name, instance)
     }
     /// Invokes a function exported by an instance.
