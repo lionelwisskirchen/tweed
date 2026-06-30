@@ -79,6 +79,7 @@ pub enum ExecutionError {
     InvalidSignatureIndex,
     FunctionNotFound,
     InterfaceNotFound,
+    InterfaceImplementationNotFound,
     MultipleMemories,
 }
 
@@ -124,6 +125,9 @@ impl Display for ExecutionError {
             Self::InvalidSignatureIndex => f.write_str("invalid signature index"),
             Self::FunctionNotFound => f.write_str("function not found"),
             Self::InterfaceNotFound => f.write_str("interface not found"),
+            Self::InterfaceImplementationNotFound => {
+                f.write_str("interface implementation not found")
+            }
             Self::MultipleMemories => f.write_str("multiple memories"),
             Self::IncompatibleNumberOfImports => f.write_str("incompatible number of imports"),
         }

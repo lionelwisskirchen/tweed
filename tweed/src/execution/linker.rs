@@ -273,11 +273,15 @@ impl Linker {
     pub fn register_interface(&mut self, linking_information: LinkingInformation) -> Result<()> {
         self.dependency_graph.add_interface(linking_information)
     }
-    pub fn register_interface_bindings(&mut self, bindings: Vec<InterfaceBinding>) -> Result<()> {
+    pub fn register_interface_bindings(
+        &mut self,
+        bindings: Vec<InterfaceBinding>,
+    ) -> Result<Vec<InterfaceId>> {
+        let mut res: Vec<InterfaceId> = vec![];
         for binding in bindings {
-            self.dependency_graph.add_binding(binding)?;
+            res.push(self.dependency_graph.add_binding(binding)?);
         }
-        Ok(())
+        Ok(res)
     }
     /// Publishes all exports of an instance so they can be imported
     /// by other instances.
@@ -325,14 +329,21 @@ impl Linker {
 
         Ok(())
     }
-    pub fn prepare_upgrade(&mut self, interface: &InterfaceId) -> Result<UpgradeInfos> {
+    pub fn get_binding(&self, interface: &InterfaceId) -> Option<InterfaceBinding> {
+        self.dependency_graph.get_binding(interface).ok()
+    }
+    pub fn prepare_upgrade(
+        &mut self,
+        interface: &InterfaceId,
+        selection: Vec<InterfaceId>,
+    ) -> Result<UpgradeInfos> {
         let current_binding = self.dependency_graph.get_binding(interface)?;
         let target_binding = self.dependency_graph.get_upgrade_binding(interface)?;
-        let dependent_bindings = self.dependency_graph.get_dependent_bindings(interface)?;
+
         Ok(UpgradeInfos {
             current_binding,
             target_binding,
-            dependent_bindings,
+            selection,
         })
     }
     pub fn apply_upgrade(&mut self, upgrade_info: &UpgradeInfos) -> Result<()> {

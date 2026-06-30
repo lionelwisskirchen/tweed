@@ -33,7 +33,7 @@ pub struct DependencyGraph {
 pub struct UpgradeInfos {
     pub current_binding: InterfaceBinding,
     pub target_binding: InterfaceBinding,
-    pub dependent_bindings: Vec<InterfaceBinding>,
+    pub selection: Vec<InterfaceId>,
 }
 
 impl DependencyGraph {
@@ -52,9 +52,10 @@ impl DependencyGraph {
     }
 
     /// Adds an implementation to an interface.
-    pub fn add_binding(&mut self, binding: InterfaceBinding) -> Result<()> {
+    pub fn add_binding(&mut self, binding: InterfaceBinding) -> Result<InterfaceId> {
+        let iface = binding.interface.clone();
         self.bindings.insert(binding.interface.clone(), binding);
-        Ok(())
+        Ok(iface)
     }
 
     /// Adds an interface to the dependency graph.
@@ -103,30 +104,32 @@ impl DependencyGraph {
 
         self.bindings
             .get(&target_version_edge.to)
-            .ok_or(ExecutionError::InterfaceNotFound)
+            .ok_or(ExecutionError::InterfaceImplementationNotFound)
             .cloned()
     }
-    pub fn get_dependent_bindings(&self, iface: &InterfaceId) -> Result<Vec<InterfaceBinding>> {
+    pub fn get_dependent_interfaces(&self, iface: &InterfaceId) -> Result<Vec<InterfaceId>> {
         Ok(self
             .dependencies
             .iter()
             .filter(|edge| edge.to == *iface)
-            .map(|e| self.bindings.get(&e.from).unwrap().clone())
+            .map(|e| e.from.clone())
             .collect())
     }
 
     /// Upgrades the graph according to the Upgrade Infos
     pub fn apply_upgrade(&mut self, upgrade_info: &UpgradeInfos) -> Result<()> {
-        // Delete all outgoing from upgraded version
-        self.dependencies
-            .retain(|edge| edge.from != upgrade_info.current_binding.interface);
-
         // Create new edges to new target iface
         let target_iface = upgrade_info.target_binding.interface.clone();
 
-        for dependent_interface in &upgrade_info.dependent_bindings {
+        for dependent_interface in &upgrade_info.selection {
+            // Delete all outgoing from upgraded version
+            self.dependencies.retain(|edge| {
+                !(edge.to == upgrade_info.current_binding.interface
+                    && edge.from == *dependent_interface)
+            });
+
             self.dependencies.push(Edge {
-                from: dependent_interface.interface.clone(),
+                from: dependent_interface.clone(),
                 to: target_iface.clone(),
             });
         }

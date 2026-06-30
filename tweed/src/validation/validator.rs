@@ -203,7 +203,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 return Err(ValidationError::EndOpCodeExpected);
             }
             let byte = self.reader.next_byte()?;
-            info!("Validating Byte: {byte:#04X}");
+            trace!("Validating Byte: {byte:#04X}");
             trace!("Stack: {:?}", self.abstract_value_stack);
             match byte {
                 I32_CONST => {
@@ -941,7 +941,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
                 }
                 REF_FUNC => {
                     let func_idx = self.reader.next_leb128_u32()? as usize;
-                    info!("{:?}", self.refs);
+                    trace!("{:?}", self.refs);
                     if !self.refs.contains(&func_idx) {
                         return Err(ValidationError::UndeclaredFunctionRef);
                     };

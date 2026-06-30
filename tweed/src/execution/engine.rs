@@ -7,8 +7,10 @@ use super::store::{HostEnv, Store};
 
 use alloc::rc::Rc;
 use core::cell::RefCell;
+use std::collections::BTreeMap;
 
 use super::linker::Linker;
+use crate::binary::custom_section::InterfaceId;
 use crate::binary::global_section::GlobalType;
 use crate::binary::memory_section::Limits;
 use crate::binary::table_section::Table;
@@ -16,6 +18,7 @@ use crate::binary::type_section::FuncType;
 use crate::core::error::ExecutionError;
 use crate::core::value_types::ValType;
 
+use crate::execution::adresses::FuncAddr;
 use crate::execution::executor::Executor;
 use crate::execution::instantiator::ModuleInstantiator;
 use crate::validation::module::Module;
@@ -59,6 +62,7 @@ impl Engine {
         if let Some(ref linking_infos) = module.linkingsec {
             self.linker.register_interface(linking_infos.clone())?;
         }
+
         let linking_infos = &module.linkingsec.clone();
         let store_addr = instantiator.module_instantiate(&mut self.store, module, &external)?;
 
@@ -66,6 +70,7 @@ impl Engine {
         let start = instance.start;
 
         // When dependency infos are available automatically register the instance
+        // under the name stored in the linking infos.
         if let Some(linking_info) = linking_infos {
             self.register(&linking_info.package_name, InstanceRef::Addr(store_addr))?;
         }
@@ -95,32 +100,37 @@ impl Engine {
         Ok(InstanceRef::Name(name))
     }
 
+    /// Tries to bind all the interface with a concrete implementation based on the
+    /// Information specified in the instance.
+    pub fn bind_interfaces(&mut self, name: &InstanceRef) -> Result<Vec<InterfaceId>> {
+        let target_instance_addr = self.linker.resolve_instance(name)?;
+        let instance = self.store.instances.get(target_instance_addr)?;
+        if !&instance.implementations.is_empty() {
+            return self
+                .linker
+                .register_interface_bindings(instance.implementations.clone());
+        }
+        Err(ExecutionError::UnknownInstance)
+    }
+
     /// Publishes all exports of an instance, making them available for import by other instances.
     ///
     /// Export registration is performed via the linker, which operates on named instances only.
     /// Therefore, only instances identified by a module name can expose their exports.
-    /// It tries to resolve the Module name by checking the dependency information;
     ///
     /// # Errors
     /// Returns [`ExecutionError::UnknownInstance`] if the provided
     /// `name` is an address.
     pub fn register_exports(&mut self, name: &InstanceRef) -> Result<()> {
         let target_instance_addr = self.linker.resolve_instance(name)?;
-        let instance = self.store.instances.get(target_instance_addr)?;
-
         let InstanceRef::Name(instance_name) = name else {
-            // If no explicit name is given, try to resolve
-            // from the linking information
-            if !&instance.implementations.is_empty() {
-                self.linker
-                    .register_interface_bindings(instance.implementations.clone())?;
-                return Ok(());
-            }
             return Err(ExecutionError::UnknownInstance);
         };
+        let instance = self.store.instances.get(target_instance_addr)?;
         self.linker
             .register_exports(instance_name.to_string(), instance)
     }
+
     /// Invokes a function exported by an instance.
     ///
     /// The instance can be referenced either by name or by direct address.
@@ -265,16 +275,33 @@ impl Engine {
 
         self.store.memories.get(mem_addr)
     }
-    pub fn upgrade_interface(&mut self, instance: &InstanceRef) -> Result<()> {
-        let instance_addr = self.linker.resolve_instance(instance)?;
-        let instance = self.store.instances.get(instance_addr)?;
-        let mut upgrade_infos = vec![];
-        for implementation in &instance.implementations {
-            upgrade_infos.push(self.linker.prepare_upgrade(&implementation.interface)?);
+    /// Upgrades an interface for the selection
+    pub fn upgrade_interface(
+        &mut self,
+        interface: &InterfaceId,
+        selection: Vec<InterfaceId>,
+    ) -> Result<()> {
+        let upgrade_info = self.linker.prepare_upgrade(interface, selection)?;
+        for dependent in &upgrade_info.selection {
+            if let Some(binding) = self.linker.get_binding(dependent) {
+                let dependent_instance = self.store.instances.get_mut(binding.instance_addr)?;
+                let function_upgrade: BTreeMap<FuncAddr, FuncAddr> = upgrade_info
+                    .current_binding
+                    .functions
+                    .iter()
+                    .filter_map(|(name, current)| {
+                        upgrade_info
+                            .target_binding
+                            .functions
+                            .get(name)
+                            .map(|new| (*current, *new))
+                    })
+                    .collect();
+                dependent_instance.upgrade_functions(function_upgrade)?;
+            }
         }
-        for upgrade_info in upgrade_infos {
-            self.linker.apply_upgrade(&upgrade_info)?;
-        }
+        self.linker.apply_upgrade(&upgrade_info)?;
+
         Ok(())
     }
 

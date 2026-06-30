@@ -41,6 +41,14 @@ pub struct ModuleInstance {
 }
 
 impl ModuleInstance {
+    pub fn upgrade_functions(&mut self, upgrade_infos: BTreeMap<FuncAddr, FuncAddr>) -> Result<()> {
+        for funcaddr in self.funcaddr.iter_mut() {
+            if let Some(new_adress) = upgrade_infos.get(funcaddr) {
+                *funcaddr = *new_adress
+            }
+        }
+        Ok(())
+    }
     pub fn get_func_by_name(&self, name: &str) -> Result<FuncAddr> {
         let Some(export_instance) = self.exports.get(name) else {
             return Err(ExecutionError::UnknownExportCall);

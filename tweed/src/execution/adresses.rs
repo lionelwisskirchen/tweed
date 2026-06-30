@@ -12,7 +12,7 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 /// This provides type safety and prevents mixing different entity kinds at compile time.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct GlobalAddr(pub usize);
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FuncAddr(pub usize);
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct TableAddr(pub usize);
