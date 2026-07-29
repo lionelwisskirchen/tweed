@@ -1,13 +1,14 @@
 extern crate alloc;
 
 use super::adresses::InstanceAddr;
+use super::executor::ExecutionState;
 use super::instances::function_instance::HostFunc;
 use super::instances::{FuncInstance, GlobalInstance, MemoryInstance, TableInstance};
 use super::store::{HostEnv, Store};
 
+use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use core::cell::RefCell;
-use std::collections::BTreeMap;
 
 use super::linker::Linker;
 use crate::binary::custom_section::InterfaceId;
@@ -23,8 +24,8 @@ use crate::execution::executor::Executor;
 use crate::execution::instantiator::ModuleInstantiator;
 use crate::validation::module::Module;
 
+use crate::alloc::string::ToString;
 use crate::Value;
-
 use alloc::string::String;
 use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ExecutionError>;
@@ -48,6 +49,8 @@ impl Engine {
     /// The imports are automatically wired into other modules via the linker.
     /// When the Module contains dependency information it automatically registers itself,
     /// under the given name.
+    /// When a Module contains a start section it automatically invokes the
+    /// referenced function.
     ///
     /// # Returns
     /// The store address of the instantiated module instance.
@@ -77,9 +80,29 @@ impl Engine {
 
         if let Some(func_addr) = start {
             info!("Invoke start function with store address {func_addr}");
-            self.executor.invoke(func_addr, &[], &mut self.store)?;
+            self.invoke_by_addr(func_addr, &[])?;
         }
         Ok(InstanceRef::Addr(store_addr))
+    }
+
+    #[cfg(not(feature = "interruptable"))]
+    fn invoke_by_addr(&mut self, func_addr: FuncAddr, args: &[Value]) -> Result<ExecutionState> {
+        match self.executor.invoke(func_addr, args, &mut self.store)? {
+            ExecutionState::Finished(values) => Ok(ExecutionState::Finished(values)),
+            ExecutionState::Continue => loop {
+                match self.executor.step(&mut self.store)? {
+                    ExecutionState::Finished(values) => {
+                        return Ok(ExecutionState::Finished(values))
+                    }
+                    ExecutionState::Continue => continue,
+                }
+            },
+        }
+    }
+
+    #[cfg(feature = "interruptable")]
+    fn invoke_by_addr(&mut self, func_addr: FuncAddr, args: &[Value]) -> Result<ExecutionState> {
+        self.executor.invoke(func_addr, args, &mut self.store)
     }
 
     /// Registers an instance under the given name in the linker.
@@ -131,6 +154,30 @@ impl Engine {
             .register_exports(instance_name.to_string(), instance)
     }
 
+    /// Invokes the implementation of an interface function.
+    ///
+    /// # Parameters
+    /// - `interface`: The identifier of an wit interface.
+    /// - `function_name`: Name of the function to invoke within the instance.
+    /// - `params`: Arguments passed to the function.
+    ///
+    /// # Returns
+    /// The result values returned by the executed function.
+    pub fn invoke_interface(
+        &mut self,
+        interface: InterfaceId,
+        function_name: String,
+        params: Vec<Value>,
+    ) -> Result<ExecutionState> {
+        let instance = &InstanceRef::Addr(
+            self.linker
+                .get_binding(&interface)
+                .ok_or(ExecutionError::InterfaceNotFound)?
+                .instance_addr,
+        );
+        self.invoke(instance, function_name, params)
+    }
+
     /// Invokes a function exported by an instance.
     ///
     /// The instance can be referenced either by name or by direct address.
@@ -149,14 +196,18 @@ impl Engine {
         instance: &InstanceRef,
         function_name: String,
         params: Vec<Value>,
-    ) -> Result<Vec<Value>> {
+    ) -> Result<ExecutionState> {
         let instance_addr = self.linker.resolve_instance(instance)?;
         let func_addr = self
             .store
             .instances
             .get(instance_addr)?
             .get_func_by_name(&function_name)?;
-        self.executor.invoke(func_addr, &params, &mut self.store)
+        self.invoke_by_addr(func_addr, &params)
+    }
+
+    pub fn step(&mut self) -> Result<ExecutionState> {
+        self.executor.step(&mut self.store)
     }
     /// Register a new global, that can be imported by other modules
     ///
@@ -303,6 +354,9 @@ impl Engine {
         self.linker.apply_upgrade(&upgrade_info)?;
 
         Ok(())
+    }
+    pub fn collect_garbage(&mut self) -> Result<()> {
+        self.linker.collect_garbage()
     }
 
     pub fn to_dot(&self) -> String {

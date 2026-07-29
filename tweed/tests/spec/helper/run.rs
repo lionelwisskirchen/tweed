@@ -7,6 +7,7 @@ use tweed::binary::type_section::FuncType;
 use tweed::core::value_types::ValType;
 use tweed::core::values::NaN;
 use tweed::execution::engine::Engine;
+use tweed::execution::executor::ExecutionState;
 
 use tweed::{initialize, Value};
 use wast::core::{HeapType, WastArgCore, WastRetCore};
@@ -583,7 +584,11 @@ fn result_to_runtime_value(expr: &WastRet) -> Value {
         _ => todo!(),
     }
 }
-fn compare_results(actual: Vec<Value>, expected: Vec<Value>) -> bool {
+fn compare_results(state: ExecutionState, expected: Vec<Value>) -> bool {
+    let actual = match state {
+        ExecutionState::Finished(result) => result,
+        _ => panic!("Embench program failed!"),
+    };
     // TODO maybe extract to types
     for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
         match (a, e) {

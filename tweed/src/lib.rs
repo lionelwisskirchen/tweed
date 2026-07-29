@@ -12,6 +12,8 @@ pub mod validation;
 use core::error::{TweedError, ValidationError};
 pub use core::values::Value;
 
+use binary::custom_section::InterfaceId;
+use execution::executor::ExecutionState;
 pub use log::LevelFilter;
 
 use crate::core::error::ExecutionError;
@@ -28,7 +30,56 @@ pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>,
     let mut engine = Engine::default();
     let instance_addr = engine.instantiate(module)?;
     let result = engine.invoke(&instance_addr, name, params)?;
-    Ok(result)
+    match result {
+        ExecutionState::Continue => loop {
+            match engine.step()? {
+                ExecutionState::Finished(values) => return Ok(values),
+                ExecutionState::Continue => continue,
+            }
+        },
+        ExecutionState::Finished(res) => Ok(res),
+    }
+}
+pub fn create_and_bind(input: &[u8], engine: &mut Engine) -> Result<Vec<InterfaceId>, TweedError> {
+    let module = initialize(input)?;
+    let instance = instantiate(module, engine)?;
+    Ok(engine.bind_interfaces(&instance)?)
+}
+
+pub fn bind_interfaces(
+    instance: InstanceRef,
+    engine: &mut Engine,
+) -> Result<Vec<InterfaceId>, TweedError> {
+    Ok(engine.bind_interfaces(&instance)?)
+}
+pub fn upgrade_interface(
+    id: String,
+    selection: Vec<String>,
+    engine: &mut Engine,
+) -> Result<(), TweedError> {
+    let interface = InterfaceId::try_from(id)?;
+    let select: Vec<InterfaceId> = selection
+        .iter()
+        .map(|id| InterfaceId::try_from(id.clone()))
+        .collect::<Result<Vec<InterfaceId>, _>>()?;
+    Ok(engine.upgrade_interface(&interface, select)?)
+}
+
+pub fn collect_garbage(engine: &mut Engine) -> Result<(), TweedError> {
+    Ok(engine.collect_garbage()?)
+}
+
+pub fn invoke_interface(
+    id: String,
+    function: String,
+    params: Vec<Value>,
+    engine: &mut Engine,
+) -> Result<ExecutionState, TweedError> {
+    let interface_id = InterfaceId::try_from(id)?;
+    Ok(engine.invoke_interface(interface_id, function, params)?)
+}
+pub fn step(engine: &mut Engine) -> Result<ExecutionState, TweedError> {
+    Ok(engine.step()?)
 }
 pub fn instantiate(module: Module, engine: &mut Engine) -> Result<InstanceRef, TweedError> {
     Ok(engine.instantiate(module)?)

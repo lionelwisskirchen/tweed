@@ -16,6 +16,11 @@ use alloc::vec::Vec;
 use extensions::*;
 use libm;
 pub type Result<T> = core::result::Result<T, ExecutionError>;
+#[derive(Debug, Clone)]
+pub enum ExecutionState {
+    Continue,
+    Finished(Vec<Value>),
+}
 
 #[derive(Default, Debug, Clone)]
 pub struct Frame {
@@ -53,19 +58,30 @@ impl Executor {
             stack_pointer: stack.len(),
             start: function.start,
             end: function.end,
-
             return_value: function.signature.result.clone(),
             locals,
             side_table: function.side_table.clone(),
             side_table_pointer: 0,
         })
     }
+    /// Prepares and starts the execution of a function invocation.
+    ///
+    /// The operand and call stacks are reset before the invocation begins, and the
+    /// provided arguments are placed on the operand stack.
+    ///
+    /// Internal functions are prepared for execution by creating an execution frame
+    /// and pushing it onto the call stack. External functions are executed
+    /// immediately through the host environment.
+    ///
+    /// The `OutOfFuel` error returned for internal functions does not indicate an
+    /// actual fuel exhaustion condition; it is used to transfer control back to
+    /// the interpreter execution loop.
     pub fn invoke(
         &mut self,
         func_addr: FuncAddr,
         args: &[Value],
         store: &mut Store,
-    ) -> Result<Vec<Value>> {
+    ) -> Result<ExecutionState> {
         self.call_stack.reset();
         self.stack.reset();
         self.stack.push_vec(args)?;
@@ -76,34 +92,53 @@ impl Executor {
             FuncInstance::Internal(instance) => {
                 let frame = self.build_frame(&instance)?;
                 self.call_stack.push(frame)?;
-                self.execute(store)
+                Ok(ExecutionState::Continue)
             }
             FuncInstance::External(ref mut host_function) => {
                 let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                 let mut func_ref = host_function.func.borrow_mut();
                 let results = func_ref(&mut env, args)?;
                 self.stack.push_vec(&results)?;
-                Ok(results)
+                Ok(ExecutionState::Finished(results))
             }
         }
     }
-    fn execute(&mut self, store: &mut Store) -> Result<Vec<Value>> {
+    pub fn step(&mut self, store: &mut Store) -> Result<ExecutionState> {
+        self.execute(store)
+    }
+
+    fn execute(&mut self, store: &mut Store) -> Result<ExecutionState> {
+        let mut result = ExecutionState::Finished(vec![]);
         loop {
             let Some(mut current_frame) = self.call_stack.pop() else {
-                return self.stack.pop_n(self.stack.len());
+                return Ok(result);
             };
-            self.execute_frame(&mut current_frame, store)?;
+            let frame_result = self.execute_frame(&mut current_frame, store)?;
+            match frame_result {
+                ExecutionState::Finished(_) => result = frame_result,
+                ExecutionState::Continue => return Ok(ExecutionState::Continue),
+            }
         }
     }
 
-    fn execute_frame(&mut self, current_frame: &mut Frame, store: &mut Store) -> Result<()> {
+    fn execute_frame(
+        &mut self,
+        current_frame: &mut Frame,
+        store: &mut Store,
+    ) -> Result<ExecutionState> {
         let instance_addr = &current_frame.instance_addr;
         let instance = store.instances.get_mut(*instance_addr)?;
         let reader_address = instance.reader;
         let reader = store.reader.get_mut(reader_address).unwrap();
         reader.seek(current_frame.start + current_frame.program_counter);
-
+        let mut counter = 10;
         loop {
+            if counter == 0 {
+                current_frame.program_counter = (reader.current_index() + 1) - current_frame.start;
+                self.call_stack.push(current_frame.clone())?;
+                return Ok(ExecutionState::Continue);
+            }
+            counter -= 1;
             let instruction = reader.next_byte();
             match instruction {
                 UNREACHABLE => {
@@ -2067,7 +2102,7 @@ impl Executor {
             };
         }
         current_frame.program_counter = reader.current_index() - current_frame.start + 1;
-        Ok(())
+        Ok(ExecutionState::Finished(self.stack.rest()))
     }
 
     fn do_goto(

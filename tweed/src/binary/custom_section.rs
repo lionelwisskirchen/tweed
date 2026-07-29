@@ -1,6 +1,9 @@
+use crate::alloc::string::ToString;
 use crate::core::error::ValidationError;
-
 use crate::core::wasm_reader::WasmReader;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::fmt::Display;
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
 /// Describes the dependency and implementation view of a module.
@@ -43,7 +46,7 @@ pub struct InterfaceKey {
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InterfaceId {
     pub key: InterfaceKey,
-    pub version: String,
+    pub version: Version,
 }
 impl InterfaceId {
     pub fn interface_name(&self) -> String {
@@ -76,11 +79,44 @@ impl TryFrom<String> for InterfaceId {
                 package: (*package).into(),
                 interface: (*interface).into(),
             },
-            version: version.into(),
+
+            version: Version::try_from(version)?,
         })
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Version {
+    major: u32,
+    minor: u32,
+    patch: u32,
+}
+impl TryFrom<&str> for Version {
+    type Error = ValidationError;
+    fn try_from(value: &str) -> core::result::Result<Self, Self::Error> {
+        let parts: Vec<u32> = value
+            .split(".")
+            .map(|part| {
+                part.parse::<u32>()
+                    .map_err(|_| ValidationError::InvalidInterfaceVersion)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let [major, minor, patch]: [u32; 3] = parts
+            .try_into()
+            .map_err(|_| ValidationError::InvalidInterfaceVersion)?;
+        Ok(Self {
+            major,
+            minor,
+            patch,
+        })
+    }
+}
+impl Display for Version {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}:{}:{}", self.major, self.minor, self.patch)
+    }
+}
 pub fn process_custom_section(reader: &mut WasmReader) -> Result<Option<LinkingInformation>> {
     let section_size = reader.next_leb128_u32()? as usize;
     let start_of_section = reader.current_index();

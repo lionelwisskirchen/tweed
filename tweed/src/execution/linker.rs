@@ -349,6 +349,9 @@ impl Linker {
     pub fn apply_upgrade(&mut self, upgrade_info: &UpgradeInfos) -> Result<()> {
         self.dependency_graph.apply_upgrade(upgrade_info)
     }
+    pub fn collect_garbage(&mut self) -> Result<()> {
+        self.dependency_graph.collect_garbage()
+    }
     pub fn to_dot(&self) -> String {
         self.dependency_graph.to_dot()
     }

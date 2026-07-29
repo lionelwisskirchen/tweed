@@ -5,7 +5,8 @@ use crate::{
 };
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
-use core::fmt::Write;
+use alloc::vec::Vec;
+use core::{fmt::Write, ops::Bound};
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Debug, Default, Clone)]
@@ -25,8 +26,8 @@ pub struct Edge {
 pub struct DependencyGraph {
     bindings: BTreeMap<InterfaceId, InterfaceBinding>,
     dependencies: Vec<Edge>,
-    versions: Vec<Edge>,
     interfaces: BTreeMap<InterfaceKey, BTreeSet<InterfaceId>>,
+    garbage: BTreeSet<InterfaceId>,
 }
 
 #[derive(Debug, Default)]
@@ -62,13 +63,6 @@ impl DependencyGraph {
     pub fn add_interface(&mut self, linking_information: LinkingInformation) -> Result<()> {
         for iface in &linking_information.implements {
             if let Some(interfaces) = self.interfaces.get_mut(&iface.interface.key) {
-                for interface in interfaces.iter() {
-                    // TODO check if version is higher or lower
-                    self.versions.push(Edge {
-                        from: interface.clone(),
-                        to: iface.interface.clone(),
-                    });
-                }
                 interfaces.insert(iface.interface.clone());
             } else {
                 self.interfaces.insert(
@@ -78,8 +72,11 @@ impl DependencyGraph {
             }
             for dependency in &linking_information.depends {
                 if !self.bindings.contains_key(dependency) {
-                    return Err(ExecutionError::MissingFunctionImport);
+                    return Err(ExecutionError::InterfaceImplementationNotFound);
                 }
+                // Remove dependency from garbage list
+                self.garbage.remove(dependency);
+
                 self.dependencies.push(Edge {
                     from: iface.interface.clone(),
                     to: dependency.clone(),
@@ -96,14 +93,22 @@ impl DependencyGraph {
             .cloned()
     }
     pub fn get_upgrade_binding(&self, iface: &InterfaceId) -> Result<InterfaceBinding> {
-        let target_version_edge = self
-            .versions
-            .iter()
-            .find(|edge| edge.from == *iface)
+        let target_interface_versions = self
+            .interfaces
+            .get(&iface.key)
+            .ok_or(ExecutionError::InterfaceNotFound)?;
+
+        let current_version = target_interface_versions
+            .get(iface)
+            .ok_or(ExecutionError::InterfaceNotFound)?;
+
+        let next_version = target_interface_versions
+            .range((Bound::Excluded(current_version), Bound::Unbounded))
+            .next()
             .ok_or(ExecutionError::InterfaceNotFound)?;
 
         self.bindings
-            .get(&target_version_edge.to)
+            .get(next_version)
             .ok_or(ExecutionError::InterfaceImplementationNotFound)
             .cloned()
     }
@@ -133,6 +138,29 @@ impl DependencyGraph {
                 to: target_iface.clone(),
             });
         }
+        // Mark as garbage, when no interface is dependent.
+        // The interface has no outgoing and no incoming dependency edges!
+        if self
+            .get_dependent_interfaces(&upgrade_info.current_binding.interface)?
+            .is_empty()
+        {
+            self.garbage
+                .insert(upgrade_info.current_binding.interface.clone());
+        }
+        Ok(())
+    }
+    pub fn collect_garbage(&mut self) -> Result<()> {
+        for interface in self.garbage.iter() {
+            // Remove Bindings
+            self.bindings.remove(interface);
+            // Remove Version from Interfaces
+            self.interfaces
+                .get_mut(&interface.key)
+                .expect("Unexpected Error")
+                .remove(interface);
+        }
+        // Clear Garbage List
+        self.garbage.clear();
         Ok(())
     }
     pub fn to_dot(&self) -> String {
@@ -149,16 +177,6 @@ impl DependencyGraph {
                 &edge.to.interface_name(),
             );
         }
-
-        for edge in &self.versions {
-            let _ = writeln!(
-                &mut out,
-                "  \"{}\" -> \"{}\" [color=blue, style=dashed, label=\"version\"];",
-                &edge.from.interface_name(),
-                &edge.to.interface_name(),
-            );
-        }
-
         let _ = writeln!(&mut out, "}}");
         out
     }
