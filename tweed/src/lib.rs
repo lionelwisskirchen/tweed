@@ -13,9 +13,11 @@ use core::error::{TweedError, ValidationError};
 pub use core::values::Value;
 
 use binary::custom_section::InterfaceId;
+use binary::type_section::FuncType;
 use execution::executor::ExecutionState;
 pub use log::LevelFilter;
 
+use crate::alloc::string::ToString;
 use crate::core::error::ExecutionError;
 use crate::core::wasm_reader::WasmReader;
 use crate::execution::engine::InstanceRef;
@@ -30,20 +32,29 @@ pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>,
     let mut engine = Engine::default();
     let instance_addr = engine.instantiate(module)?;
     let result = engine.invoke(&instance_addr, name, params)?;
-    match result {
-        ExecutionState::Continue => loop {
-            match engine.step()? {
-                ExecutionState::Finished(values) => return Ok(values),
-                ExecutionState::Continue => continue,
-            }
-        },
-        ExecutionState::Finished(res) => Ok(res),
+    if let ExecutionState::Finished(res) = result {
+        Ok(res)
+    } else {
+        Err(TweedError::Execution(ExecutionError::FunctionIsRunning))
     }
 }
 pub fn create_and_bind(input: &[u8], engine: &mut Engine) -> Result<Vec<InterfaceId>, TweedError> {
     let module = initialize(input)?;
     let instance = instantiate(module, engine)?;
     Ok(engine.bind_interfaces(&instance)?)
+}
+
+pub fn register_safe_point(engine: &mut Engine) -> Result<(), TweedError> {
+    engine.add_function_import(
+        "env".to_string(),
+        "safe_point".to_string(),
+        FuncType {
+            parameter: vec![],
+            result: vec![],
+        },
+        |_, _| Err(ExecutionError::SafePointReached),
+    )?;
+    Ok(())
 }
 
 pub fn bind_interfaces(
@@ -64,7 +75,18 @@ pub fn upgrade_interface(
         .collect::<Result<Vec<InterfaceId>, _>>()?;
     Ok(engine.upgrade_interface(&interface, select)?)
 }
-
+pub fn force_upgrade_interface(
+    id: String,
+    selection: Vec<String>,
+    engine: &mut Engine,
+) -> Result<(), TweedError> {
+    let interface = InterfaceId::try_from(id)?;
+    let select: Vec<InterfaceId> = selection
+        .iter()
+        .map(|id| InterfaceId::try_from(id.clone()))
+        .collect::<Result<Vec<InterfaceId>, _>>()?;
+    Ok(engine.force_upgrade_interface(&interface, select)?)
+}
 pub fn collect_garbage(engine: &mut Engine) -> Result<(), TweedError> {
     Ok(engine.collect_garbage()?)
 }

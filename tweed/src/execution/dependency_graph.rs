@@ -30,11 +30,25 @@ pub struct DependencyGraph {
     garbage: BTreeSet<InterfaceId>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct UpgradeInfos {
     pub current_binding: InterfaceBinding,
     pub target_binding: InterfaceBinding,
     pub selection: Vec<InterfaceId>,
+}
+impl UpgradeInfos {
+    pub fn create_upgrade_map(&self) -> BTreeMap<FuncAddr, FuncAddr> {
+        self.current_binding
+            .functions
+            .iter()
+            .filter_map(|(name, current)| {
+                self.target_binding
+                    .functions
+                    .get(name)
+                    .map(|new| (*current, *new))
+            })
+            .collect()
+    }
 }
 
 impl DependencyGraph {

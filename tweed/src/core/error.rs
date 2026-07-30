@@ -45,7 +45,9 @@ impl From<ExecutionError> for TweedError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExecutionError {
+    SafePointReached,
     InstanceNameTaken,
+    FunctionIsRunning,
     IncompatibleNumberOfImports,
     UnknownReader,
     UnknownInstance,
@@ -86,6 +88,8 @@ pub enum ExecutionError {
 impl Display for ExecutionError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::SafePointReached => f.write_str("Safe point reached"),
+            Self::FunctionIsRunning => f.write_str("Function is running"),
             Self::InstanceNameTaken => f.write_str("instance name taken"),
             Self::UnknownReader => f.write_str("no reader found for instance"),
             Self::UnknownInstance => f.write_str("unknown instance"),

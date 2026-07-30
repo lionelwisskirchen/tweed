@@ -1,5 +1,6 @@
 extern crate alloc;
 
+use super::dependency_graph::UpgradeInfos;
 use super::execution_stack::{CallStack, ExecutionStack};
 use super::instances::function_instance::Internal;
 use super::instances::{FuncInstance, MemoryInstance};
@@ -20,6 +21,7 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 pub enum ExecutionState {
     Continue,
     Finished(Vec<Value>),
+    Stopped,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -39,13 +41,21 @@ pub struct Frame {
 pub struct Executor {
     pub call_stack: CallStack,
     pub stack: ExecutionStack,
+    pub is_running: bool,
+    pub applied_upgrades: Vec<UpgradeInfos>,
+    pub max_steps: Option<usize>,
+    step_count: usize,
 }
 
 impl Executor {
-    pub fn new() -> Self {
+    pub fn new(max_steps: usize) -> Self {
         Self {
             call_stack: CallStack::default(),
             stack: ExecutionStack::default(),
+            is_running: false,
+            applied_upgrades: vec![],
+            max_steps: Some(max_steps),
+            step_count: max_steps,
         }
     }
     fn build_frame(&mut self, function: &Internal) -> Result<Frame> {
@@ -72,10 +82,6 @@ impl Executor {
     /// Internal functions are prepared for execution by creating an execution frame
     /// and pushing it onto the call stack. External functions are executed
     /// immediately through the host environment.
-    ///
-    /// The `OutOfFuel` error returned for internal functions does not indicate an
-    /// actual fuel exhaustion condition; it is used to transfer control back to
-    /// the interpreter execution loop.
     pub fn invoke(
         &mut self,
         func_addr: FuncAddr,
@@ -92,6 +98,7 @@ impl Executor {
             FuncInstance::Internal(instance) => {
                 let frame = self.build_frame(&instance)?;
                 self.call_stack.push(frame)?;
+                self.is_running = true;
                 Ok(ExecutionState::Continue)
             }
             FuncInstance::External(ref mut host_function) => {
@@ -103,20 +110,58 @@ impl Executor {
             }
         }
     }
-    pub fn step(&mut self, store: &mut Store) -> Result<ExecutionState> {
-        self.execute(store)
-    }
 
+    pub fn step(&mut self, store: &mut Store) -> Result<ExecutionState> {
+        let result = self.execute(store);
+        // When an error occurs the executor is not running anymore.
+        // This means a new function can be invoked.
+        if result.is_err() {
+            for instance_addr in self.get_active_instances() {
+                self.upgrade_instance(instance_addr, store)?;
+            }
+            self.is_running = false;
+        }
+        result
+    }
+    fn upgrade_instance(&mut self, instance_addr: InstanceAddr, store: &mut Store) -> Result<()> {
+        let instance = store.instances.get_mut(instance_addr);
+        if let Ok(inst) = instance {
+            self.applied_upgrades.append(&mut inst.apply_upgrade());
+        } else {
+            info!("Tried to upgrade non-existent instance.");
+        }
+        Ok(())
+    }
+    fn get_active_instances(&mut self) -> Vec<InstanceAddr> {
+        let active_instances: Vec<InstanceAddr> = self
+            .call_stack
+            .list()
+            .iter()
+            .map(|inst| inst.instance_addr)
+            .collect();
+        active_instances
+    }
     fn execute(&mut self, store: &mut Store) -> Result<ExecutionState> {
-        let mut result = ExecutionState::Finished(vec![]);
+        let mut result = ExecutionState::Stopped;
         loop {
             let Some(mut current_frame) = self.call_stack.pop() else {
+                self.is_running = false;
                 return Ok(result);
             };
+
             let frame_result = self.execute_frame(&mut current_frame, store)?;
             match frame_result {
-                ExecutionState::Finished(_) => result = frame_result,
-                ExecutionState::Continue => return Ok(ExecutionState::Continue),
+                ExecutionState::Finished(_) => {
+                    result = frame_result;
+                    // Try to upgrade instance of finished frame.
+                    if !self
+                        .get_active_instances()
+                        .contains(&current_frame.instance_addr)
+                    {
+                        self.upgrade_instance(current_frame.instance_addr, store)?;
+                    }
+                }
+                _ => return Ok(frame_result),
             }
         }
     }
@@ -131,14 +176,18 @@ impl Executor {
         let reader_address = instance.reader;
         let reader = store.reader.get_mut(reader_address).unwrap();
         reader.seek(current_frame.start + current_frame.program_counter);
-        let mut counter = 10;
         loop {
-            if counter == 0 {
-                current_frame.program_counter = (reader.current_index() + 1) - current_frame.start;
-                self.call_stack.push(current_frame.clone())?;
-                return Ok(ExecutionState::Continue);
+            if let Some(max_steps) = self.max_steps {
+                if self.step_count == 0 {
+                    current_frame.program_counter =
+                        (reader.current_index() + 1) - current_frame.start;
+                    self.call_stack.push(current_frame.clone())?;
+                    self.step_count = max_steps;
+                    return Ok(ExecutionState::Continue);
+                }
+                self.step_count -= 1;
             }
-            counter -= 1;
+
             let instruction = reader.next_byte();
             match instruction {
                 UNREACHABLE => {
@@ -861,8 +910,18 @@ impl Executor {
                             };
                             let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                             let mut func_ref = host_function.func.borrow_mut();
-                            let results = func_ref(&mut env, args)?;
-                            self.stack.push_vec(&results)?;
+                            let results = func_ref(&mut env, args);
+                            match results {
+                                Err(ExecutionError::SafePointReached) => {
+                                    self.applied_upgrades.append(&mut instance.apply_upgrade());
+                                }
+                                Ok(res) => {
+                                    self.stack.push_vec(&res)?;
+                                }
+                                _ => {
+                                    results?;
+                                }
+                            }
                         }
                     }
                 }
@@ -898,8 +957,18 @@ impl Executor {
                             };
                             let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                             let mut func_ref = host_function.func.borrow_mut();
-                            let results = func_ref(&mut env, args)?;
-                            self.stack.push_vec(&results)?;
+                            let results = func_ref(&mut env, args);
+                            match results {
+                                Err(ExecutionError::SafePointReached) => {
+                                    self.applied_upgrades.append(&mut instance.apply_upgrade());
+                                }
+                                Ok(res) => {
+                                    self.stack.push_vec(&res)?;
+                                }
+                                _ => {
+                                    results?;
+                                }
+                            }
                         }
                     }
                 }

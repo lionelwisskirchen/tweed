@@ -381,7 +381,7 @@ impl ModuleInstantiator {
             exports,
             reader: *store.reader.add(vec![module.reader]).first().unwrap(),
             start: start_address,
-            implementations: vec![],
+            ..Default::default()
         };
 
         // Resolve Interface Bindings

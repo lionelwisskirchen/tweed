@@ -33,7 +33,9 @@ impl CallStack {
     pub fn pop(&mut self) -> Option<Frame> {
         self.stack.pop()
     }
-
+    pub fn list(&self) -> &[Frame] {
+        &self.stack
+    }
     pub fn reset(&mut self) {
         self.stack.clear();
     }

@@ -30,7 +30,6 @@ default = ["std"]
 std = []
 unsafe = []
 custom_page_size = []
-interruptable = []
 
 [[test]]
 name = "custom_page_size_tests"

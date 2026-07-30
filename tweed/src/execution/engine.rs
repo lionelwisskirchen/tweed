@@ -6,7 +6,6 @@ use super::instances::function_instance::HostFunc;
 use super::instances::{FuncInstance, GlobalInstance, MemoryInstance, TableInstance};
 use super::store::{HostEnv, Store};
 
-use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 
@@ -45,6 +44,13 @@ pub struct Engine {
     store: Store,
 }
 impl Engine {
+    pub fn new(max_steps: usize) -> Self {
+        Self {
+            executor: Executor::new(max_steps),
+            ..Default::default()
+        }
+    }
+
     /// Instantiates a module, resolves its imports, and invokes the start function if present.
     /// The imports are automatically wired into other modules via the linker.
     /// When the Module contains dependency information it automatically registers itself,
@@ -85,24 +91,14 @@ impl Engine {
         Ok(InstanceRef::Addr(store_addr))
     }
 
-    #[cfg(not(feature = "interruptable"))]
     fn invoke_by_addr(&mut self, func_addr: FuncAddr, args: &[Value]) -> Result<ExecutionState> {
+        if self.executor.is_running {
+            return Err(ExecutionError::FunctionIsRunning);
+        };
         match self.executor.invoke(func_addr, args, &mut self.store)? {
             ExecutionState::Finished(values) => Ok(ExecutionState::Finished(values)),
-            ExecutionState::Continue => loop {
-                match self.executor.step(&mut self.store)? {
-                    ExecutionState::Finished(values) => {
-                        return Ok(ExecutionState::Finished(values))
-                    }
-                    ExecutionState::Continue => continue,
-                }
-            },
+            _ => self.executor.step(&mut self.store),
         }
-    }
-
-    #[cfg(feature = "interruptable")]
-    fn invoke_by_addr(&mut self, func_addr: FuncAddr, args: &[Value]) -> Result<ExecutionState> {
-        self.executor.invoke(func_addr, args, &mut self.store)
     }
 
     /// Registers an instance under the given name in the linker.
@@ -207,7 +203,13 @@ impl Engine {
     }
 
     pub fn step(&mut self) -> Result<ExecutionState> {
-        self.executor.step(&mut self.store)
+        let result = self.executor.step(&mut self.store);
+        for upgrade_info in &self.executor.applied_upgrades {
+            // TODO how to handle a linker upgrade failure?
+            self.linker.apply_upgrade(upgrade_info)?;
+        }
+        self.executor.applied_upgrades.clear();
+        result
     }
     /// Register a new global, that can be imported by other modules
     ///
@@ -250,7 +252,7 @@ impl Engine {
         name: String,
         ty: FuncType,
         func: impl FnMut(&mut HostEnv, Vec<Value>) -> Result<Vec<Value>> + 'static,
-    ) -> Result<()> {
+    ) -> Result<FuncAddr> {
         let func_instance = HostFunc {
             signature: ty,
             func: Rc::new(RefCell::new(func)),
@@ -259,7 +261,8 @@ impl Engine {
             .store
             .functions
             .add_one(FuncInstance::External(func_instance));
-        self.linker.register_function(module, name, func_addr)
+        self.linker.register_function(module, name, func_addr)?;
+        Ok(func_addr)
     }
     /// Register a new table, that can be imported by other modules
     ///
@@ -326,8 +329,10 @@ impl Engine {
 
         self.store.memories.get(mem_addr)
     }
-    /// Upgrades an interface for the selection
-    pub fn upgrade_interface(
+
+    /// Upgrades an interface for the selection.
+    /// It ignores if the binding is currently executed.
+    pub fn force_upgrade_interface(
         &mut self,
         interface: &InterfaceId,
         selection: Vec<InterfaceId>,
@@ -336,22 +341,39 @@ impl Engine {
         for dependent in &upgrade_info.selection {
             if let Some(binding) = self.linker.get_binding(dependent) {
                 let dependent_instance = self.store.instances.get_mut(binding.instance_addr)?;
-                let function_upgrade: BTreeMap<FuncAddr, FuncAddr> = upgrade_info
-                    .current_binding
-                    .functions
-                    .iter()
-                    .filter_map(|(name, current)| {
-                        upgrade_info
-                            .target_binding
-                            .functions
-                            .get(name)
-                            .map(|new| (*current, *new))
-                    })
-                    .collect();
-                dependent_instance.upgrade_functions(function_upgrade)?;
+                dependent_instance.prepare_upgrade(&upgrade_info)?;
+                for upgrade in dependent_instance.apply_upgrade() {
+                    self.linker.apply_upgrade(&upgrade)?;
+                }
             }
         }
-        self.linker.apply_upgrade(&upgrade_info)?;
+        Ok(())
+    }
+    /// Upgrades an interface for the selection.
+    pub fn upgrade_interface(
+        &mut self,
+        interface: &InterfaceId,
+        selection: Vec<InterfaceId>,
+    ) -> Result<()> {
+        let upgrade_info = self.linker.prepare_upgrade(interface, selection)?;
+        let active_instances: Vec<InstanceAddr> = self
+            .executor
+            .call_stack
+            .list()
+            .iter()
+            .map(|inst| inst.instance_addr)
+            .collect();
+        for dependent in &upgrade_info.selection {
+            if let Some(binding) = self.linker.get_binding(dependent) {
+                let dependent_instance = self.store.instances.get_mut(binding.instance_addr)?;
+                dependent_instance.prepare_upgrade(&upgrade_info)?;
+                if !active_instances.contains(&binding.instance_addr) {
+                    for upgrade in dependent_instance.apply_upgrade() {
+                        self.linker.apply_upgrade(&upgrade)?;
+                    }
+                }
+            }
+        }
 
         Ok(())
     }

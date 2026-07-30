@@ -22,7 +22,7 @@ pub struct MemoryAddr(pub usize);
 pub struct DataAddr(pub usize);
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ElementAddr(pub usize);
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct InstanceAddr(pub usize);
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ReaderAddr(pub usize);
