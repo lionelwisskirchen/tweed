@@ -1,4 +1,6 @@
 stages:
+  - style
+  - format
   - test
   - benchmark
 
@@ -23,11 +25,11 @@ variables:
   GIT_STRATEGY: clone
 
 style-test-job:
-  stage: test
+  stage: style
   script: ./scripts/style-checks.bash
 
 format-test-job:
-  stage: test
+  stage: format
   script: ./scripts/format-checks.bash
 
 unit-test-job:
