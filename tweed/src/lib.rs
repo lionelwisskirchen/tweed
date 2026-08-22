@@ -1,3 +1,11 @@
+#![cfg_attr(
+    any(feature = "tail-call", feature = "match-tail-call"),
+    allow(incomplete_features)
+)]
+#![cfg_attr(
+    any(feature = "tail-call", feature = "match-tail-call"),
+    feature(explicit_tail_calls)
+)]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 #[macro_use]
 extern crate alloc;

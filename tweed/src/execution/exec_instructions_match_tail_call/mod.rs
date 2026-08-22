@@ -1,0 +1,10 @@
+pub mod control_flow;
+pub mod execute_next_instruction;
+pub mod f32;
+pub mod f64;
+pub mod global;
+pub mod i32;
+pub mod i64;
+pub mod local;
+pub mod memory;
+pub mod table;

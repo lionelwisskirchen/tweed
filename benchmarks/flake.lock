@@ -1,0 +1,66 @@
+{
+  "nodes": {
+    "nixos-unstable": {
+      "locked": {
+        "lastModified": 1787304403,
+        "narHash": "sha256-idg9xCvpCWoazOLxdoaR+8WPFR/holsJF/BAeCEnq5I=",
+        "ref": "nixos-unstable",
+        "rev": "84bf56a9c02b34bb21b3f9a9103610a273d51397",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://gitlab%2Bdeploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/000000003B9CFBB6/nixpkgs-mirror.git"
+      },
+      "original": {
+        "ref": "nixos-unstable",
+        "type": "git",
+        "url": "https://gitlab%2Bdeploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/000000003B9CFBB6/nixpkgs-mirror.git"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1787304403,
+        "narHash": "sha256-idg9xCvpCWoazOLxdoaR+8WPFR/holsJF/BAeCEnq5I=",
+        "ref": "nixos-unstable",
+        "rev": "84bf56a9c02b34bb21b3f9a9103610a273d51397",
+        "revCount": 1,
+        "type": "git",
+        "url": "https://gitlab%2Bdeploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/000000003B9CFBB6/nixpkgs-mirror.git"
+      },
+      "original": {
+        "ref": "nixos-unstable",
+        "type": "git",
+        "url": "https://gitlab%2Bdeploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/000000003B9CFBB6/nixpkgs-mirror.git"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixos-unstable": "nixos-unstable",
+        "nixpkgs": "nixpkgs",
+        "rust-overlay": "rust-overlay"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1787367552,
+        "narHash": "sha256-YT4Fs2k7bi+7YzuLt93EtIRgjpwHK5ZfsQEIh5dEQSk=",
+        "ref": "master",
+        "rev": "fd2ebb9cc4323d0c5a1336138dab5c3c5a5d8bd9",
+        "revCount": 2280,
+        "type": "git",
+        "url": "https://gitlab%2Bdeploy-token-2661:gldt-fnxNgazf26aSZoB_DZJN@gitlab.lrz.de/000000003B9CFBB6/rust-overlay-mirror.git"
+      },
+      "original": {
+        "ref": "master",
+        "type": "git",
+        "url": "https://gitlab%2Bdeploy-token-2661:gldt-fnxNgazf26aSZoB_DZJN@gitlab.lrz.de/000000003B9CFBB6/rust-overlay-mirror.git"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

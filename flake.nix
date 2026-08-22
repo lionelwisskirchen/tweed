@@ -7,7 +7,6 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
     devshell.url = "github:numtide/devshell";
-
   };
 
   outputs =
@@ -17,7 +16,6 @@
       flake-utils,
       rust-overlay,
       devshell,
-
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
