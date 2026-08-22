@@ -79,6 +79,17 @@
                 help = "run tests.";
                 category = "code-checks";
               }
+              {
+                name = "benchmark-on-device";
+                command = ''                   
+                   cd $PRJ_ROOT/benchmarks/stm32/l4
+                   nix develop --command bash -c 'openocd -f openocd.cfg > openocd.log 2>&1 &'
+                   nix develop --command bash -c '
+                         python ../run-benches.py --outname benchmark_output ../../benchmark_sources results'
+                '';
+                help = "Benchmark on STM32L4";
+                category = "benchmarks";
+              }
             ];
           }
 

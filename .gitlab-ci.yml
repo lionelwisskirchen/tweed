@@ -1,5 +1,6 @@
 stages:
   - test
+  - benchmark
 
 workflow:
   rules:
@@ -17,6 +18,9 @@ default:
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_UPDATE_FLAGS: --remote
+  GIT_DEPTH: 1
+  GIT_STRATEGY: clone
 
 style-test-job:
   stage: test
@@ -36,3 +40,20 @@ unit-test-job:
   # this uses region for coverage summary
   coverage: '/TOTAL\s+(\d+\s+)+(\d+\.\d+\%)/'
   script: ./scripts/coverage-checks.bash
+
+benchmark-job:
+  stage: benchmark
+  when: manual
+  script:
+    - cd benchmarks
+    - nix develop --command bash -c 'openocd -f openocd.cfg > openocd.log 2>&1 &'      
+    - echo "Start Benchmarking"
+    - cd ./stm32/l4
+    - nix develop --command bash -c '
+      python ../run-benches.py
+      --outname benchmark_output
+      ../../benchmark_sources 
+      results' 
+  artifacts:
+    paths:
+      - benchmarks/stm32/l4/results/benchmark_output.csv  

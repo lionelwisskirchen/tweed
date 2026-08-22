@@ -1,0 +1,22 @@
+[package]
+name = "staticlib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+spin = "0.9.8"
+tweed = {path = "../../tweed", default-features = false, features = []} 
+
+[lib]
+name = "tweed_staticlib"
+crate-type = ["staticlib"]
+
+# [profile.dev]
+# panic = "abort"
+
+# [profile.release]
+# panic = "abort"
+# strip = true
+# opt-level = "z"
+# lto = true
+# codegen-units = 1
