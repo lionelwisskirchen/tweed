@@ -127,7 +127,9 @@ def main(benchpath, outpath, outname):
         if delay1 > -1:
             measurements[name] = (delay1, delay2, stack, heap)
             sizes[name] = (text, data)
-
+            print(
+                f"GOT RESULTS: {name},{text},{data},{delay1},{delay2},{stack},{heap}\n"
+            )
     Path(outpath).mkdir(exist_ok=True)
     write_csv(f"{outpath}", sizes, measurements, outname)
 
@@ -138,6 +140,7 @@ def write_csv(path, sizes, measurements, extension):
         for name in sizes:
             size = sizes[name]
             measurement = measurements[name]
+
             f.write(
                 f"{name},{size[0]},{size[1]},{measurement[0]},{measurement[1]},{measurement[2]},{measurement[3]}\n"
             )
@@ -300,11 +303,17 @@ def get_measurements(coremark_flag):
         y = bytearray()
         y.extend(ser.read_until(b"END OF TEST"))
         s = str(y, "utf-8")
-        if VERBOSE is not None:
-            print(s)
+        print("Searching for delays.")
+
+        print(s)
+
         first = re.search(r"First runtime delay: (\d+)ms", s)
         second = re.search(r"Second runtime delay: (\d+)ms", s)
-        delay1 = int(first.group(1))
+        if first is not None:
+            delay1 = int(first.group(1))
+        else:
+            delay1 = -1
+
         if second is not None:
             delay2 = int(second.group(1))
         else:
