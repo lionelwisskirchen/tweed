@@ -1,7 +1,10 @@
+use crate::binary::custom_section::InterfaceId;
 use crate::binary::export_section::ExportContext;
 
 use crate::binary::type_section::FuncType;
 use crate::core::error::ExecutionError;
+
+use crate::execution::dependency_graph::{InterfaceBinding, UpgradeInfos};
 use crate::execution::instances::MemoryInstance;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
@@ -13,6 +16,12 @@ use crate::execution::adresses::{
 use crate::execution::store::Store;
 
 pub type Result<T> = core::result::Result<T, ExecutionError>;
+
+#[derive(Debug, Default, Clone)]
+pub struct DependencyInstance {
+    pub depends: Vec<InterfaceId>,
+    pub implements: Vec<InterfaceBinding>,
+}
 
 // An instantiated Module
 #[derive(Debug, Clone, Default)]
@@ -28,9 +37,29 @@ pub struct ModuleInstance {
     pub exports: BTreeMap<String, ExportContext>,
     pub reader: ReaderAddr,
     pub start: Option<FuncAddr>,
+    pub implementations: Vec<InterfaceBinding>,
+    pub upgrades: Vec<UpgradeInfos>,
 }
 
 impl ModuleInstance {
+    pub fn prepare_upgrade(&mut self, upgrade_infos: &UpgradeInfos) -> Result<()> {
+        self.upgrades.push(upgrade_infos.clone());
+        Ok(())
+    }
+
+    pub fn apply_upgrade(&mut self) -> Vec<UpgradeInfos> {
+        for upgrade_info in &self.upgrades {
+            let upgrade_map = upgrade_info.create_upgrade_map();
+            for funcaddr in self.funcaddr.iter_mut() {
+                if let Some(new_adress) = upgrade_map.get(funcaddr) {
+                    *funcaddr = *new_adress
+                }
+            }
+        }
+        let result = self.upgrades.clone();
+        self.upgrades.clear();
+        result
+    }
     pub fn get_func_by_name(&self, name: &str) -> Result<FuncAddr> {
         let Some(export_instance) = self.exports.get(name) else {
             return Err(ExecutionError::UnknownExportCall);

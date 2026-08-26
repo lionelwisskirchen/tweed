@@ -45,7 +45,9 @@ impl From<ExecutionError> for TweedError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExecutionError {
+    SafePointReached,
     InstanceNameTaken,
+    FunctionIsRunning,
     IncompatibleNumberOfImports,
     UnknownReader,
     UnknownInstance,
@@ -78,12 +80,16 @@ pub enum ExecutionError {
     InvalidConversionToInt,
     InvalidSignatureIndex,
     FunctionNotFound,
+    InterfaceNotFound,
+    InterfaceImplementationNotFound,
     MultipleMemories,
 }
 
 impl Display for ExecutionError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::SafePointReached => f.write_str("Safe point reached"),
+            Self::FunctionIsRunning => f.write_str("Function is running"),
             Self::InstanceNameTaken => f.write_str("instance name taken"),
             Self::UnknownReader => f.write_str("no reader found for instance"),
             Self::UnknownInstance => f.write_str("unknown instance"),
@@ -122,6 +128,10 @@ impl Display for ExecutionError {
             Self::InvalidConversionToInt => f.write_str("invalid conversion to integer"),
             Self::InvalidSignatureIndex => f.write_str("invalid signature index"),
             Self::FunctionNotFound => f.write_str("function not found"),
+            Self::InterfaceNotFound => f.write_str("interface not found"),
+            Self::InterfaceImplementationNotFound => {
+                f.write_str("interface implementation not found")
+            }
             Self::MultipleMemories => f.write_str("multiple memories"),
             Self::IncompatibleNumberOfImports => f.write_str("incompatible number of imports"),
         }
@@ -157,6 +167,7 @@ pub enum ValidationError {
     MalformedMutability,
     InvalidMagic,
     InvalidVersion,
+    InvalidInterfaceVersion,
     TypeMismatch,
     InvalidSignatureIndex,
     InvalidControlFlow,
@@ -189,6 +200,8 @@ pub enum ValidationError {
     InconsistentDataDataCountSectionLengths,
     LengthOutOfBounds,
     ConstantExpressionRequired,
+    MalformedInterfaceDefinition,
+
     MalformedOneByteFlag,
     InvalidCustomPageSize,
 }
@@ -199,7 +212,7 @@ impl Display for ValidationError {
             Self::UndeclaredFunctionRef => f.write_str("undeclared function reference"),
             Self::MalformedUTF8Encoding => f.write_str("malformed UTF-8 encoding"),
             Self::OffsetOutOfRange => f.write_str("offset out of range"),
-
+            Self::MalformedInterfaceDefinition => f.write_str("malformed interface definition"),
             Self::MalformedOneByteFlag => f.write_str("malformed limits flags"),
             Self::UnexpectedContentAfterLastSection => {
                 f.write_str("unexpected content after last section")
@@ -240,6 +253,7 @@ impl Display for ValidationError {
             Self::GlobalIsImmutable => f.write_str("global is immutable"),
             Self::InvalidIntegerRepresentation => f.write_str("integer representation too long"),
             Self::InvalidVersion => f.write_str("unknown binary version"),
+            Self::InvalidInterfaceVersion => f.write_str("invalid interface version"),
             Self::TypeMismatch | Self::InvalidSignatureIndex => f.write_str("type mismatch"),
             Self::InvalidControlFlow => f.write_str("invalid control flow"),
             Self::InvalidLocalIndex => f.write_str("unknown local"),

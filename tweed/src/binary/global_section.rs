@@ -52,7 +52,6 @@ pub fn process_global_section(
             number_of_globals as usize,
             refs,
         )?;
-        info!("{:?}", refs);
         let end = reader.current_index();
         let global_type = GlobalType {
             value_type,

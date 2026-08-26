@@ -55,7 +55,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     for val in test_values {
         group.bench_with_input(BenchmarkId::new("Tweed", &val.0), &val, |b, _val| {
             b.iter(|| {
-                use tweed::execution::engine::Engine;
+                use tweed::execution::{engine::Engine, executor::ExecutionState};
 
                 let module = initialize(&val.1).unwrap_or_else(|e| {
                     panic!("Initialization failed: {e}");
@@ -67,8 +67,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 let result = engine
                     .invoke(&instance, "_run".to_string(), vec![])
                     .expect("Execution failed");
-                if result != vec![Value::I32(0)] {
-                    panic!("Embench program failed!");
+                match result {
+                    ExecutionState::Finished(resul) => {
+                        if resul != vec![Value::I32(0)] {
+                            panic!("Embench program failed!");
+                        }
+                    }
+                    _ => panic!("Embench program failed!"),
                 }
             })
         });

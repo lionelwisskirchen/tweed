@@ -8,6 +8,7 @@ use super::store::Store;
 
 use super::adresses::ExternAddr;
 use super::constant_expression_executor::execute_const_expr;
+use crate::binary::custom_section::FunctionName;
 use crate::binary::data_section::SegmentMode;
 use crate::binary::element_section::{ElementItems, Mode};
 use crate::binary::import_section::Import;
@@ -15,6 +16,7 @@ use crate::core::error::ExecutionError;
 use crate::core::signature_lookup::lookup_signature;
 use crate::core::value_types::ValType;
 
+use crate::execution::dependency_graph::InterfaceBinding;
 use crate::execution::instances::function_instance::Internal;
 use crate::execution::instances::{
     DataInstance, ElementInstance, FuncInstance, GlobalInstance, MemoryInstance, ModuleInstance,
@@ -368,7 +370,7 @@ impl ModuleInstantiator {
             start_address = all_function_idxs.get(id as usize).cloned()
         }
 
-        let module_instance = ModuleInstance {
+        let mut module_instance = ModuleInstance {
             types: module.typesec.clone(),
             funcaddr: all_function_idxs,
             tableaddr: all_table_idxs,
@@ -379,8 +381,24 @@ impl ModuleInstantiator {
             exports,
             reader: *store.reader.add(vec![module.reader]).first().unwrap(),
             start: start_address,
+            ..Default::default()
         };
 
+        // Resolve Interface Bindings
+        if let Some(linking_infos) = module.linkingsec {
+            for iface in linking_infos.implements {
+                let funcs = iface
+                    .functions
+                    .iter()
+                    .map(|f| Ok((f.clone(), module_instance.get_func_by_name(&f.0)?)))
+                    .collect::<Result<BTreeMap<FunctionName, FuncAddr>>>()?;
+                module_instance.implementations.push(InterfaceBinding {
+                    interface: iface.interface,
+                    functions: funcs,
+                    instance_addr,
+                });
+            }
+        }
         store
             .instances
             .insert_instance_at_addr(instance_addr, module_instance)?;

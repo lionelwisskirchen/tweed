@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use super::{
     code_section::{process_code_section, FuncCode},
-    custom_section::process_custom_section,
+    custom_section::{process_custom_section, LinkingInformation},
     data_section::{process_data_section, DataSegment},
     element_section::ElementSegment,
     export_section::{process_export_section, Export},
@@ -40,6 +40,7 @@ pub struct ModuleEnvironment {
     pub datacountsec: Option<u32>,
     pub startsec: Option<u32>,
     pub sidetables: Vec<SideTable>,
+    pub linking_sec: Option<LinkingInformation>,
 }
 
 /// Defines the Order of the sections:
@@ -123,15 +124,19 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
 
         match next_section {
             Section::Custom => {
-                info!("Process Custom Section");
+                trace!("Process Custom Section");
 
-                process_custom_section(reader).map_err(|e| match e {
+                let res = process_custom_section(reader).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
                     _ => e,
                 })?;
+
+                if res.is_some() {
+                    module.linking_sec = res;
+                }
             }
             Section::Type => {
-                info!("Process Type Section");
+                trace!("Process Type Section");
                 module.typesec = process_type_section(reader).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => {
                         ValidationError::UnexpectedEndOfFunctionOrSection
@@ -141,7 +146,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
 
             Section::Import => {
-                info!("Process Import Section");
+                trace!("Process Import Section");
                 let imports = process_import_section(reader, &module).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => {
                         ValidationError::UnexpectedEndOfFunctionOrSection
@@ -158,7 +163,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 module.importsec = imports;
             }
             Section::Function => {
-                info!("Process Function Section");
+                trace!("Process Function Section");
                 let internal_funcs = process_function_section(reader).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => {
                         ValidationError::UnexpectedEndOfFunctionOrSection
@@ -169,7 +174,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 module.funcsec.extend(internal_funcs);
             }
             Section::Table => {
-                info!("Process Table Section");
+                trace!("Process Table Section");
                 module.tablesec = process_table_section(reader).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => {
                         ValidationError::UnexpectedEndOfFunctionOrSection
@@ -178,7 +183,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 })?;
             }
             Section::Memory => {
-                info!("Process Memory Section");
+                trace!("Process Memory Section");
 
                 // currently (WebAssembly V2) there is only one memory allowed at once
                 if !module.importsec.memories.is_empty() {
@@ -193,7 +198,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
             }
 
             Section::Global => {
-                info!("Process Global Section");
+                trace!("Process Global Section");
                 process_global_section(reader, &mut module, &mut refs).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => {
                         ValidationError::UnexpectedEndOfFunctionOrSection
@@ -202,7 +207,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 })?;
             }
             Section::Export => {
-                info!("Process Export Section");
+                trace!("Process Export Section");
                 module.exportsec =
                     process_export_section(reader, &module, &mut refs).map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => {
@@ -212,7 +217,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                     })?;
             }
             Section::Start => {
-                info!("Process Start Section");
+                trace!("Process Start Section");
                 let start_function_idx = process_start_section(reader).map_err(|e| match e {
                     ValidationError::ReadingOutOfBounds => {
                         ValidationError::UnexpectedEndOfFunctionOrSection
@@ -232,7 +237,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 module.startsec = Some(start_function_idx);
             }
             Section::Element => {
-                info!("Process Element Section");
+                trace!("Process Element Section");
                 module.elementsec = process_element_section(reader, &mut module, &mut refs)
                     .map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => ValidationError::UnexpectedEnd,
@@ -240,7 +245,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                     })?;
             }
             Section::Code => {
-                info!("Process Code Section");
+                trace!("Process Code Section");
 
                 let (functions, sidetables) = process_code_section(reader, &module, &mut refs)
                     .map_err(|e| match e {
@@ -254,7 +259,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                 module.sidetables = sidetables;
             }
             Section::Data => {
-                info!("Process Data Section");
+                trace!("Process Data Section");
                 module.datasec =
                     process_data_section(reader, &mut module, &mut refs).map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => {
@@ -264,7 +269,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
                     })?;
             }
             Section::DataCount => {
-                info!("Process Data Count Section");
+                trace!("Process Data Count Section");
                 module.datacountsec =
                     Some(process_data_count_section(reader).map_err(|e| match e {
                         ValidationError::ReadingOutOfBounds => {
@@ -286,6 +291,7 @@ pub fn create_module_environment(reader: &mut WasmReader) -> Result<ModuleEnviro
     {
         return Err(ValidationError::InconsistentDataDataCountSectionLengths);
     }
-    info!("Finished Module parsing and validation");
+    trace!("Finished Module parsing and validation");
+
     Ok(module)
 }

@@ -25,7 +25,7 @@ pub fn validate_const_expr(
             return Err(ValidationError::UnexpectedEndOfFunctionOrSection);
         }
         let byte = reader.next_byte()?;
-        info!("Validate Const Expression Byte: {byte:#04X}");
+        trace!("Validate Const Expression Byte: {byte:#04X}");
 
         match byte {
             I32_CONST => {

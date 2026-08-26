@@ -1,5 +1,6 @@
 pub mod adresses;
 pub mod constant_expression_executor;
+pub mod dependency_graph;
 pub mod engine;
 pub mod execution_stack;
 pub mod executor;
