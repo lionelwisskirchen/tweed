@@ -4,10 +4,7 @@
 
   inputs = {
     nixpkgs.url = "git+https://gitlab+deploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/aemy/tweed/mirrors/nixpkgs-mirror.git?ref=nixos-unstable";
-    rust-overlay = {
-      url = "git+https://gitlab+deploy-token-2661:gldt-fnxNgazf26aSZoB_DZJN@gitlab.lrz.de/aemy/tweed/mirrors/rust-overlay-mirror.git?ref=master";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    rust-overlay.url = "git+https://gitlab+deploy-token-2661:gldt-fnxNgazf26aSZoB_DZJN@gitlab.lrz.de/aemy/tweed/mirrors/rust-overlay-mirror.git?ref=master";
     flake-utils.url = "git+https://gitlab+deploy-token-2681:gldt-y-KMz_ZjzeKJR2Gp4i3t@gitlab.lrz.de/aemy/tweed/mirrors/flake-utils-mirror.git?ref=main";
     devshell.url = "git+https://gitlab+deploy-token-2680:gldt-edKyyemgx6xoUdAVaLjW@gitlab.lrz.de/aemy/tweed/mirrors/devshell-mirror.git";
   };
