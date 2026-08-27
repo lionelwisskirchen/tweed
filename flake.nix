@@ -3,11 +3,13 @@
   nixConfig.bash-prompt = "[nix(develop):\\w]$ ";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    flake-utils.url = "github:numtide/flake-utils";
-    devshell.url = "github:numtide/devshell";
-
+    nixpkgs.url = "git+https://gitlab+deploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/aemy/tweed/mirrors/nixpkgs-mirror.git?ref=nixos-unstable";
+    rust-overlay = {
+      url = "git+https://gitlab+deploy-token-2661:gldt-fnxNgazf26aSZoB_DZJN@gitlab.lrz.de/aemy/tweed/mirrors/rust-overlay-mirror.git?ref=master";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    flake-utils.url = "git+https://gitlab+flake-utils-mirror-token:gldt--S6zra6rqoh9JVv9y1EG@gitlab.lrz.de/aemy/tweed/mirrors/flake-utils-mirror.git";
+    devshell.url = "git+https://gitlab+devshell-mirror-token:gldt-uGXtGGQS6uk991XQSh1T@gitlab.lrz.de/aemy/tweed/mirrors/devshell-mirror.git";
   };
 
   outputs =
