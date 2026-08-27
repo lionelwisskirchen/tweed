@@ -2,10 +2,10 @@
   nixConfig.bash-prompt = "[nix(develop):\\w]$ ";
 
   inputs = {
-    nixpkgs.url = "git+https://gitlab+deploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/000000003B9CFBB6/nixpkgs-mirror.git?ref=nixos-unstable";
-    nixos-unstable.url = "git+https://gitlab+deploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/000000003B9CFBB6/nixpkgs-mirror.git?ref=nixos-unstable";
+    nixpkgs.url = "git+https://gitlab+deploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/aemy/tweed/mirrors/nixpkgs-mirror.git?ref=nixos-unstable";
+    nixos-unstable.url = "git+https://gitlab+deploy-token-2663:gldt-iUzzjA9yUqfEzNcUM-5g@gitlab.lrz.de/aemy/tweed/mirrors/nixpkgs-mirror.git?ref=nixos-unstable";
     rust-overlay = {
-      url = "git+https://gitlab+deploy-token-2661:gldt-fnxNgazf26aSZoB_DZJN@gitlab.lrz.de/000000003B9CFBB6/rust-overlay-mirror.git?ref=master";
+      url = "git+https://gitlab+deploy-token-2661:gldt-fnxNgazf26aSZoB_DZJN@gitlab.lrz.de/aemy/tweed/mirrors/rust-overlay-mirror.git?ref=master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
