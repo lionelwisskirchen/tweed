@@ -9,7 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flake-utils.url = "git+https://gitlab+flake-utils-mirror-token:gldt--S6zra6rqoh9JVv9y1EG@gitlab.lrz.de/aemy/tweed/mirrors/flake-utils-mirror.git";
-    devshell.url = "git+https://gitlab+devshell-mirror-token:gldt-PBxz3ZN3HeWxBpcsEoH5@gitlab.lrz.de/aemy/tweed/mirrors/devshell-mirror.git?ref=main";
+    devshell.url = "git+https://gitlab+devshell-token:gldt-2nGVgzngkXP8yvVW4mp9@gitlab.lrz.de/aemy/tweed/mirrors/devshell.git";
   };
 
   outputs =
