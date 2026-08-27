@@ -38,6 +38,7 @@
               pkgs.pre-commit
               pkgs.hotspot
               pkgs.perf
+              pkgs.cargo-llvm-cov
             ];
             env = [
               {
