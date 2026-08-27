@@ -26,11 +26,11 @@ variables:
 
 style-test-job:
   stage: style
-  script: ./scripts/style-checks.bash
+  script: nix develop --command bash -c './scripts/style-checks.bash'
 
 format-test-job:
   stage: format
-  script: ./scripts/format-checks.bash
+  script: nix develop --command bash -c './scripts/format-checks.bash'
 
 unit-test-job:
   stage: test
@@ -41,7 +41,7 @@ unit-test-job:
         path: tweed/target/llvm-cov-target/cobertura.xml
   # this uses region for coverage summary
   coverage: '/TOTAL\s+(\d+\s+)+(\d+\.\d+\%)/'
-  script: ./scripts/coverage-checks.bash
+  script: nix develop --command bash -c './scripts/coverage-checks.bash'
 
 benchmark-job:
   stage: benchmark
@@ -53,9 +53,22 @@ benchmark-job:
     - cd ./stm32/l4
     - nix develop --command bash -c '
       python ../run-benches.py
-      --outname benchmark_output
+      --outname $CI_COMMIT_SHA
       ../../benchmark_sources 
-      results' 
+      results'      
   artifacts:
     paths:
-      - benchmarks/stm32/l4/results/benchmark_output.csv  
+      - benchmarks/stm32/l4/results/$CI_COMMIT_SHA.csv
+      
+push-results-job:
+  stage: benchmark
+  when: manual
+  script:
+    - git config user.name "GitLab CI"
+    - git config user.email "gitlab-ci@example.com"
+    - git clone "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.lrz.de/aemy/tweed/tweed-benchmarking-data.git"
+    - cd tweed-benchmarking-data
+    - cp benchmarks/stm32/l4/results/$CI_COMMIT_SHA.csv ./
+    - git add $CI_COMMIT_SHA.csv
+    - git commit -m "Update generated files"
+    - git push origin main
