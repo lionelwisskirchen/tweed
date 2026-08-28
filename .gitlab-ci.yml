@@ -48,7 +48,7 @@ benchmark-job:
   when: manual
   script:
     - cd benchmarks
-    - nix develop --command bash -c 'openocd -f openocd.cfg'      
+    - nix develop --command bash -c 'openocd -f openocd.cfg > openocd.log 2>&1 &'      
     - echo "Start Benchmarking"
     - cd ./stm32/l4
     - nix develop --command bash -c '
