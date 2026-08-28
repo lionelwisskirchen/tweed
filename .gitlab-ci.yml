@@ -72,8 +72,8 @@ push-results-job:
   script:
     - git clone "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.lrz.de/aemy/tweed/tweed-benchmarking-data.git"
     - cd tweed-benchmarking-data
-    - git config user.name "GitLab CI"
-    - git config user.email "gitlab-ci@example.com"
+    - git config user.name "TWEED GitLab CI"
+    - git config user.email "gitlab-ci@tweed.com"
     - cp ../benchmarks/stm32/l4/results/$CI_COMMIT_SHA.csv ./
     - git add $CI_COMMIT_SHA.csv
     - git commit -m "Update generated files"
