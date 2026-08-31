@@ -1,3 +1,6 @@
 [submodule "tweed/tests/spec/testsuite"]
 	path = tweed/tests/spec/testsuite
 	url = ../wasm-spectest.git
+[submodule "benchmarks/libopencm3"]
+	path = benchmarks/libopencm3
+	url = https://gitlab.lrz.de/aemy/tweed/libopencm3.git

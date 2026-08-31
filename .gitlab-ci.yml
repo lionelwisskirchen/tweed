@@ -1,5 +1,8 @@
 stages:
+  - style
+  - format
   - test
+  - benchmark
 
 workflow:
   rules:
@@ -17,14 +20,17 @@ default:
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_UPDATE_FLAGS: --remote
+  GIT_DEPTH: 1
+  GIT_STRATEGY: clone
 
 style-test-job:
-  stage: test
-  script: ./scripts/style-checks.bash
+  stage: style
+  script: nix develop # --command bash -c './scripts/style-checks.bash'
 
 format-test-job:
-  stage: test
-  script: ./scripts/format-checks.bash
+  stage: format
+  script: nix develop --command bash -c './scripts/format-checks.bash'
 
 unit-test-job:
   stage: test
@@ -35,4 +41,40 @@ unit-test-job:
         path: tweed/target/llvm-cov-target/cobertura.xml
   # this uses region for coverage summary
   coverage: '/TOTAL\s+(\d+\s+)+(\d+\.\d+\%)/'
-  script: ./scripts/coverage-checks.bash
+  script: nix develop --command bash -c './scripts/coverage-checks.bash'
+
+benchmark-job:
+  stage: benchmark
+  when: manual
+  script:
+    - cd benchmarks
+    - nix develop --command bash -c 'openocd -f openocd.cfg > openocd.log 2>&1 &' 
+    - OPENOCD_PID=$(pidof openocd)
+    - trap 'kill $OPENOCD_PID 2>/dev/null || true' EXIT     
+
+    - echo "Start Benchmarking"
+    - cd ./stm32/l4
+    - nix develop --command bash -c '
+      python ../run-benches.py
+      --outname $CI_COMMIT_SHA
+      ../../benchmark_sources/huffbench.wasm 
+      results'
+    - echo "Finished Benchmarking"      
+  artifacts:
+    paths:
+      - benchmarks/stm32/l4/results/$CI_COMMIT_SHA.csv
+      
+push-results-job:
+  stage: benchmark
+  when: manual
+  needs:
+    - job: benchmark-job
+  script:
+    - git clone "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.lrz.de/aemy/tweed/tweed-benchmarking-data.git"
+    - cd tweed-benchmarking-data
+    - git config user.name "TWEED GitLab CI"
+    - git config user.email "gitlab-ci@tweed.com"
+    - cp ../benchmarks/stm32/l4/results/$CI_COMMIT_SHA.csv ./
+    - git add $CI_COMMIT_SHA.csv
+    - git commit -m "Update generated files"
+    - git push origin main
