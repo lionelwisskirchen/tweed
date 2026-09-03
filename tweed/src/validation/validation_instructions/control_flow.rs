@@ -8,6 +8,8 @@ use crate::{
     validation::{control_types::ControlType, validator::CodeValidator},
 };
 
+use alloc::vec::Vec;
+
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
 impl<'a, 'b> CodeValidator<'a, 'b> {
