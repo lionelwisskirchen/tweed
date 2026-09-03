@@ -38,12 +38,12 @@ pub struct Store {
 }
 
 /// The sub stores for the runtime representation of all instances.
-type GlobalStore = TypedStore<GlobalInstance, GlobalAddr>;
-type FunctionStore = TypedStore<FuncInstance, FuncAddr>;
-type MemoryStore = TypedStore<MemoryInstance, MemoryAddr>;
-type DataStore = TypedStore<DataInstance, DataAddr>;
-type TableStore = TypedStore<TableInstance, TableAddr>;
-type ElementStore = TypedStore<ElementInstance, ElementAddr>;
+pub type GlobalStore = TypedStore<GlobalInstance, GlobalAddr>;
+pub type FunctionStore = TypedStore<FuncInstance, FuncAddr>;
+pub type MemoryStore = TypedStore<MemoryInstance, MemoryAddr>;
+pub type DataStore = TypedStore<DataInstance, DataAddr>;
+pub type TableStore = TypedStore<TableInstance, TableAddr>;
+pub type ElementStore = TypedStore<ElementInstance, ElementAddr>;
 type ReaderStore = TypedStore<ValidatedWasmReader, ReaderAddr>;
 type InstanceStore = TypedStore<ModuleInstance, InstanceAddr>;
 

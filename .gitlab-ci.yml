@@ -48,22 +48,22 @@ benchmark-job:
   when: manual
   script:
     - cd benchmarks
-    - nix develop --command bash -c 'openocd -f openocd.cfg > openocd.log 2>&1 &' 
+    - nix develop --command bash -c 'openocd -f openocd.cfg > openocd.log 2>&1 &'
     - OPENOCD_PID=$(pidof openocd)
-    - trap 'kill $OPENOCD_PID 2>/dev/null || true' EXIT     
+    - trap 'kill $OPENOCD_PID 2>/dev/null || true' EXIT
 
     - echo "Start Benchmarking"
     - cd ./stm32/l4
     - nix develop --command bash -c '
       python ../run-benches.py
       --outname $CI_COMMIT_SHA
-      ../../benchmark_sources/huffbench.wasm 
+      ../../benchmark_sources/huffbench.wasm
       results'
-    - echo "Finished Benchmarking"      
+    - echo "Finished Benchmarking"
   artifacts:
     paths:
       - benchmarks/stm32/l4/results/$CI_COMMIT_SHA.csv
-      
+
 push-results-job:
   stage: benchmark
   when: manual
