@@ -1,10 +1,8 @@
 use crate::{
-    core::{error::ExecutionError, validated_wasm_reader::ValidatedWasmReader},
+    core::error::ExecutionError,
     execution::{
         adresses::Address,
-        executor::Executor,
-        instances::ModuleInstance,
-        store::{ElementStore, TableStore},
+        executor::{ExecutionContext, Executor},
     },
     Value,
 };
@@ -12,40 +10,32 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
-    pub fn execute_table_get(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        tables: &mut TableStore,
-    ) -> Result<()> {
-        let table_idx = reader.next_leb128_u32() as usize;
+    pub fn execute_table_get(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let table_idx = context.reader.next_leb128_u32() as usize;
         trace!("TABLE_GET '{table_idx:?}'");
 
-        let table_addr = instance
+        let table_addr = context
+            .instance
             .tableaddr
             .get(table_idx)
             .ok_or(ExecutionError::TableAccessOutOfBounds)?;
         let offset = self.stack.pop_i32() as usize;
-        let table = tables.get_mut(*table_addr).unwrap(); // validated
+        let table = context.tables.get_mut(*table_addr).unwrap(); // validated
         let value = table.get(offset)?;
         self.stack.push(value)?;
         trace!("TABLE_GET '{}' [{}] -> [{:?}]", table_idx, offset, value);
         Ok(())
     }
 
-    pub fn execute_table_set(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        tables: &mut TableStore,
-    ) -> Result<()> {
-        let table_idx = reader.next_leb128_u32() as usize;
+    pub fn execute_table_set(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let table_idx = context.reader.next_leb128_u32() as usize;
 
-        let table_addr = instance
+        let table_addr = context
+            .instance
             .tableaddr
             .get(table_idx)
             .ok_or(ExecutionError::TableAccessOutOfBounds)?;
-        let table = tables.get_mut(*table_addr).unwrap(); // validated
+        let table = context.tables.get_mut(*table_addr).unwrap(); // validated
         let val = self.stack.pop();
         let index = self.stack.pop_i32() as usize;
         table.insert(index, &[val])?;
@@ -53,29 +43,23 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_table_init(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        tables: &mut TableStore,
-        elements: &mut ElementStore,
-    ) -> Result<()> {
-        let element_idx = reader.next_leb128_u32() as usize;
-        let table_idx = reader.next_leb128_u32();
+    pub fn execute_table_init(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let element_idx = context.reader.next_leb128_u32() as usize;
+        let table_idx = context.reader.next_leb128_u32();
 
         // 2. Assert: due to validation, 𝐹.module.tableaddrs[𝑥] exists.
         // 3. Let ta be the table address 𝐹.module.tableaddrs[𝑥]
-        let table_addr = instance.tableaddr.get(table_idx as usize).unwrap();
+        let table_addr = context.instance.tableaddr.get(table_idx as usize).unwrap();
         // 4. Assert: due to validation, 𝑆.tables[ta] exists.
         // 5. Let tab be the table instance 𝑆.tables[ta]
-        let tab = tables.get_mut(*table_addr).unwrap(); // validated
+        let tab = context.tables.get_mut(*table_addr).unwrap(); // validated
 
         // 6. Assert: due to validation, 𝐹.module.elemaddrs[𝑦] exists
         // 7. Let ea be the element address 𝐹.module.elemaddrs[𝑦].
-        let element_addr = instance.elemaddr.get(element_idx).unwrap();
+        let element_addr = context.instance.elemaddr.get(element_idx).unwrap();
         // 8. Assert: due to validation, 𝑆.elems[ea] exists.
         // 9. Let elem be the element instance 𝑆.elems[ea]
-        let elem = elements.get(*element_addr).unwrap(); // validated
+        let elem = context.elements.get(*element_addr).unwrap(); // validated
 
         // 10. Assert: due to validation, a value of value type i32 is on the top of the stack.
         // 11. Pop the value i32.const 𝑛 from the stack.
@@ -107,31 +91,29 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_table_size(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        tables: &mut TableStore,
-    ) -> Result<()> {
-        let table_idx = reader.next_leb128_u32();
-        let table_addr = instance.tableaddr.get(table_idx as usize).unwrap(); // validated
-        let tab = tables.get_mut(*table_addr).unwrap(); // validated
+    pub fn execute_table_size(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let table_idx = context.reader.next_leb128_u32();
+        let table_addr = context.instance.tableaddr.get(table_idx as usize).unwrap(); // validated
+        let tab = context.tables.get_mut(*table_addr).unwrap(); // validated
         info!("TABLE_SIZE {:?}", tab.reference_count());
 
         self.stack.push(Value::I32(tab.reference_count() as i32))?;
         Ok(())
     }
 
-    pub fn execute_table_copy(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        tables: &mut TableStore,
-    ) -> Result<()> {
-        let table_idx_x = reader.next_leb128_u32(); // Destination
-        let table_idx_y = reader.next_leb128_u32(); // Source
-        let table_x_addr = instance.tableaddr.get(table_idx_x as usize).unwrap();
-        let table_y_addr = instance.tableaddr.get(table_idx_y as usize).unwrap();
+    pub fn execute_table_copy(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let table_idx_x = context.reader.next_leb128_u32(); // Destination
+        let table_idx_y = context.reader.next_leb128_u32(); // Source
+        let table_x_addr = context
+            .instance
+            .tableaddr
+            .get(table_idx_x as usize)
+            .unwrap();
+        let table_y_addr = context
+            .instance
+            .tableaddr
+            .get(table_idx_y as usize)
+            .unwrap();
 
         let n = self.stack.pop_i32() as usize; // size
         let s = self.stack.pop_i32() as usize; // source
@@ -145,7 +127,7 @@ impl Executor {
             .checked_add(n)
             .ok_or(ExecutionError::TableAccessOutOfBounds)?;
         let src_data = {
-            let table_y = tables.get(*table_y_addr).unwrap();
+            let table_y = context.tables.get(*table_y_addr).unwrap();
             let len = table_y.reference_values.len();
             if src_end > len {
                 return Err(ExecutionError::TableAccessOutOfBounds);
@@ -155,7 +137,7 @@ impl Executor {
             data
         };
 
-        let table_x = tables.get_mut(*table_x_addr).unwrap(); // validated
+        let table_x = context.tables.get_mut(*table_x_addr).unwrap(); // validated
         if dst_end > table_x.reference_values.len() {
             return Err(ExecutionError::TableAccessOutOfBounds);
         }
@@ -163,15 +145,10 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_table_fill(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        tables: &mut TableStore,
-    ) -> Result<()> {
-        let table_idx = reader.next_leb128_u32();
-        let table_addr = instance.tableaddr.get(table_idx as usize).unwrap(); // validated
-        let tab = tables.get_mut(*table_addr).unwrap(); // validated
+    pub fn execute_table_fill(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let table_idx = context.reader.next_leb128_u32();
+        let table_addr = context.instance.tableaddr.get(table_idx as usize).unwrap(); // validated
+        let tab = context.tables.get_mut(*table_addr).unwrap(); // validated
         let n = self.stack.pop_i32() as usize; // size
         let val = self.stack.pop();
         let i = self.stack.pop_i32() as usize; // dest
@@ -185,15 +162,10 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_table_grow(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        tables: &mut TableStore,
-    ) -> Result<()> {
-        let table_idx = reader.next_leb128_u32();
-        let table_addr = instance.tableaddr.get(table_idx as usize).unwrap(); // validated
-        let tab = tables.get_mut(*table_addr).unwrap(); // validated
+    pub fn execute_table_grow(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let table_idx = context.reader.next_leb128_u32();
+        let table_addr = context.instance.tableaddr.get(table_idx as usize).unwrap(); // validated
+        let tab = context.tables.get_mut(*table_addr).unwrap(); // validated
 
         let sz = tab.reference_count();
 
@@ -221,19 +193,15 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_ref_null(&mut self, reader: &mut ValidatedWasmReader) -> Result<()> {
-        let ref_type = crate::core::value_types::RefType::from_byte(reader.next_byte())
+    pub fn execute_ref_null(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let ref_type = crate::core::value_types::RefType::from_byte(context.reader.next_byte())
             .ok_or(ExecutionError::UnexpectedValueType)?;
         self.stack.push(Value::RefNull(ref_type))?;
         Ok(())
     }
-    pub fn execute_ref_func(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-    ) -> Result<()> {
-        let func_idx = reader.next_leb128_u32() as usize;
-        let store_addr = instance.funcaddr.get(func_idx).unwrap(); // Validated
+    pub fn execute_ref_func(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let func_idx = context.reader.next_leb128_u32() as usize;
+        let store_addr = context.instance.funcaddr.get(func_idx).unwrap(); // Validated
         self.stack.push(Value::FuncRef(store_addr.as_usize()))?;
         Ok(())
     }
@@ -247,18 +215,13 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_elem_drop(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        elements: &mut ElementStore,
-    ) -> Result<()> {
-        let element_idx = reader.next_leb128_u32() as usize;
+    pub fn execute_elem_drop(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let element_idx = context.reader.next_leb128_u32() as usize;
         // 2. Assert: due to validation, 𝐹.module.elemaddrs[𝑥] exists.
         // 3. Let 𝑎 be the element address 𝐹.module.elemaddrs[𝑥].
-        let element_addr = instance.elemaddr.get(element_idx).unwrap();
+        let element_addr = context.instance.elemaddr.get(element_idx).unwrap();
         // 4. Assert: due to validation, 𝑆.elems[𝑎] exists.
-        let elem = elements.get_mut(*element_addr).unwrap();
+        let elem = context.elements.get_mut(*element_addr).unwrap();
         // Replace 𝑆.elems[𝑎].elem with 𝜖.
         elem.references.clear();
         Ok(())

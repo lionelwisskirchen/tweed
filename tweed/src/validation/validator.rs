@@ -183,6 +183,42 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         imported_memories
     }
 
+    pub fn validate_code(
+        &mut self,
+        locals: &[ValType],
+        index: usize,
+        section_end: usize,
+    ) -> Result<SideTable> {
+        let signature_index = self
+            .module_environment
+            .funcsec
+            .get(index)
+            .ok_or(ValidationError::InvalidSignatureIndex)?
+            .sig_index;
+
+        let func_signature = lookup_signature(signature_index, &self.module_environment.typesec)?;
+        self.push_ctrl(ControlType::Func {
+            func_type: func_signature.clone(),
+            sidetable_idxs: Vec::new(),
+            height_of_value_stack: self.abstract_value_stack.height(),
+            reachable: true,
+        });
+
+        self.validation_context.locals = self.initialize_locals(locals, &func_signature);
+        self.validation_context.globals = self.initialize_globals();
+        self.validation_context.tables = self.initialize_tables();
+        self.validation_context.memories = self.initialize_memories();
+        self.validation_context.func_signature = func_signature;
+        self.validation_context.section_end = section_end;
+
+        while !self.validation_context.should_break {
+            self.validate_next_instrucation()?;
+        }
+        let result = self.side_table.clone();
+        self.reset();
+        Ok(result)
+    }
+
     pub fn validate_next_instrucation(&mut self) -> Result<()> {
         if self.reader.current_index() == self.validation_context.section_end {
             Err(ValidationError::EndOpCodeExpected)?;
@@ -329,42 +365,6 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         };
 
         Ok(())
-    }
-
-    pub fn validate_code(
-        &mut self,
-        locals: &[ValType],
-        index: usize,
-        section_end: usize,
-    ) -> Result<SideTable> {
-        let signature_index = self
-            .module_environment
-            .funcsec
-            .get(index)
-            .ok_or(ValidationError::InvalidSignatureIndex)?
-            .sig_index;
-
-        let func_signature = lookup_signature(signature_index, &self.module_environment.typesec)?;
-        self.push_ctrl(ControlType::Func {
-            func_type: func_signature.clone(),
-            sidetable_idxs: Vec::new(),
-            height_of_value_stack: self.abstract_value_stack.height(),
-            reachable: true,
-        });
-
-        self.validation_context.locals = self.initialize_locals(locals, &func_signature);
-        self.validation_context.globals = self.initialize_globals();
-        self.validation_context.tables = self.initialize_tables();
-        self.validation_context.memories = self.initialize_memories();
-        self.validation_context.func_signature = func_signature;
-        self.validation_context.section_end = section_end;
-
-        while !self.validation_context.should_break {
-            self.validate_next_instrucation()?;
-        }
-        let result = self.side_table.clone();
-        self.reset();
-        Ok(result)
     }
 
     pub fn check_align(&mut self, max_align: u32) -> Result<()> {

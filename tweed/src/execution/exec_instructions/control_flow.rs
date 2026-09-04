@@ -1,10 +1,10 @@
 use crate::{
-    core::{error::ExecutionError, validated_wasm_reader::ValidatedWasmReader},
+    core::error::ExecutionError,
     execution::{
         adresses::FuncAddr,
-        executor::{Executor, Frame},
-        instances::{FuncInstance, ModuleInstance},
-        store::{FunctionStore, GlobalStore, HostEnv, MemoryStore, TableStore},
+        executor::{ExecutionContext, Executor},
+        instances::FuncInstance,
+        store::HostEnv,
     },
     Value,
 };
@@ -12,41 +12,33 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
-    pub fn execute_block(&mut self, reader: &mut ValidatedWasmReader) -> Result<()> {
+    pub fn execute_block(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("BLOCK");
-        reader.next_leb128_u32(); // Skip Block type
+        context.reader.next_leb128_u32(); // Skip Block type
         Ok(())
     }
 
-    pub fn execute_loop(&mut self, reader: &mut ValidatedWasmReader) -> Result<()> {
+    pub fn execute_loop(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("LOOP");
-        reader.next_leb128_u32(); // Skip Block type
+        context.reader.next_leb128_u32(); // Skip Block type
         Ok(())
     }
 
-    pub fn execute_if(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        current_frame: &mut Frame,
-    ) -> Result<()> {
+    pub fn execute_if(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let bool_val = self.stack.pop();
         trace!("IF({:?})", bool_val);
         if bool_val == Value::I32(0) {
-            Self::do_goto(&mut self.stack, current_frame, reader)?;
+            Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
         } else {
-            reader.next_leb128_u32(); // Skip Block type
-            current_frame.side_table_pointer += 1;
+            context.reader.next_leb128_u32(); // Skip Block type
+            context.current_frame.side_table_pointer += 1;
         }
         Ok(())
     }
 
-    pub fn execute_else(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        current_frame: &mut Frame,
-    ) -> Result<()> {
+    pub fn execute_else(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("ELSE");
-        Self::do_goto(&mut self.stack, current_frame, reader)?;
+        Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
         Ok(())
     }
 
@@ -62,10 +54,10 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_select_t(&mut self, reader: &mut ValidatedWasmReader) -> Result<()> {
-        reader.next_leb128_u32();
+    pub fn execute_select_t(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        context.reader.next_leb128_u32();
 
-        reader.next_byte();
+        context.reader.next_byte();
         let c = self.stack.pop_i32();
         let val_2 = self.stack.pop(); // TODO Type check?
         let val_1 = self.stack.pop();
@@ -79,79 +71,60 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_br(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        current_frame: &mut Frame,
-    ) -> Result<()> {
+    pub fn execute_br(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("BR");
-        Self::do_goto(&mut self.stack, current_frame, reader)?;
+        Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
         Ok(())
     }
 
-    pub fn execute_br_if(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        current_frame: &mut Frame,
-    ) -> Result<()> {
+    pub fn execute_br_if(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let bool_val = self.stack.pop_i32();
         trace!("BR_IF({bool_val})");
 
         if bool_val == 0 {
-            reader.next_leb128_u32(); // skip depth
-            current_frame.side_table_pointer += 1;
+            context.reader.next_leb128_u32(); // skip depth
+            context.current_frame.side_table_pointer += 1;
         } else {
-            Self::do_goto(&mut self.stack, current_frame, reader)?;
+            Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
         }
         Ok(())
     }
 
-    pub fn execute_br_table(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        current_frame: &mut Frame,
-    ) -> Result<()> {
+    pub fn execute_br_table(&mut self, context: &mut ExecutionContext) -> Result<()> {
         // TODO br_table vec[Branch index] not += branch_index!
         let branch_index = self.stack.pop_i32() as usize;
-        let number_of_branches = reader.next_leb128_u32() as usize;
+        let number_of_branches = context.reader.next_leb128_u32() as usize;
         trace!("BR_TABLE({branch_index})");
         let offset = branch_index.min(number_of_branches);
-        current_frame.side_table_pointer += offset;
+        context.current_frame.side_table_pointer += offset;
 
-        Self::do_goto(&mut self.stack, current_frame, reader)?;
+        Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
         Ok(())
     }
 
-    pub fn execute_return(&mut self, current_frame: &mut Frame) -> Result<()> {
+    pub fn execute_return(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("RETURN");
-        let count = current_frame.return_value.len();
+        let count = context.current_frame.return_value.len();
         let results = self.stack.pop_n(count)?;
-        self.stack.unwind_to(current_frame.stack_pointer);
+        self.stack.unwind_to(context.current_frame.stack_pointer);
         self.stack.push_vec(&results)?;
         Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn execute_call_indirect(
-        &mut self,
-        instance: &mut ModuleInstance,
-        reader: &mut ValidatedWasmReader,
-        current_frame: &mut Frame,
-        tables: &TableStore,
-        functions: &mut FunctionStore,
-        memories: &MemoryStore,
-        globals: &GlobalStore,
-    ) -> Result<i32> {
-        let type_index = reader.next_leb128_u32();
-        let table_index = reader.next_leb128_u32();
-        let table_addr = instance
+    pub fn execute_call_indirect(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let type_index = context.reader.next_leb128_u32();
+        let table_index = context.reader.next_leb128_u32();
+        let table_addr = context
+            .instance
             .tableaddr
             .get(table_index as usize)
             .ok_or(ExecutionError::UnknownTable)?;
 
-        let table = tables.get(*table_addr)?;
+        let table = context.tables.get(*table_addr)?;
 
-        let func_type = instance
+        let func_type = context
+            .instance
             .types
             .get(type_index as usize)
             .ok_or(ExecutionError::InvalidFunctionIndex)?;
@@ -165,7 +138,8 @@ impl Executor {
             Value::ExternRef(_) => return Err(ExecutionError::TypeMismatch),
             _ => unreachable!(),
         };
-        let function = functions
+        let function = context
+            .functions
             .get(index)
             .map_err(|_| ExecutionError::InvalidFunctionIndex)?;
         if function.get_signature() != func_type {
@@ -175,17 +149,19 @@ impl Executor {
         match function {
             FuncInstance::Internal(instance) => {
                 let frame = self.build_frame(instance)?;
-                current_frame.program_counter = reader.current_index() - current_frame.start + 1;
+                context.current_frame.program_counter =
+                    context.reader.current_index() - context.current_frame.start + 1;
 
-                self.call_stack.push(current_frame.clone())?;
+                self.call_stack.push(context.current_frame.clone())?;
                 self.call_stack.push(frame)?;
-                return Ok(1);
+                context.should_break = true;
+                return Ok(());
             }
 
             FuncInstance::External(host_function) => {
                 let mut env: HostEnv = HostEnv {
-                    memories: memories.items(),
-                    globals: globals.items(),
+                    memories: context.memories.items(),
+                    globals: context.globals.items(),
                 };
                 let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                 let mut func_ref = host_function.func.borrow_mut();
@@ -193,47 +169,43 @@ impl Executor {
                 self.stack.push_vec(&results)?;
             }
         }
-        Ok(0)
+        Ok(())
     }
 
-    pub fn execute_call(
-        &mut self,
-        instance: &mut ModuleInstance,
-        reader: &mut ValidatedWasmReader,
-        current_frame: &mut Frame,
-        functions: &mut FunctionStore,
-        memories: &MemoryStore,
-        globals: &GlobalStore,
-    ) -> Result<i32> {
-        let index = reader.next_leb128_u32();
+    pub fn execute_call(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let index = context.reader.next_leb128_u32();
         trace!("CALL({index})");
 
         // funcaddr contains the indices of the functions on the store
         // | [0] StoreIdx = 2 | [1] StoreIdx = 3 | [2] StoreIdx = 6 | [3] StoreIdx = x |
         // so if want to call the function with index 0 we actually call the second
         // function in the store
-        let function_addr = instance
+        let function_addr = context
+            .instance
             .funcaddr
             .get(index as usize)
             .ok_or(ExecutionError::InvalidFunctionIndex)?;
 
-        let function = functions
+        let function = context
+            .functions
             .get(*function_addr)
             .map_err(|_| ExecutionError::InvalidFunctionIndex)?;
 
         match function {
             FuncInstance::Internal(instance) => {
                 let frame = self.build_frame(instance)?;
-                current_frame.program_counter = reader.current_index() - current_frame.start + 1;
-                self.call_stack.push(current_frame.clone())?;
+                context.current_frame.program_counter =
+                    context.reader.current_index() - context.current_frame.start + 1;
+                self.call_stack.push(context.current_frame.clone())?;
                 self.call_stack.push(frame)?;
-                return Ok(1);
+                context.should_break = true;
+                return Ok(());
             }
 
             FuncInstance::External(host_function) => {
                 let mut env: HostEnv = HostEnv {
-                    memories: memories.items(),
-                    globals: globals.items(),
+                    memories: context.memories.items(),
+                    globals: context.globals.items(),
                 };
                 let args = self.stack.pop_n(host_function.signature.parameter.len())?;
                 let mut func_ref = host_function.func.borrow_mut();
@@ -241,7 +213,7 @@ impl Executor {
                 self.stack.push_vec(&results)?;
             }
         }
-        Ok(0)
+        Ok(())
     }
 
     pub fn execute_nop(&self) -> Result<()> {

@@ -1,9 +1,8 @@
 use crate::{
-    core::{error::ExecutionError, validated_wasm_reader::ValidatedWasmReader},
+    core::error::ExecutionError,
     execution::{
-        executor::Executor,
-        instances::ModuleInstance,
-        store::{map_memory, MemoryStore},
+        executor::{ExecutionContext, Executor},
+        store::map_memory,
     },
     Value,
 };
@@ -11,8 +10,8 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
-    pub fn execute_i32_const(&mut self, reader: &mut ValidatedWasmReader) -> Result<()> {
-        let value = reader.next_leb128_i32();
+    pub fn execute_i32_const(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let value = context.reader.next_leb128_i32();
         trace!("I32_CONST({})", value);
         self.stack.push(Value::I32(value))?;
         Ok(())
@@ -278,121 +277,81 @@ impl Executor {
         Ok(())
     }
 
-    pub fn execute_i32_store(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        memories: &mut MemoryStore,
-    ) -> Result<()> {
-        let (_, offset) = reader.read_mem_args();
+    pub fn execute_i32_store(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i32() as u32).to_le_bytes();
         let rel_address = self.stack.pop_i32() as u32;
         trace!("I32_STORE({store_data:?} to {rel_address:?})");
-        let mem = map_memory(0, instance, &mut *memories)?;
+        let mem = map_memory(0, context.instance, context.memories)?;
         mem.store(rel_address as usize, offset as usize, &store_data)?;
         Ok(())
     }
 
-    pub fn execute_i32_store8(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        memories: &mut MemoryStore,
-    ) -> Result<()> {
-        let (_, offset) = reader.read_mem_args();
+    pub fn execute_i32_store8(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i32() as u8).to_le_bytes();
         let rel_address = self.stack.pop_i32() as u32;
         trace!("I32_STORE8({store_data:?} to {rel_address:?})");
-        let mem = map_memory(0, instance, &mut *memories)?;
+        let mem = map_memory(0, context.instance, context.memories)?;
         mem.store(rel_address as usize, offset as usize, &store_data)?;
         Ok(())
     }
 
-    pub fn execute_i32_store16(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        memories: &mut MemoryStore,
-    ) -> Result<()> {
-        let (_, offset) = reader.read_mem_args();
+    pub fn execute_i32_store16(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i32() as u16).to_le_bytes();
         let rel_address = self.stack.pop_i32() as u32;
         trace!("I32_STORE16({store_data:?} to {rel_address:?})");
 
-        let mem = map_memory(0, instance, &mut *memories)?;
+        let mem = map_memory(0, context.instance, context.memories)?;
         mem.store(rel_address as usize, offset as usize, &store_data)?;
         Ok(())
     }
 
-    pub fn execute_i32_load(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        memories: &mut MemoryStore,
-    ) -> Result<()> {
-        let (_, offset) = reader.read_mem_args();
+    pub fn execute_i32_load(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
-        let mem = map_memory(0, instance, &mut *memories)?;
+        let mem = map_memory(0, context.instance, context.memories)?;
         let data: i32 = Self::load(mem, offset, address, 4)?;
         trace!("I32_LOAD({data:?} from {address:?})");
         self.stack.push(data.into())?;
         Ok(())
     }
 
-    pub fn execute_i32_load8_u(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        memories: &mut MemoryStore,
-    ) -> Result<()> {
-        let (_, offset) = reader.read_mem_args();
+    pub fn execute_i32_load8_u(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
-        let mem = map_memory(0, instance, &mut *memories)?;
+        let mem = map_memory(0, context.instance, context.memories)?;
         let data: u8 = Self::load(mem, offset, address, 1)?;
         trace!("I32_LOAD8_U({data:?} from {address:?})");
         self.stack.push((data as u32).into())?;
         Ok(())
     }
 
-    pub fn execute_i32_load8_s(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        memories: &mut MemoryStore,
-    ) -> Result<()> {
-        let (_, offset) = reader.read_mem_args();
+    pub fn execute_i32_load8_s(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
-        let mem = map_memory(0, instance, &mut *memories)?;
+        let mem = map_memory(0, context.instance, context.memories)?;
         let data: i8 = Self::load(mem, offset, address, 1)?;
         trace!("I32_LOAD8_S({data:?} from {address:?})");
         self.stack.push((data as u32).into())?;
         Ok(())
     }
 
-    pub fn execute_i32_load16_u(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        memories: &mut MemoryStore,
-    ) -> Result<()> {
-        let (_, offset) = reader.read_mem_args();
+    pub fn execute_i32_load16_u(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
-        let mem = map_memory(0, instance, &mut *memories)?;
+        let mem = map_memory(0, context.instance, context.memories)?;
         let data: u16 = Self::load(mem, offset, address, 2)?;
         trace!("I32_LOAD16_U({data:?} from {address:?})");
         self.stack.push((data as u32).into())?;
         Ok(())
     }
 
-    pub fn execute_i32_load16_s(
-        &mut self,
-        reader: &mut ValidatedWasmReader,
-        instance: &ModuleInstance,
-        memories: &mut MemoryStore,
-    ) -> Result<()> {
-        let (_, offset) = reader.read_mem_args();
+    pub fn execute_i32_load16_s(&mut self, context: &mut ExecutionContext) -> Result<()> {
+        let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
-        let mem = map_memory(0, instance, &mut *memories)?;
+        let mem = map_memory(0, context.instance, context.memories)?;
         let data: i16 = Self::load(mem, offset, address, 2)?;
         trace!("I32_LOAD16_S({data:?} from {address:?})");
         self.stack.push((data as u32).into())?;

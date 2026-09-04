@@ -28,6 +28,7 @@ default = ["std"]
 std = []
 unsafe = []
 custom_page_size = []
+tail-call = []
 
 [[test]]
 name = "custom_page_size_tests"
