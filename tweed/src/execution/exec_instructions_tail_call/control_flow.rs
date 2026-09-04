@@ -154,7 +154,7 @@ impl Executor {
                 self.call_stack.push(context.current_frame.clone())?;
                 self.call_stack.push(frame)?;
                 context.should_break = true;
-                return Ok(());
+                become self.exit_tail_calls(context)
             }
 
             FuncInstance::External(host_function) => {
@@ -198,7 +198,7 @@ impl Executor {
                 self.call_stack.push(context.current_frame.clone())?;
                 self.call_stack.push(frame)?;
                 context.should_break = true;
-                become self.execute_next_instruction(context);
+                become self.exit_tail_calls(context)
             }
 
             FuncInstance::External(host_function) => {
