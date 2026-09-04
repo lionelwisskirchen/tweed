@@ -20,6 +20,18 @@ use super::side_table::SideTable;
 
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
+/// This is primary a helper to store the
+#[derive(Debug, Default)]
+pub struct ValidationContext {
+    pub(super) section_end: usize,
+    pub(super) locals: Vec<ValType>,
+    pub(super) globals: Vec<GlobalType>,
+    pub(super) tables: Vec<RefType>,
+    pub(super) memories: Vec<Limits>,
+    pub(super) func_signature: FuncType,
+    pub(super) should_break: bool,
+}
+
 pub struct CodeValidator<'a, 'b> {
     pub(super) reader: &'a mut WasmReader,
     pub(super) module_environment: &'b ModuleEnvironment,
@@ -27,6 +39,8 @@ pub struct CodeValidator<'a, 'b> {
     pub(super) abstract_value_stack: ValidationStack,
     pub(super) side_table: SideTable,
     pub(super) refs: &'b BTreeSet<usize>,
+
+    pub(super) validation_context: ValidationContext,
 }
 
 impl<'a, 'b> CodeValidator<'a, 'b> {
@@ -42,6 +56,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             abstract_value_stack: ValidationStack::default(),
             side_table: SideTable::default(),
             refs,
+            validation_context: ValidationContext::default(),
         }
     }
 
@@ -168,6 +183,154 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         imported_memories
     }
 
+    pub fn validate_next_instrucation(&mut self) -> Result<()> {
+        if self.reader.current_index() == self.validation_context.section_end {
+            Err(ValidationError::EndOpCodeExpected)?;
+        }
+        let byte = self.reader.next_byte()?;
+        info!("Validating Byte: {byte:#04X}");
+        trace!("Stack: {:?}", self.abstract_value_stack);
+
+        match byte {
+            I32_CONST => self.validate_i32_const()?,
+            I64_CONST => self.validate_i64_const()?,
+            F32_CONST => self.validate_f32_const()?,
+            F64_CONST => self.validate_f64_const()?,
+            LOCAL_GET => self.validate_local_get()?,
+            LOCAL_SET => self.validate_local_set()?,
+            LOCAL_TEE => self.validate_local_tee()?,
+            I32_ADD | I32_SUB | I32_MUL | I32_DIV_S | I32_DIV_U | I32_REM_S | I32_REM_U
+            | I32_AND | I32_OR | I32_XOR | I32_EQ | I32_SHL | I32_SHR_U | I32_SHR_S | I32_ROTL
+            | I32_ROTR => self.validate_i32_binop()?,
+            IF => self.validate_if()?,
+            ELSE => self.validate_else()?,
+            GLOBAL_GET => self.validate_global_get()?,
+            GLOBAL_SET => self.validate_global_set()?,
+            NOP => self.validate_nop()?,
+            DROP => self.validate_drop()?,
+            I32_GE_U | I32_GT_U | I32_LE_S | I32_LT_S | I32_LT_U | I32_LE_U | I32_NE | I32_GT_S
+            | I32_GE_S => self.validate_i32_cmp()?,
+            I64_EQ | I64_NE | I64_LT_U | I64_LT_S | I64_LE_S | I64_LE_U | I64_GE_S | I64_GT_U
+            | I64_GT_S | I64_GE_U => self.validate_i64_cmp()?,
+            I64_ADD | I64_SUB | I64_MUL | I64_AND | I64_OR | I64_XOR | I64_SHR_U | I64_SHR_S
+            | I64_SHL | I64_ROTL | I64_ROTR | I64_DIV_S | I64_DIV_U | I64_REM_S | I64_REM_U => {
+                self.validate_i64_binop()?
+            }
+            F64_ABS | F64_NEG | F64_CEIL | F64_FLOOR | F64_TRUNC | F64_NEAREST | F64_SQRT => {
+                self.validate_f64_unop()?
+            }
+            F32_COPYSIGN => self.validate_f32_copysign()?,
+            F64_COPYSIGN => self.validate_f64_copysign()?,
+            F64_PROMOTE_F32 => self.validate_f64_promote_f32()?,
+            F32_DEMOTE_F64 => self.validate_f32_demote_f64()?,
+            I32_REINTERPRET_F32 => self.validate_i32_reinterpret_f32()?,
+            I64_REINTERPRET_F64 => self.validate_i64_reinterpret_f64()?,
+            F64_REINTERPRET_I64 => self.validate_f64_reinterpret_i64()?,
+            F32_REINTERPRET_I32 => self.validate_f32_reinterpret_i32()?,
+            F32_EQ | F32_NE | F32_LT | F32_GT | F32_LE | F32_GE => self.validate_f32_cmp()?,
+            F32_ABS | F32_NEG | F32_CEIL | F32_FLOOR | F32_TRUNC | F32_NEAREST | F32_SQRT => {
+                self.validate_f32_unop()?
+            }
+            F64_ADD | F64_SUB | F64_MUL | F64_DIV | F64_MIN | F64_MAX => {
+                self.validate_f64_binop()?
+            }
+            F32_ADD | F32_SUB | F32_MUL | F32_DIV | F32_MIN | F32_MAX => {
+                self.validate_f32_binop()?
+            }
+            I32_TRUNC_F32_S | I32_TRUNC_F32_U => self.validate_i32_trunc_f32()?,
+            I32_TRUNC_F64_S | I32_TRUNC_F64_U => self.validate_i32_trunc_f64()?,
+            I64_TRUNC_F32_S | I64_TRUNC_F32_U => self.validate_i64_trunc_f32()?,
+            I64_TRUNC_F64_S | I64_TRUNC_F64_U => self.validate_i64_trunc_f64()?,
+            F64_EQ | F64_NE | F64_LT | F64_GT | F64_LE | F64_GE => self.validate_f64_cmp()?,
+            F64_CONVERT_I64_U | F64_CONVERT_I64_S => self.validate_f64_convert_i64()?,
+            F32_CONVERT_I32_U | F32_CONVERT_I32_S => self.validate_f32_convert_i32()?,
+            F64_CONVERT_I32_S | F64_CONVERT_I32_U => self.validate_f64_convert_i32()?,
+            F32_CONVERT_I64_S | F32_CONVERT_I64_U => self.validate_f32_convert_i64()?,
+            I32_CTZ | I32_CLZ | I32_POPCNT | I32_EQZ => self.validate_i32_unop()?,
+            I32_WRAP_I64 => self.validate_i32_wrap_i64()?,
+            I64_EXTEND_I32_U | I64_EXTEND_I32_S => self.validate_i64_extend_i32()?,
+            I32_EXTEND8_S | I32_EXTEND16_S => self.validate_i32_extend()?,
+            I64_EQZ => self.validate_i64_eqz()?,
+            I64_CTZ | I64_CLZ | I64_POPCNT | I64_EXTEND8_S | I64_EXTEND16_S | I64_EXTEND32_S => {
+                self.validate_i64_unop()?
+            }
+            TABLE_GET => self.validate_table_get()?,
+            TABLE_SET => self.validate_table_set()?,
+            SELECT_T => self.validate_select_t()?,
+            SELECT => self.validate_select()?,
+            RETURN => self.validate_return()?,
+            BLOCK => self.validate_block()?,
+            LOOP => self.validate_loop()?,
+            BR_IF => self.validate_br_if()?,
+            BR_TABLE => self.validate_br_table()?,
+            BR => self.validate_br()?,
+            END => {
+                self.validate_end()?;
+                if self.validation_context.should_break {
+                    return Ok(());
+                };
+            }
+            CALL_INDIRECT => self.validate_call_indirect()?,
+            CALL => self.validate_call()?,
+            I32_STORE => self.validate_i32_store(2)?,
+            I32_STORE8 => self.validate_i32_store(0)?,
+            I32_STORE16 => self.validate_i32_store(1)?,
+            I64_STORE => self.validate_i64_store(3)?,
+            I64_STORE8 => self.validate_i64_store(0)?,
+            I64_STORE16 => self.validate_i64_store(1)?,
+            I64_STORE32 => self.validate_i64_store(2)?,
+            F32_STORE => self.validate_f32_store()?,
+            F64_STORE => self.validate_f64_store()?,
+            I32_LOAD => self.validate_i32_load(2)?,
+            I32_LOAD8_U | I32_LOAD8_S => self.validate_i32_load(0)?,
+            I32_LOAD16_U | I32_LOAD16_S => self.validate_i32_load(1)?,
+            I64_LOAD => self.validate_i64_load(3)?,
+            I64_LOAD8_S | I64_LOAD8_U => self.validate_i64_load(0)?,
+            I64_LOAD16_U | I64_LOAD16_S => self.validate_i64_load(1)?,
+            I64_LOAD32_U | I64_LOAD32_S => self.validate_i64_load(2)?,
+            F32_LOAD => self.validate_f32_load()?,
+            F64_LOAD => self.validate_f64_load()?,
+            REF_IS_NULL => self.validate_ref_is_null()?,
+            REF_NULL => self.validate_ref_null()?,
+            MEMORY_GROW => self.validate_memory_grow()?,
+            MEMORY_SIZE => self.validate_memory_size()?,
+            REF_FUNC => self.validate_ref_func()?,
+            EXTENSION_PREFIX => {
+                let byte = self.reader.next_leb128_u32()?;
+                trace!("Validating Byte: {byte:#04X}");
+                match byte {
+                    ELEM_DROP => self.validate_elem_drop()?,
+                    TABLE_INIT => self.validate_table_init()?,
+                    TABLE_SIZE => self.validate_table_size()?,
+                    TABLE_COPY => self.validate_table_copy()?,
+                    TABLE_FILL => self.validate_table_fill()?,
+                    TABLE_GROW => self.validate_table_grow()?,
+                    I32_TRUNC_SAT_F32_S | I32_TRUNC_SAT_F32_U => self.validate_i32_trunc_f32()?,
+                    I32_TRUNC_SAT_F64_S | I32_TRUNC_SAT_F64_U => {
+                        self.validate_i32_trunc_f64()?;
+                    }
+
+                    I64_TRUNC_SAT_F32_S | I64_TRUNC_SAT_F32_U => {
+                        self.validate_i64_trunc_f32()?;
+                    }
+                    I64_TRUNC_SAT_F64_U | I64_TRUNC_SAT_F64_S => {
+                        self.validate_i64_trunc_f64()?;
+                    }
+                    DATA_DROP => self.validate_data_drop()?,
+                    MEMORY_INIT => self.validate_memory_init()?,
+                    MEMORY_COPY => self.validate_memory_copy()?,
+                    MEMORY_FILL => self.validate_memory_fill()?,
+                    _ => Err(ValidationError::UndefinedOpCode(byte as u8))?,
+                }
+            }
+
+            UNREACHABLE => self.unreachable(),
+            _ => Err(ValidationError::UndefinedOpCode(byte))?,
+        };
+
+        Ok(())
+    }
+
     pub fn validate_code(
         &mut self,
         locals: &[ValType],
@@ -189,154 +352,15 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             reachable: true,
         });
 
-        let locals = self.initialize_locals(locals, &func_signature);
-        let globals = self.initialize_globals();
-        let tables = self.initialize_tables();
-        let memories = self.initialize_memories();
+        self.validation_context.locals = self.initialize_locals(locals, &func_signature);
+        self.validation_context.globals = self.initialize_globals();
+        self.validation_context.tables = self.initialize_tables();
+        self.validation_context.memories = self.initialize_memories();
+        self.validation_context.func_signature = func_signature;
+        self.validation_context.section_end = section_end;
 
-        loop {
-            // Reading out of the section size
-            if self.reader.current_index() == section_end {
-                Err(ValidationError::EndOpCodeExpected)?;
-            }
-            let byte = self.reader.next_byte()?;
-            info!("Validating Byte: {byte:#04X}");
-            trace!("Stack: {:?}", self.abstract_value_stack);
-            match byte {
-                I32_CONST => self.validate_i32_const()?,
-                I64_CONST => self.validate_i64_const()?,
-                F32_CONST => self.validate_f32_const()?,
-                F64_CONST => self.validate_f64_const()?,
-                LOCAL_GET => self.validate_local_get(&locals)?,
-                LOCAL_SET => self.validate_local_set(&locals)?,
-                LOCAL_TEE => self.validate_local_tee(&locals)?,
-                I32_ADD | I32_SUB | I32_MUL | I32_DIV_S | I32_DIV_U | I32_REM_S | I32_REM_U
-                | I32_AND | I32_OR | I32_XOR | I32_EQ | I32_SHL | I32_SHR_U | I32_SHR_S
-                | I32_ROTL | I32_ROTR => self.validate_i32_binop()?,
-                IF => self.validate_if()?,
-                ELSE => self.validate_else()?,
-                GLOBAL_GET => self.validate_global_get(&globals)?,
-                GLOBAL_SET => self.validate_global_set(&globals)?,
-                NOP => self.validate_nop()?,
-                DROP => self.validate_drop()?,
-                I32_GE_U | I32_GT_U | I32_LE_S | I32_LT_S | I32_LT_U | I32_LE_U | I32_NE
-                | I32_GT_S | I32_GE_S => self.validate_i32_cmp()?,
-                I64_EQ | I64_NE | I64_LT_U | I64_LT_S | I64_LE_S | I64_LE_U | I64_GE_S
-                | I64_GT_U | I64_GT_S | I64_GE_U => self.validate_i64_cmp()?,
-                I64_ADD | I64_SUB | I64_MUL | I64_AND | I64_OR | I64_XOR | I64_SHR_U
-                | I64_SHR_S | I64_SHL | I64_ROTL | I64_ROTR | I64_DIV_S | I64_DIV_U | I64_REM_S
-                | I64_REM_U => self.validate_i64_binop()?,
-                F64_ABS | F64_NEG | F64_CEIL | F64_FLOOR | F64_TRUNC | F64_NEAREST | F64_SQRT => {
-                    self.validate_f64_unop()?
-                }
-                F32_COPYSIGN => self.validate_f32_copysign()?,
-                F64_COPYSIGN => self.validate_f64_copysign()?,
-                F64_PROMOTE_F32 => self.validate_f64_promote_f32()?,
-                F32_DEMOTE_F64 => self.validate_f32_demote_f64()?,
-                I32_REINTERPRET_F32 => self.validate_i32_reinterpret_f32()?,
-                I64_REINTERPRET_F64 => self.validate_i64_reinterpret_f64()?,
-                F64_REINTERPRET_I64 => self.validate_f64_reinterpret_i64()?,
-                F32_REINTERPRET_I32 => self.validate_f32_reinterpret_i32()?,
-                F32_EQ | F32_NE | F32_LT | F32_GT | F32_LE | F32_GE => self.validate_f32_cmp()?,
-                F32_ABS | F32_NEG | F32_CEIL | F32_FLOOR | F32_TRUNC | F32_NEAREST | F32_SQRT => {
-                    self.validate_f32_unop()?
-                }
-                F64_ADD | F64_SUB | F64_MUL | F64_DIV | F64_MIN | F64_MAX => {
-                    self.validate_f64_binop()?
-                }
-                F32_ADD | F32_SUB | F32_MUL | F32_DIV | F32_MIN | F32_MAX => {
-                    self.validate_f32_binop()?
-                }
-                I32_TRUNC_F32_S | I32_TRUNC_F32_U => self.validate_i32_trunc_f32()?,
-                I32_TRUNC_F64_S | I32_TRUNC_F64_U => self.validate_i32_trunc_f64()?,
-                I64_TRUNC_F32_S | I64_TRUNC_F32_U => self.validate_i64_trunc_f32()?,
-                I64_TRUNC_F64_S | I64_TRUNC_F64_U => self.validate_i64_trunc_f64()?,
-                F64_EQ | F64_NE | F64_LT | F64_GT | F64_LE | F64_GE => self.validate_f64_cmp()?,
-                F64_CONVERT_I64_U | F64_CONVERT_I64_S => self.validate_f64_convert_i64()?,
-                F32_CONVERT_I32_U | F32_CONVERT_I32_S => self.validate_f32_convert_i32()?,
-                F64_CONVERT_I32_S | F64_CONVERT_I32_U => self.validate_f64_convert_i32()?,
-                F32_CONVERT_I64_S | F32_CONVERT_I64_U => self.validate_f32_convert_i64()?,
-                I32_CTZ | I32_CLZ | I32_POPCNT | I32_EQZ => self.validate_i32_unop()?,
-                I32_WRAP_I64 => self.validate_i32_wrap_i64()?,
-                I64_EXTEND_I32_U | I64_EXTEND_I32_S => self.validate_i64_extend_i32()?,
-                I32_EXTEND8_S | I32_EXTEND16_S => self.validate_i32_extend()?,
-                I64_EQZ => self.validate_i64_eqz()?,
-                I64_CTZ | I64_CLZ | I64_POPCNT | I64_EXTEND8_S | I64_EXTEND16_S
-                | I64_EXTEND32_S => self.validate_i64_unop()?,
-                TABLE_GET => self.validate_table_get(&tables)?,
-                TABLE_SET => self.validate_table_set(&tables)?,
-                SELECT_T => self.validate_select_t()?,
-                SELECT => self.validate_select()?,
-                RETURN => self.validate_return(&func_signature)?,
-                BLOCK => self.validate_block()?,
-                LOOP => self.validate_loop()?,
-                BR_IF => self.validate_br_if()?,
-                BR_TABLE => self.validate_br_table()?,
-                BR => self.validate_br()?,
-                END => {
-                    if self.validate_end()? == 1 {
-                        break;
-                    };
-                }
-                CALL_INDIRECT => self.validate_call_indirect(&tables)?,
-                CALL => self.validate_call()?,
-                I32_STORE => self.validate_i32_store(&memories, 2)?,
-                I32_STORE8 => self.validate_i32_store(&memories, 0)?,
-                I32_STORE16 => self.validate_i32_store(&memories, 1)?,
-                I64_STORE => self.validate_i64_store(&memories, 3)?,
-                I64_STORE8 => self.validate_i64_store(&memories, 0)?,
-                I64_STORE16 => self.validate_i64_store(&memories, 1)?,
-                I64_STORE32 => self.validate_i64_store(&memories, 2)?,
-                F32_STORE => self.validate_f32_store(&memories)?,
-                F64_STORE => self.validate_f64_store(&memories)?,
-                I32_LOAD => self.validate_i32_load(&memories, 2)?,
-                I32_LOAD8_U | I32_LOAD8_S => self.validate_i32_load(&memories, 0)?,
-                I32_LOAD16_U | I32_LOAD16_S => self.validate_i32_load(&memories, 1)?,
-                I64_LOAD => self.validate_i64_load(&memories, 3)?,
-                I64_LOAD8_S | I64_LOAD8_U => self.validate_i64_load(&memories, 0)?,
-                I64_LOAD16_U | I64_LOAD16_S => self.validate_i64_load(&memories, 1)?,
-                I64_LOAD32_U | I64_LOAD32_S => self.validate_i64_load(&memories, 2)?,
-                F32_LOAD => self.validate_f32_load(&memories)?,
-                F64_LOAD => self.validate_f64_load(&memories)?,
-                REF_IS_NULL => self.validate_ref_is_null()?,
-                REF_NULL => self.validate_ref_null()?,
-                MEMORY_GROW => self.validate_memory_grow(&memories)?,
-                MEMORY_SIZE => self.validate_memory_size(&memories)?,
-                REF_FUNC => self.validate_ref_func()?,
-                EXTENSION_PREFIX => {
-                    let byte = self.reader.next_leb128_u32()?;
-                    trace!("Validating Byte: {byte:#04X}");
-                    match byte {
-                        ELEM_DROP => self.validate_elem_drop()?,
-                        TABLE_INIT => self.validate_table_init(&tables)?,
-                        TABLE_SIZE => self.validate_table_size(&tables)?,
-                        TABLE_COPY => self.validate_table_copy(&tables)?,
-                        TABLE_FILL => self.validate_table_fill(&tables)?,
-                        TABLE_GROW => self.validate_table_grow(&tables)?,
-                        I32_TRUNC_SAT_F32_S | I32_TRUNC_SAT_F32_U => {
-                            self.validate_i32_trunc_f32()?
-                        }
-                        I32_TRUNC_SAT_F64_S | I32_TRUNC_SAT_F64_U => {
-                            self.validate_i32_trunc_f64()?;
-                        }
-
-                        I64_TRUNC_SAT_F32_S | I64_TRUNC_SAT_F32_U => {
-                            self.validate_i64_trunc_f32()?;
-                        }
-                        I64_TRUNC_SAT_F64_U | I64_TRUNC_SAT_F64_S => {
-                            self.validate_i64_trunc_f64()?;
-                        }
-                        DATA_DROP => self.validate_data_drop()?,
-                        MEMORY_INIT => self.validate_memory_init(&memories)?,
-                        MEMORY_COPY => self.validate_memory_copy(&memories)?,
-                        MEMORY_FILL => self.validate_memory_fill(&memories)?,
-                        _ => Err(ValidationError::UndefinedOpCode(byte as u8))?,
-                    }
-                }
-
-                UNREACHABLE => self.unreachable(),
-                _ => Err(ValidationError::UndefinedOpCode(byte))?,
-            };
+        while !self.validation_context.should_break {
+            self.validate_next_instrucation()?;
         }
         let result = self.side_table.clone();
         self.reset();

@@ -108,9 +108,9 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         Ok(())
     }
 
-    pub fn validate_return(&mut self, func_signature: &FuncType) -> Result<()> {
+    pub fn validate_return(&mut self) -> Result<()> {
         self.abstract_value_stack
-            .pop_expected_vec(&func_signature.result)?;
+            .pop_expected_vec(&self.validation_context.func_signature.result)?;
 
         self.unreachable();
         Ok(())
@@ -228,7 +228,7 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         Ok(())
     }
 
-    pub fn validate_end(&mut self) -> Result<i32> {
+    pub fn validate_end(&mut self) -> Result<()> {
         let control_type = self.abstract_control_stack.pop();
         match control_type {
             ControlType::Func {
@@ -239,7 +239,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             } => {
                 self.check_args(&func_type.result, height_of_value_stack)?;
                 self.resolve_sidetable_entries(&sidetable_idxs);
-                return Ok(1);
+                self.validation_context.should_break = true;
+                return Ok(());
             }
             ControlType::Block {
                 func_type,
@@ -279,14 +280,16 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
             self.abstract_control_stack.height_of_top(),
             self.abstract_control_stack.top_is_reachable(),
         );
-        Ok(0)
+        Ok(())
     }
 
-    pub fn validate_call_indirect(&mut self, tables: &[RefType]) -> Result<()> {
+    pub fn validate_call_indirect(&mut self) -> Result<()> {
         let type_index = self.reader.next_leb128_u32()?;
         let table_index = self.reader.next_leb128_u32()?;
 
-        let table = tables
+        let table = self
+            .validation_context
+            .tables
             .get(table_index as usize)
             .ok_or(ValidationError::UnknownTable)?;
 

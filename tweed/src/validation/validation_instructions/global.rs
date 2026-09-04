@@ -1,14 +1,13 @@
-use crate::{
-    binary::global_section::GlobalType, core::error::ValidationError,
-    validation::validator::CodeValidator,
-};
+use crate::{core::error::ValidationError, validation::validator::CodeValidator};
 
 pub type Result<T> = core::result::Result<T, ValidationError>;
 
 impl<'a, 'b> CodeValidator<'a, 'b> {
-    pub fn validate_global_get(&mut self, globals: &[GlobalType]) -> Result<()> {
+    pub fn validate_global_get(&mut self) -> Result<()> {
         let idx = self.reader.next_leb128_u32()? as usize;
-        let value = globals
+        let value = self
+            .validation_context
+            .globals
             .get(idx)
             .ok_or(ValidationError::UnknownGlobal(None))?
             .value_type;
@@ -16,9 +15,11 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         Ok(())
     }
 
-    pub fn validate_global_set(&mut self, globals: &[GlobalType]) -> Result<()> {
+    pub fn validate_global_set(&mut self) -> Result<()> {
         let idx = self.reader.next_leb128_u32()? as usize;
-        let global = globals
+        let global = self
+            .validation_context
+            .globals
             .get(idx)
             .ok_or(ValidationError::UnknownGlobal(None))?;
         if !global.is_mutable {

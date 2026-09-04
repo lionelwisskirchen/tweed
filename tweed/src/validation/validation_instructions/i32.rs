@@ -1,5 +1,4 @@
 use crate::{
-    binary::memory_section::Limits,
     core::{error::ValidationError, value_types::ValType},
     validation::validator::CodeValidator,
 };
@@ -63,8 +62,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         Ok(())
     }
 
-    pub fn validate_i32_store(&mut self, memories: &[Limits], alignment: u32) -> Result<()> {
-        if memories.is_empty() {
+    pub fn validate_i32_store(&mut self, alignment: u32) -> Result<()> {
+        if self.validation_context.memories.is_empty() {
             Err(ValidationError::UnknownMemory)?;
         }
         self.check_align(alignment)?;
@@ -73,8 +72,8 @@ impl<'a, 'b> CodeValidator<'a, 'b> {
         Ok(())
     }
 
-    pub fn validate_i32_load(&mut self, memories: &[Limits], alignment: u32) -> Result<()> {
-        if memories.is_empty() {
+    pub fn validate_i32_load(&mut self, alignment: u32) -> Result<()> {
+        if self.validation_context.memories.is_empty() {
             Err(ValidationError::UnknownMemory)?;
         }
         self.check_align(alignment)?;
