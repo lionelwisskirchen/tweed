@@ -1,6 +1,7 @@
 use core::hint::cold_path;
 
 use crate::core::error::ExecutionError;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 

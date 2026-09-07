@@ -1,4 +1,5 @@
 use super::error::ExecutionError;
+use alloc::boxed::Box;
 
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 const CONTINUATION_BIT_MASK: u8 = 0x80;

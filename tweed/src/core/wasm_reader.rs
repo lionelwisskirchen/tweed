@@ -1,6 +1,7 @@
 use super::error::ValidationError;
 use super::validated_wasm_reader::ValidatedWasmReader;
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ValidationError>;
