@@ -1,5 +1,5 @@
-#![feature(explicit_tail_calls)]
-#![expect(incomplete_features)]
+#![cfg_attr(feature = "tail-call", feature(explicit_tail_calls))]
+#![cfg_attr(feature = "tail-call", expect(incomplete_features))]
 #![cfg_attr(all(not(test), not(feature = "std")), no_std)]
 #[macro_use]
 extern crate alloc;

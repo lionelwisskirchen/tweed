@@ -2,6 +2,7 @@ use crate::{
     core::error::ExecutionError,
     execution::{
         adresses::FuncAddr,
+        exec_instructions_tail_call::execute_next_instruction::DISPATCH_TABLE,
         executor::{ExecutionContext, Executor},
         instances::FuncInstance,
         store::HostEnv,
@@ -12,107 +13,132 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
-    pub fn execute_block(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_block(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         trace!("BLOCK");
         context.reader.next_leb128_u32(); // Skip Block type
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_loop(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_loop(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         trace!("LOOP");
         context.reader.next_leb128_u32(); // Skip Block type
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_if(&mut self, context: &mut ExecutionContext) -> Result<()> {
-        let bool_val = self.stack.pop();
+    pub fn execute_if(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
+        let bool_val = executor.stack.pop();
         trace!("IF({:?})", bool_val);
         if bool_val == Value::I32(0) {
-            Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
+            Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
         } else {
             context.reader.next_leb128_u32(); // Skip Block type
             context.current_frame.side_table_pointer += 1;
         }
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_else(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_else(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         trace!("ELSE");
-        Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
-        become self.execute_next_instruction(context)
+        Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_select(&mut self, context: &mut ExecutionContext) -> Result<()> {
-        let (cond, b, a) = (self.stack.pop_i32(), self.stack.pop(), self.stack.pop());
+    pub fn execute_select(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
+        let (cond, b, a) = (
+            executor.stack.pop_i32(),
+            executor.stack.pop(),
+            executor.stack.pop(),
+        );
         trace!("SELECT({cond} ? {a:?} : {b:?})");
         if cond == 0 {
-            self.stack.push(b)?;
+            executor.stack.push(b)?;
         } else {
-            self.stack.push(a)?;
+            executor.stack.push(a)?;
         }
 
-        become self.execute_next_instruction(context)
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_select_t(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_select_t(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         context.reader.next_leb128_u32();
 
         context.reader.next_byte();
-        let c = self.stack.pop_i32();
-        let val_2 = self.stack.pop(); // TODO Type check?
-        let val_1 = self.stack.pop();
+        let c = executor.stack.pop_i32();
+        let val_2 = executor.stack.pop(); // TODO Type check?
+        let val_1 = executor.stack.pop();
         trace!("SELECT_T({c})");
         if c == 0 {
-            self.stack.push(val_2)?;
+            executor.stack.push(val_2)?;
         } else {
-            self.stack.push(val_1)?;
+            executor.stack.push(val_1)?;
         }
 
-        become self.execute_next_instruction(context)
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_br(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_br(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         trace!("BR");
-        Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
-        become self.execute_next_instruction(context)
+        Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_br_if(&mut self, context: &mut ExecutionContext) -> Result<()> {
-        let bool_val = self.stack.pop_i32();
+    pub fn execute_br_if(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
+        let bool_val = executor.stack.pop_i32();
         trace!("BR_IF({bool_val})");
 
         if bool_val == 0 {
             context.reader.next_leb128_u32(); // skip depth
             context.current_frame.side_table_pointer += 1;
         } else {
-            Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
+            Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
         }
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_br_table(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_br_table(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         // TODO br_table vec[Branch index] not += branch_index!
-        let branch_index = self.stack.pop_i32() as usize;
+        let branch_index = executor.stack.pop_i32() as usize;
         let number_of_branches = context.reader.next_leb128_u32() as usize;
         trace!("BR_TABLE({branch_index})");
         let offset = branch_index.min(number_of_branches);
         context.current_frame.side_table_pointer += offset;
 
-        Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
-        become self.execute_next_instruction(context)
+        Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_return(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_return(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         trace!("RETURN");
         let count = context.current_frame.return_value.len();
-        let results = self.stack.pop_n(count)?;
-        self.stack.unwind_to(context.current_frame.stack_pointer);
-        self.stack.push_vec(&results)?;
+        let results = executor.stack.pop_n(count)?;
+        executor
+            .stack
+            .unwind_to(context.current_frame.stack_pointer);
+        executor.stack.push_vec(&results)?;
 
         Ok(())
     }
 
-    pub fn execute_call_indirect(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_call_indirect(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let type_index = context.reader.next_leb128_u32();
         let table_index = context.reader.next_leb128_u32();
         let table_addr = context
@@ -127,7 +153,7 @@ impl Executor {
             .types
             .get(type_index as usize)
             .ok_or(ExecutionError::InvalidFunctionIndex)?;
-        let entry_index = self.stack.pop_i32() as usize;
+        let entry_index = executor.stack.pop_i32() as usize;
         let Ok(entry) = table.get(entry_index) else {
             return Err(ExecutionError::UndefinedElement);
         };
@@ -147,14 +173,14 @@ impl Executor {
 
         match function {
             FuncInstance::Internal(instance) => {
-                let frame = self.build_frame(instance)?;
+                let frame = executor.build_frame(instance)?;
                 context.current_frame.program_counter =
                     context.reader.current_index() - context.current_frame.start + 1;
 
-                self.call_stack.push(context.current_frame.clone())?;
-                self.call_stack.push(frame)?;
+                executor.call_stack.push(context.current_frame.clone())?;
+                executor.call_stack.push(frame)?;
                 context.should_break = true;
-                become self.exit_tail_calls(context)
+                become executor.exit_tail_calls(context)
             }
 
             FuncInstance::External(host_function) => {
@@ -162,16 +188,18 @@ impl Executor {
                     memories: context.memories.items(),
                     globals: context.globals.items(),
                 };
-                let args = self.stack.pop_n(host_function.signature.parameter.len())?;
+                let args = executor
+                    .stack
+                    .pop_n(host_function.signature.parameter.len())?;
                 let mut func_ref = host_function.func.borrow_mut();
                 let results = func_ref(&mut env, args)?;
-                self.stack.push_vec(&results)?;
+                executor.stack.push_vec(&results)?;
             }
         }
         Ok(())
     }
 
-    pub fn execute_call(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_call(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         let index = context.reader.next_leb128_u32();
         trace!("CALL({index})");
 
@@ -192,13 +220,13 @@ impl Executor {
 
         match function {
             FuncInstance::Internal(instance) => {
-                let frame = self.build_frame(instance)?;
+                let frame = executor.build_frame(instance)?;
                 context.current_frame.program_counter =
                     context.reader.current_index() - context.current_frame.start + 1;
-                self.call_stack.push(context.current_frame.clone())?;
-                self.call_stack.push(frame)?;
+                executor.call_stack.push(context.current_frame.clone())?;
+                executor.call_stack.push(frame)?;
                 context.should_break = true;
-                become self.exit_tail_calls(context)
+                become executor.exit_tail_calls(context)
             }
 
             FuncInstance::External(host_function) => {
@@ -206,23 +234,46 @@ impl Executor {
                     memories: context.memories.items(),
                     globals: context.globals.items(),
                 };
-                let args = self.stack.pop_n(host_function.signature.parameter.len())?;
+                let args = executor
+                    .stack
+                    .pop_n(host_function.signature.parameter.len())?;
                 let mut func_ref = host_function.func.borrow_mut();
                 let results = func_ref(&mut env, args)?;
-                self.stack.push_vec(&results)?;
+                executor.stack.push_vec(&results)?;
             }
         }
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_nop(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_nop(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         trace!("NOP");
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_drop(&mut self, context: &mut ExecutionContext) -> Result<()> {
-        let val = self.stack.pop();
+    pub fn execute_end(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
+        trace!("END");
+        if context.reader.current_index() == context.current_frame.end {
+            return Ok(());
+        }
+        become executor.start_tail_called_execution(context);
+    }
+
+    pub fn execute_drop(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
+        let val = executor.stack.pop();
         trace!("DROP {:?}", val);
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
+    }
+
+    pub fn execute_unreachable(
+        _executor: &mut Executor,
+        _context: &mut ExecutionContext,
+    ) -> Result<()> {
+        return Err(ExecutionError::TrapUnreachable);
     }
 }

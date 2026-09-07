@@ -1,12 +1,18 @@
 use crate::{
     core::error::ExecutionError,
-    execution::executor::{ExecutionContext, Executor},
+    execution::{
+        exec_instructions_tail_call::execute_next_instruction::DISPATCH_TABLE,
+        executor::{ExecutionContext, Executor},
+    },
 };
 
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
-    pub fn execute_local_get(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_local_get(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let idx = context.reader.next_leb128_u32() as usize;
         trace!("LOCAL_GET({})", idx);
         let local = context
@@ -15,34 +21,46 @@ impl Executor {
             .get(idx)
             .ok_or(ExecutionError::InvalidLocalIndex)?;
 
-        self.stack.push(*local)?;
-        become self.execute_next_instruction(context)
+        executor.stack.push(*local)?;
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_local_set(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_local_set(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let idx = context.reader.next_leb128_u32() as usize;
         let local = context
             .current_frame
             .locals
             .get_mut(idx)
             .ok_or(ExecutionError::InvalidLocalIndex)?;
-        let new_value = self.stack.pop();
+        let new_value = executor.stack.pop();
         trace!("LOCAL_SET({}) TO {:?}", idx, new_value);
         *local = new_value;
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_local_tee(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_local_tee(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let idx = context.reader.next_leb128_u32() as usize;
         let local = context
             .current_frame
             .locals
             .get_mut(idx)
             .ok_or(ExecutionError::InvalidLocalIndex)?;
-        let new_value = self.stack.pop();
+        let new_value = executor.stack.pop();
         trace!("LOCAL_TEE({}) TO {:?}", idx, new_value);
         *local = new_value;
-        self.stack.push(new_value)?;
-        become self.execute_next_instruction(context)
+        executor.stack.push(new_value)?;
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 }

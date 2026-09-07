@@ -1,6 +1,7 @@
 use crate::{
     core::error::ExecutionError,
     execution::{
+        exec_instructions_tail_call::execute_next_instruction::DISPATCH_TABLE,
         executor::{ExecutionContext, Executor},
         store::map_memory,
     },
@@ -10,32 +11,45 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
-    pub fn execute_memory_size(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_memory_size(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let idx = context.reader.next_byte();
         let mem = map_memory(idx as usize, context.instance, context.memories).unwrap();
         let size_in_pages = mem.pages() as i32;
 
-        self.stack.push(Value::I32(size_in_pages))?;
-        become self.execute_next_instruction(context)
+        executor.stack.push(Value::I32(size_in_pages))?;
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_memory_grow(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_memory_grow(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let idx = context.reader.next_byte();
         let mem = map_memory(idx as usize, context.instance, context.memories).unwrap();
         let size_in_pages = mem.pages() as i32;
 
-        let amount = self.stack.pop_i32() as u32;
+        let amount = executor.stack.pop_i32() as u32;
         trace!("Instruction: memory.grow {}", size_in_pages);
 
         if mem.grow(amount).is_ok() {
-            self.stack.push(Value::I32(size_in_pages))?;
+            executor.stack.push(Value::I32(size_in_pages))?;
         } else {
-            self.stack.push(Value::I32(-1))?;
+            executor.stack.push(Value::I32(-1))?;
         }
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_data_drop(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_data_drop(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         // 2. Assert: due to validation, 𝐹.module.dataaddrs[𝑥] exists.
         // 3. Let 𝑎 be the data address 𝐹.module.dataaddrs[𝑥].
         let data_index = context.reader.next_leb128_u32() as usize;
@@ -44,10 +58,15 @@ impl Executor {
         let data_inst = context.datas.get_mut(*data_addr).unwrap();
         // 5. Replace 𝑆.datas[𝑎] with the data instance {data 𝜖}.
         data_inst.clear();
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_memory_init(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_memory_init(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let data_index = context.reader.next_leb128_u32() as usize;
         let memory_index = context.reader.next_byte() as usize;
         // 2. Assert: due to validation, 𝐹.module.memaddrs[0] exists.
@@ -66,13 +85,13 @@ impl Executor {
 
         // 10. Assert: due to validation, a value of value type i32 is on the top of the stack.
         // 11. Pop the value i32.const 𝑛 from the stack.
-        let n = self.stack.pop_i32() as usize;
+        let n = executor.stack.pop_i32() as usize;
         // 12. Assert: due to validation, a value of value type i32 is on the top of the stack.
         // 13. Pop the value i32.const 𝑠 from the stack
-        let s = self.stack.pop_i32() as usize;
+        let s = executor.stack.pop_i32() as usize;
         // 14. Assert: due to validation, a value of value type i32 is on the top of the stack.
         // 15. Pop the value i32.const 𝑑 from the stack
-        let d = self.stack.pop_i32() as usize;
+        let d = executor.stack.pop_i32() as usize;
         let src_end = s
             .checked_add(n)
             .ok_or(ExecutionError::MemoryAccessOutOfBounds)?;
@@ -87,15 +106,19 @@ impl Executor {
         let data = data.load_slice(s, n)?;
         mem.store(d, 0, &data)?;
 
-        become self.execute_next_instruction(context)
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_memory_copy(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_memory_copy(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let (dest, src) = (context.reader.next_byte(), context.reader.next_byte());
 
-        let number_of_bytes = self.stack.pop_i32() as usize;
-        let src_address = self.stack.pop_i32() as usize;
-        let dest_address = self.stack.pop_i32() as usize;
+        let number_of_bytes = executor.stack.pop_i32() as usize;
+        let src_address = executor.stack.pop_i32() as usize;
+        let dest_address = executor.stack.pop_i32() as usize;
 
         let data = {
             let src_mem = map_memory(src as usize, context.instance, context.memories).unwrap();
@@ -105,23 +128,29 @@ impl Executor {
         dest_mem.store(dest_address, 0, &data)?;
         trace!("MEMORY_COPY: {number_of_bytes} bytes from {src}:{src_address} to {dest}:{dest_address}");
 
-        become self.execute_next_instruction(context)
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 
-    pub fn execute_memory_fill(&mut self, context: &mut ExecutionContext) -> Result<()> {
+    pub fn execute_memory_fill(
+        executor: &mut Executor,
+        context: &mut ExecutionContext,
+    ) -> Result<()> {
         let idx = context.reader.next_byte();
         let mem = map_memory(idx as usize, context.instance, context.memories).unwrap(); // always 0
-        let number_of_bytes = self.stack.pop_i32() as usize;
-        let val = self.stack.pop_i32() as u8;
+        let number_of_bytes = executor.stack.pop_i32() as usize;
+        let val = executor.stack.pop_i32() as u8;
 
         if number_of_bytes > isize::MAX as usize {
             return Err(ExecutionError::MemoryAccessOutOfBounds);
         }
         let data = vec![val; number_of_bytes];
 
-        let address = self.stack.pop_i32() as usize;
+        let address = executor.stack.pop_i32() as usize;
         mem.store(address, 0, &data)?;
         trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");
-        become self.execute_next_instruction(context)
+
+        let instruction = context.reader.next_byte() as usize;
+        become DISPATCH_TABLE[instruction](executor, context);
     }
 }
