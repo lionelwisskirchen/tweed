@@ -24,7 +24,8 @@ impl Executor {
         executor.stack.push(global.value)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_global_set(
@@ -43,6 +44,7 @@ impl Executor {
         global.value = new_value;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 }

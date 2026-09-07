@@ -20,7 +20,8 @@ impl Executor {
         executor.stack.push(Value::F32(value))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_store(
@@ -35,7 +36,8 @@ impl Executor {
         mem.store(rel_address as usize, offset as usize, &store_data)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_load(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -48,7 +50,8 @@ impl Executor {
         executor.stack.push(data.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_reinterpret_i32(
@@ -61,7 +64,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_demote_f64(
@@ -74,7 +78,8 @@ impl Executor {
         executor.stack.push(Value::F32(result))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_copysign(
@@ -88,7 +93,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_convert_i32_s(
@@ -101,7 +107,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_convert_i32_u(
@@ -114,7 +121,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_convert_i64_s(
@@ -127,7 +135,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_convert_i64_u(
@@ -140,7 +149,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_sub(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -157,7 +167,8 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_mul(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -174,7 +185,8 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_div(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -191,7 +203,8 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_min(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -209,7 +222,8 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_max(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -227,7 +241,8 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_abs(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -237,7 +252,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_neg(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -249,7 +265,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_ceil(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -259,7 +276,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_floor(
@@ -272,7 +290,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_trunc(
@@ -285,7 +304,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_nearest(
@@ -298,7 +318,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_sqrt(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -308,7 +329,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_add(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -324,7 +346,8 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_eq(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -334,7 +357,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_ne(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -344,7 +368,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_lt(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -354,7 +379,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_gt(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -364,7 +390,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_le(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -374,7 +401,8 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_f32_ge(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -384,6 +412,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 }

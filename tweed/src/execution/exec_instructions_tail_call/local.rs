@@ -24,7 +24,8 @@ impl Executor {
         executor.stack.push(*local)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_local_set(
@@ -42,7 +43,8 @@ impl Executor {
         *local = new_value;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 
     pub fn execute_local_tee(
@@ -61,6 +63,7 @@ impl Executor {
         executor.stack.push(new_value)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context)
+        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        become handler(executor, context)
     }
 }
