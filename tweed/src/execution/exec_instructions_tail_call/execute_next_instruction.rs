@@ -10,8 +10,8 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 pub type DispatchFunction =
     fn(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()>;
 
-pub const DISPATCH_TABLE: [DispatchFunction; 256] = const {
-    let mut table: [DispatchFunction; 256] = [Executor::execute_unreachable; 256];
+pub static DISPATCH_TABLE: [DispatchFunction; 253] = const {
+    let mut table: [DispatchFunction; 253] = [Executor::execute_unreachable; 253];
 
     table[UNREACHABLE as usize] = Executor::execute_unreachable;
     table[NOP as usize] = Executor::execute_nop;
@@ -201,7 +201,7 @@ pub const DISPATCH_TABLE: [DispatchFunction; 256] = const {
     table
 };
 
-const DISPATCH_EXT_TABLE: [DispatchFunction; 18] = {
+static DISPATCH_EXT_TABLE: [DispatchFunction; 18] = {
     let mut table: [DispatchFunction; 18] = [Executor::execute_unreachable; 18];
     table[ELEM_DROP as usize] = Executor::execute_elem_drop;
     table[I32_TRUNC_SAT_F32_S as usize] = Executor::execute_i32_trunc_sat_f32_s;
