@@ -20,7 +20,7 @@ impl Executor {
         executor.stack.push(Value::I64(value))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_popcnt(
@@ -33,7 +33,7 @@ impl Executor {
         executor.stack.push(Value::I64(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_ctz(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -43,7 +43,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_shr_s(
@@ -56,7 +56,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_shr_u(
@@ -69,7 +69,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_shl(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -79,7 +79,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_add(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -89,7 +89,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
     pub fn execute_i64_sub(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         let (right, left) = (executor.stack.pop_i64(), executor.stack.pop_i64());
@@ -98,7 +98,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_mul(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -108,7 +108,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_div_s(
@@ -126,7 +126,7 @@ impl Executor {
         executor.stack.push((left / right).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_div_u(
@@ -143,7 +143,7 @@ impl Executor {
             .push(((left as u64) / (right as u64)).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_rem_s(
@@ -160,7 +160,7 @@ impl Executor {
         executor.stack.push(result.unwrap_or_default().into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_rem_u(
@@ -177,7 +177,7 @@ impl Executor {
         executor.stack.push(result.unwrap_or_default().into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_and(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -188,7 +188,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_or(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -199,7 +199,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_xor(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -210,7 +210,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_rotr(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -220,7 +220,7 @@ impl Executor {
         executor.stack.push(Value::I64(result))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_rotl(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -230,7 +230,7 @@ impl Executor {
         executor.stack.push(Value::I64(result))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_clz(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -240,7 +240,7 @@ impl Executor {
         executor.stack.push(result.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_extend8_s(
@@ -253,7 +253,7 @@ impl Executor {
         executor.stack.push(extended.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_extend16_s(
@@ -266,7 +266,7 @@ impl Executor {
         executor.stack.push(extended.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_extend32_s(
@@ -279,7 +279,7 @@ impl Executor {
         executor.stack.push(extended.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_extend_i32_u(
@@ -291,7 +291,7 @@ impl Executor {
         executor.stack.push((value as u32 as i64).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_extend_i32_s(
@@ -303,7 +303,7 @@ impl Executor {
         executor.stack.push((value as i64).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_ge_u(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -314,7 +314,7 @@ impl Executor {
             .push(Value::I32(((left as u64) >= (right as u64)) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_ge_s(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -323,7 +323,7 @@ impl Executor {
         executor.stack.push(Value::I32((left >= right) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_gt_s(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -332,7 +332,7 @@ impl Executor {
         executor.stack.push(Value::I32((left > right) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_gt_u(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -343,7 +343,7 @@ impl Executor {
             .push(Value::I32(((left as u64) > (right as u64)) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_lt_s(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -352,7 +352,7 @@ impl Executor {
         executor.stack.push(Value::I32((left < right) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_lt_u(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -363,7 +363,7 @@ impl Executor {
             .push(Value::I32(((left as u64) < (right as u64)) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_le_s(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -372,7 +372,7 @@ impl Executor {
         executor.stack.push(Value::I32((left <= right) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_le_u(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -383,7 +383,7 @@ impl Executor {
             .push(Value::I32(((left as u64) <= (right as u64)) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_eqz(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -392,7 +392,7 @@ impl Executor {
         executor.stack.push(Value::I32((val == 0) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_eq(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -401,7 +401,7 @@ impl Executor {
         executor.stack.push(Value::I32((left == right) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_ne(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -410,7 +410,7 @@ impl Executor {
         executor.stack.push(Value::I32((left != right) as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_store(
@@ -425,7 +425,7 @@ impl Executor {
         mem.store(rel_address as usize, offset as usize, &store_data)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_store8(
@@ -440,7 +440,7 @@ impl Executor {
         mem.store(rel_address as usize, offset as usize, &store_data)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_store16(
@@ -455,7 +455,7 @@ impl Executor {
         mem.store(rel_address as usize, offset as usize, &store_data)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_store32(
@@ -471,7 +471,7 @@ impl Executor {
         mem.store(rel_address as usize, offset as usize, &store_data)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_load(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -483,7 +483,7 @@ impl Executor {
         executor.stack.push(data.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_load8_s(
@@ -498,7 +498,7 @@ impl Executor {
         executor.stack.push((data as u64).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_load8_u(
@@ -513,7 +513,7 @@ impl Executor {
         executor.stack.push((data as u64).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_load16_s(
@@ -528,7 +528,7 @@ impl Executor {
         executor.stack.push((data as u64).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_load16_u(
@@ -543,7 +543,7 @@ impl Executor {
         executor.stack.push((data as u64).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_load32_s(
@@ -558,7 +558,7 @@ impl Executor {
         executor.stack.push((data as u64).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_load32_u(
@@ -573,7 +573,7 @@ impl Executor {
         executor.stack.push((data as u64).into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_trunc_f32_s(
@@ -592,7 +592,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_trunc_f32_u(
@@ -612,7 +612,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_trunc_f64_s(
@@ -632,7 +632,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_trunc_f64_u(
@@ -651,7 +651,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_reinterpret_f64(
@@ -665,7 +665,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_trunc_sat_f64_s(
@@ -678,7 +678,7 @@ impl Executor {
         executor.stack.push(Value::I64(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_trunc_sat_f32_s(
@@ -691,7 +691,7 @@ impl Executor {
         executor.stack.push(Value::I64(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_trunc_sat_f64_u(
@@ -704,7 +704,7 @@ impl Executor {
         executor.stack.push(Value::I64(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_i64_trunc_sat_f32_u(
@@ -717,6 +717,6 @@ impl Executor {
         executor.stack.push(Value::I64(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 }

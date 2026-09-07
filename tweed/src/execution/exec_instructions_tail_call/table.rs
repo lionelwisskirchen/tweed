@@ -30,7 +30,7 @@ impl Executor {
         trace!("TABLE_GET '{}' [{}] -> [{:?}]", table_idx, offset, value);
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_table_set(
@@ -51,7 +51,7 @@ impl Executor {
         trace!("TABLE_SET '{}' [{} {:?}] -> []", table_idx, index, val);
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_table_init(
@@ -103,7 +103,7 @@ impl Executor {
         tab.insert(d, elems_to_copy)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_table_size(
@@ -120,7 +120,7 @@ impl Executor {
             .push(Value::I32(tab.reference_count() as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_table_copy(
@@ -169,7 +169,7 @@ impl Executor {
         table_x.insert(d, &src_data)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_table_fill(
@@ -191,7 +191,7 @@ impl Executor {
         tab.fill(i, end, val)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_table_grow(
@@ -230,7 +230,7 @@ impl Executor {
         executor.stack.push(Value::I32(sz as i32))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_ref_null(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -239,7 +239,7 @@ impl Executor {
         executor.stack.push(Value::RefNull(ref_type))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
     pub fn execute_ref_func(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         let func_idx = context.reader.next_leb128_u32() as usize;
@@ -247,7 +247,7 @@ impl Executor {
         executor.stack.push(Value::FuncRef(store_addr.as_usize()))?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_ref_is_null(
@@ -261,7 +261,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_elem_drop(
@@ -278,6 +278,6 @@ impl Executor {
         elem.references.clear();
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 }

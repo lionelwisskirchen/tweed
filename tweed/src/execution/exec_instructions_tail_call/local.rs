@@ -24,7 +24,7 @@ impl Executor {
         executor.stack.push(*local)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_local_set(
@@ -42,7 +42,7 @@ impl Executor {
         *local = new_value;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_local_tee(
@@ -61,6 +61,6 @@ impl Executor {
         executor.stack.push(new_value)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 }

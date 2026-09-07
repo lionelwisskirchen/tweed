@@ -227,7 +227,7 @@ static DISPATCH_EXT_TABLE: [DispatchFunction; 18] = {
 impl Executor {
     pub fn start_tail_called_execution(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](self, context);
+        become DISPATCH_TABLE[instruction](self, context)
     }
 
     fn execute_extension(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {

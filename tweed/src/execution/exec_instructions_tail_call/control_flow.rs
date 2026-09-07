@@ -18,7 +18,7 @@ impl Executor {
         context.reader.next_leb128_u32(); // Skip Block type
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_loop(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -26,7 +26,7 @@ impl Executor {
         context.reader.next_leb128_u32(); // Skip Block type
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_if(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -40,7 +40,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_else(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -48,7 +48,7 @@ impl Executor {
         Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_select(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -65,7 +65,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_select_t(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -83,7 +83,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_br(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -91,7 +91,7 @@ impl Executor {
         Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_br_if(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -106,7 +106,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_br_table(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -120,7 +120,7 @@ impl Executor {
         Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_return(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -244,14 +244,14 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_nop(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
         trace!("NOP");
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_end(executor: &mut Executor, context: &mut ExecutionContext) -> Result<()> {
@@ -267,7 +267,7 @@ impl Executor {
         trace!("DROP {:?}", val);
 
         let instruction = context.reader.next_byte() as usize;
-        become DISPATCH_TABLE[instruction](executor, context);
+        become DISPATCH_TABLE[instruction](executor, context)
     }
 
     pub fn execute_unreachable(
