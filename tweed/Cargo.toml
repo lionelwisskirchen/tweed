@@ -25,7 +25,6 @@ debug = true
 [profile.profiling]
 inherits = "release"
 debug = true
-debug-frame = true
 strip = "none"
 
 [features]
