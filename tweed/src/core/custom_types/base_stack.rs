@@ -27,7 +27,7 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 /// ```
 #[derive(Clone, Debug)]
 pub struct BaseStack<T: Default + Clone, const N: usize> {
-    data: Vec<T>,
+    data: Box<[T]>,
     top: usize,
 }
 
@@ -35,7 +35,7 @@ impl<T: Default + Clone, const N: usize> BaseStack<T, N> {
     /// Creates an empty `BaseStack`, initializing all slots to `T::default()`.
     pub fn new() -> Self {
         Self {
-            data: vec![T::default(); N],
+            data: vec![T::default(); N].into_boxed_slice(),
             top: 0,
         }
     }
