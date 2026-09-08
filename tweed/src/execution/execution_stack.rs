@@ -6,8 +6,8 @@ use super::executor::Frame;
 
 use crate::core::custom_types::base_stack::BaseStack;
 
-pub const MAX_VALUE_STACK_SIZE: usize = 0x1000;
-pub const MAX_CALL_STACK_SIZE: usize = 0x800; // Should be smaller than 'MAX_VALUE_STACK_SIZE'
+pub const MAX_VALUE_STACK_SIZE: usize = 0x800;
+pub const MAX_CALL_STACK_SIZE: usize = 0x100; // Should be smaller than 'MAX_VALUE_STACK_SIZE'
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Debug)]
