@@ -1,7 +1,6 @@
 use core::hint::cold_path;
 
 use crate::core::error::ExecutionError;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
@@ -28,7 +27,7 @@ pub type Result<T> = core::result::Result<T, ExecutionError>;
 /// ```
 #[derive(Clone, Debug)]
 pub struct BaseStack<T: Default + Clone, const N: usize> {
-    data: Box<[T; N]>,
+    data: Vec<T>,
     top: usize,
 }
 
@@ -36,7 +35,7 @@ impl<T: Default + Clone, const N: usize> BaseStack<T, N> {
     /// Creates an empty `BaseStack`, initializing all slots to `T::default()`.
     pub fn new() -> Self {
         Self {
-            data: Box::new(core::array::from_fn(|_| T::default())),
+            data: vec![T::default(); N],
             top: 0,
         }
     }
