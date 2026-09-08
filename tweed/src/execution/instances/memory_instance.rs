@@ -4,13 +4,14 @@ use crate::binary::memory_section::{Limits, Memory, DEFAULT_WASM_PAGE_SIZE};
 use crate::core::error::ExecutionError;
 use crate::core::values::FromLeBytes;
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Debug, Clone)]
 pub struct MemoryInstance {
     pub memory_type: Memory,
-    pub bytes: Vec<u8>,
+    pub bytes: Box<[u8]>,
 }
 
 impl MemoryInstance {
@@ -20,7 +21,7 @@ impl MemoryInstance {
                 limits,
                 mempagesize,
             },
-            bytes,
+            bytes: bytes.into_boxed_slice(),
         }
     }
 
@@ -103,8 +104,12 @@ impl MemoryInstance {
                 return Err(ExecutionError::MemoryAccessOutOfBounds);
             }
         }
-        self.bytes
-            .resize((len * self.memory_type.mempagesize) as usize, 0);
+
+        let mut new_data =
+            vec![0; (len * self.memory_type.mempagesize) as usize].into_boxed_slice();
+        new_data[..self.bytes.len()].clone_from_slice(&self.bytes);
+
+        self.bytes = new_data;
         self.memory_type.limits.min += amount;
 
         Ok(())
