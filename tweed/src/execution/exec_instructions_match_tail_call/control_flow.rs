@@ -116,7 +116,7 @@ impl Executor {
         self.stack.unwind_to(context.current_frame.stack_pointer);
         self.stack.push_vec(&results)?;
 
-        Ok(())
+        become self.exit_tail_calls(context)
     }
 
     pub fn execute_call_indirect(&mut self, context: &mut ExecutionContext) -> Result<()> {
@@ -175,7 +175,7 @@ impl Executor {
                 self.stack.push_vec(&results)?;
             }
         }
-        Ok(())
+        become self.execute_next_instruction(context)
     }
 
     pub fn execute_call(&mut self, context: &mut ExecutionContext) -> Result<()> {
@@ -232,7 +232,7 @@ impl Executor {
     pub fn execute_end(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("END");
         if context.reader.current_index() == context.current_frame.end {
-            return Ok(());
+            become self.exit_tail_calls(context)
         }
         become self.execute_next_instruction(context)
     }

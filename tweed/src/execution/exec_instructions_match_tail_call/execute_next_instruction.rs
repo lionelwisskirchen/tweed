@@ -101,16 +101,8 @@ impl Executor {
             BR_IF => become self.execute_br_if(context),
             BR_TABLE => become self.execute_br_table(context),
             SELECT_T => become self.execute_select_t(context),
-            RETURN => {
-                become self.execute_return(context);
-            }
-            END => {
-                trace!("END");
-                if context.reader.current_index() == context.current_frame.end {
-                    become self.exit_tail_calls(context)
-                }
-                become self.execute_next_instruction(context)
-            }
+            RETURN => become self.execute_return(context),
+            END => become self.execute_end(context),
             CALL_INDIRECT => become self.execute_call_indirect(context),
             CALL => become self.execute_call(context),
             I64_STORE => become self.execute_i64_store(context),
