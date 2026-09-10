@@ -20,7 +20,7 @@ list(APPEND STM32_COMP_OPTIONS -DEMBENCH=1)
 endif()
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_LIST_DIR}/../target/thumbv7em-none-eabihf/release/libtweed_staticlib.a
-                    COMMAND cargo build
+                    COMMAND cargo build --release
                     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/..)
 
 add_executable(tweed ${CMAKE_CURRENT_LIST_DIR}/src/main.c ${CMAKE_CURRENT_LIST_DIR}/src/benchmarks.c)
