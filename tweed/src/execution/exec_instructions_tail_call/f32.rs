@@ -1,7 +1,7 @@
 use crate::{
     core::{error::ExecutionError, values::NaN},
     execution::{
-        exec_instructions_tail_call::execute_next_instruction::DISPATCH_TABLE,
+        exec_instructions_tail_call::start_tail_called_execution::DISPATCH_TABLE,
         executor::{ExecutionContext, Executor},
         store::map_memory,
     },

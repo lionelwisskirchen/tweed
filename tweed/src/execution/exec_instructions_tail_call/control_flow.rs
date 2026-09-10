@@ -2,7 +2,7 @@ use crate::{
     core::error::ExecutionError,
     execution::{
         adresses::FuncAddr,
-        exec_instructions_tail_call::execute_next_instruction::DISPATCH_TABLE,
+        exec_instructions_tail_call::start_tail_called_execution::DISPATCH_TABLE,
         executor::{ExecutionContext, Executor},
         instances::FuncInstance,
         store::HostEnv,

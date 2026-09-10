@@ -57,7 +57,7 @@ benchmark-job:
     - nix develop --command bash -c '
       python ../run-benches.py
       --outname $CI_COMMIT_SHA
-      ../../benchmark_sources/huffbench.wasm
+      ../../benchmark_sources/dispatch_bench_sources/
       results'
     - echo "Finished Benchmarking"
   artifacts:

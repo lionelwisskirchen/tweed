@@ -7,4 +7,5 @@ pub mod i32;
 pub mod i64;
 pub mod local;
 pub mod memory;
+pub mod start_tail_called_execution;
 pub mod table;
