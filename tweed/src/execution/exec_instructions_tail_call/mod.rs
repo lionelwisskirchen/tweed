@@ -1,5 +1,4 @@
 pub mod control_flow;
-pub mod execute_next_instruction;
 pub mod f32;
 pub mod f64;
 pub mod global;
