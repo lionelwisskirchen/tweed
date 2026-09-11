@@ -22,7 +22,7 @@ impl Executor {
         executor.stack.push(Value::I32(size_in_pages))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -44,7 +44,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -62,7 +62,7 @@ impl Executor {
         data_inst.clear();
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -110,7 +110,7 @@ impl Executor {
         mem.store(d, 0, &data)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -133,7 +133,7 @@ impl Executor {
         trace!("MEMORY_COPY: {number_of_bytes} bytes from {src}:{src_address} to {dest}:{dest_address}");
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -156,7 +156,7 @@ impl Executor {
         trace!("MEMORY_FILL: {number_of_bytes} bytes from {address} to {val}");
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 }

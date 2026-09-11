@@ -24,7 +24,7 @@ impl Executor {
         executor.stack.push(*local)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -43,7 +43,7 @@ impl Executor {
         *local = new_value;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -63,7 +63,7 @@ impl Executor {
         executor.stack.push(new_value)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 }

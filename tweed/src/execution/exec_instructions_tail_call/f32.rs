@@ -20,7 +20,7 @@ impl Executor {
         executor.stack.push(Value::F32(value))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -36,7 +36,7 @@ impl Executor {
         mem.store(rel_address as usize, offset as usize, &store_data)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -50,7 +50,7 @@ impl Executor {
         executor.stack.push(data.into())?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -64,7 +64,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -78,7 +78,7 @@ impl Executor {
         executor.stack.push(Value::F32(result))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -93,7 +93,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -107,7 +107,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -121,7 +121,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -135,7 +135,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -149,7 +149,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -167,7 +167,7 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -185,7 +185,7 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -203,7 +203,7 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -222,7 +222,7 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -241,7 +241,7 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -252,7 +252,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -265,7 +265,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -276,7 +276,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -290,7 +290,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -304,7 +304,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -318,7 +318,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -329,7 +329,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -346,7 +346,7 @@ impl Executor {
         executor.stack.push(Value::F32(res))?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -357,7 +357,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -368,7 +368,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -379,7 +379,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -390,7 +390,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -401,7 +401,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -412,7 +412,7 @@ impl Executor {
         executor.stack.push(res)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 }

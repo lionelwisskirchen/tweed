@@ -18,7 +18,7 @@ impl Executor {
         context.reader.next_leb128_u32(); // Skip Block type
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -27,7 +27,7 @@ impl Executor {
         context.reader.next_leb128_u32(); // Skip Block type
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -42,7 +42,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -51,7 +51,7 @@ impl Executor {
         Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -69,7 +69,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -88,7 +88,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -97,7 +97,7 @@ impl Executor {
         Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -113,7 +113,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -128,7 +128,7 @@ impl Executor {
         Self::do_goto(&mut executor.stack, context.current_frame, context.reader)?;
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -207,7 +207,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -256,7 +256,7 @@ impl Executor {
         }
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -264,7 +264,7 @@ impl Executor {
         trace!("NOP");
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
@@ -281,7 +281,7 @@ impl Executor {
         trace!("DROP {:?}", val);
 
         let instruction = context.reader.next_byte() as usize;
-        let handler = unsafe { *DISPATCH_TABLE.get_unchecked(instruction as usize) };
+        let handler = DISPATCH_TABLE[instruction];
         become handler(executor, context)
     }
 
