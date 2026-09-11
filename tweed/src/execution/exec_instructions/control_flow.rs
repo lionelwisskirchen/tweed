@@ -226,4 +226,11 @@ impl Executor {
         trace!("DROP {:?}", val);
         Ok(())
     }
+
+    pub fn execute_unreachable(
+        _executor: &mut Executor,
+        _context: &mut ExecutionContext,
+    ) -> Result<()> {
+        Err(ExecutionError::TrapUnreachable)
+    }
 }

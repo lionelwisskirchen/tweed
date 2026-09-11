@@ -117,7 +117,11 @@ impl Executor {
         }
     }
 
-    #[cfg(not(any(feature = "tail-call", feature = "match-tail-call")))]
+    #[cfg(not(any(
+        feature = "tail-call",
+        feature = "match-tail-call",
+        feature = "call-threading"
+    )))]
     fn execute_frame(&mut self, current_frame: &mut Frame, store: &mut Store) -> Result<()> {
         let instance_addr = &current_frame.instance_addr;
         let instance = store.instances.get_mut(*instance_addr)?;
@@ -433,6 +437,37 @@ impl Executor {
         // !! We need to make the way through this function since we can't flag out the incomplete_features
         self.execute_next_instruction(&mut context)?;
 
+        current_frame.program_counter = context.reader.current_index() - current_frame.start + 1;
+        Ok(())
+    }
+
+    #[cfg(feature = "call-threading")]
+    fn execute_frame(&mut self, current_frame: &mut Frame, store: &mut Store) -> Result<()> {
+        let instance_addr = &current_frame.instance_addr;
+        let instance = store.instances.get_mut(*instance_addr)?;
+        let reader_address = instance.reader;
+        let reader: &mut ValidatedWasmReader = store.reader.get_mut(reader_address).unwrap();
+        reader.seek(current_frame.start + current_frame.program_counter);
+
+        let mut context = ExecutionContext {
+            reader,
+            instance,
+            current_frame,
+            tables: &mut store.tables,
+            memories: &mut store.memories,
+            globals: &mut store.globals,
+            functions: &mut store.functions,
+            elements: &mut store.elements,
+            datas: &mut store.datas,
+            should_break: false,
+        };
+
+        use crate::execution::exec_instructions_call_threading::call_table::CALL_TABLE;
+
+        while !context.should_break {
+            let instruction = context.reader.next_byte();
+            CALL_TABLE[instruction as usize](self, &mut context)?;
+        }
         current_frame.program_counter = context.reader.current_index() - current_frame.start + 1;
         Ok(())
     }

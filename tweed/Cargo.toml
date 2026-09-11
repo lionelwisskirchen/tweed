@@ -30,6 +30,7 @@ unsafe = []
 custom_page_size = []
 tail-call = []
 match-tail-call = []
+call-threading = []
 
 [[test]]
 name = "custom_page_size_tests"
