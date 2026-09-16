@@ -6,6 +6,7 @@ use crate::{
         table_section::Table, type_section::FuncType,
     },
     core::validated_wasm_reader::ValidatedWasmReader,
+    String,
 };
 
 use super::side_table::SideTable;
@@ -27,4 +28,5 @@ pub struct Module {
     pub startsec: Option<u32>,
     pub sidetables: Vec<SideTable>,
     pub linkingsec: Option<LinkingInformation>,
+    pub artifact_hash: Option<String>,
 }

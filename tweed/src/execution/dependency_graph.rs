@@ -14,6 +14,7 @@ pub struct InterfaceBinding {
     pub interface: InterfaceId,
     pub functions: BTreeMap<FunctionName, FuncAddr>,
     pub instance_addr: InstanceAddr,
+    pub artifact_hash: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -177,6 +178,14 @@ impl DependencyGraph {
         self.garbage.clear();
         Ok(())
     }
+
+    pub fn get_artifacts(&self) -> Vec<String> {
+        self.bindings
+            .iter()
+            .filter_map(|(_id, binding)| binding.artifact_hash.clone())
+            .collect()
+    }
+
     pub fn to_dot(&self) -> String {
         let mut out = String::new();
 

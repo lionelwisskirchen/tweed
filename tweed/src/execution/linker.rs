@@ -352,6 +352,9 @@ impl Linker {
     pub fn collect_garbage(&mut self) -> Result<()> {
         self.dependency_graph.collect_garbage()
     }
+    pub fn get_artifacts(&self) -> Vec<String> {
+        self.dependency_graph.get_artifacts()
+    }
     pub fn to_dot(&self) -> String {
         self.dependency_graph.to_dot()
     }

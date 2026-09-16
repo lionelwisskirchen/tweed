@@ -396,6 +396,7 @@ impl ModuleInstantiator {
                     interface: iface.interface,
                     functions: funcs,
                     instance_addr,
+                    artifact_hash: module.artifact_hash.clone(),
                 });
             }
         }

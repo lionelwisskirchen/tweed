@@ -38,8 +38,13 @@ pub fn run(input: &[u8], name: String, params: Vec<Value>) -> Result<Vec<Value>,
         Err(TweedError::Execution(ExecutionError::FunctionIsRunning))
     }
 }
-pub fn create_and_bind(input: &[u8], engine: &mut Engine) -> Result<Vec<InterfaceId>, TweedError> {
-    let module = initialize(input)?;
+pub fn create_and_bind(
+    input: &[u8],
+    engine: &mut Engine,
+    artifact_hash: Option<String>,
+) -> Result<Vec<InterfaceId>, TweedError> {
+    let mut module = initialize(input)?;
+    module.artifact_hash = artifact_hash;
     let instance = instantiate(module, engine)?;
     Ok(engine.bind_interfaces(&instance)?)
 }
@@ -106,6 +111,10 @@ pub fn step(engine: &mut Engine) -> Result<ExecutionState, TweedError> {
 pub fn instantiate(module: Module, engine: &mut Engine) -> Result<InstanceRef, TweedError> {
     Ok(engine.instantiate(module)?)
 }
+pub fn get_artifacts(engine: &mut Engine) -> Vec<String> {
+    engine.get_artifacts()
+}
+
 pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
     trace!("Initialize module");
     let mut reader = WasmReader::new(input.to_vec());
@@ -126,6 +135,7 @@ pub fn initialize(input: &[u8]) -> Result<Module, ValidationError> {
         startsec: module_environment.startsec,
         sidetables: module_environment.sidetables,
         linkingsec: module_environment.linking_sec,
+        artifact_hash: None,
     })
 }
 

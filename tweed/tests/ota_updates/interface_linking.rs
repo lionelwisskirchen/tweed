@@ -36,7 +36,7 @@ fn safe_points(world: &mut TestWorld) {
 fn adder_interface(world: &mut TestWorld, wasm: String, version: String) {
     let path = format!("tests/ota_updates/fixtures/{}@{}.wasm", wasm, version);
     let adder = std::fs::read(path).unwrap();
-    tweed::create_and_bind(&adder, &mut world.engine).unwrap();
+    tweed::create_and_bind(&adder, &mut world.engine, None).unwrap();
 }
 #[given(
     regex = r"^an engine with an (pricing|order) interface implementation using safe points registered in version (0.1.0|0.1.1)"
@@ -47,7 +47,7 @@ fn interface_with_safe_points(world: &mut TestWorld, wasm: String, version: Stri
         wasm, version
     );
     let adder = std::fs::read(path).unwrap();
-    tweed::create_and_bind(&adder, &mut world.engine).unwrap();
+    tweed::create_and_bind(&adder, &mut world.engine, None).unwrap();
 }
 #[when(expr = "I upgrade the {string} interface for the {string} interface")]
 fn upgrade(world: &mut TestWorld, upgrade_iface: String, selection: String) {
@@ -86,7 +86,7 @@ fn gc(world: &mut TestWorld) {
 fn add_interface(world: &mut TestWorld, wasm: String, version: String) {
     let path = format!("tests/ota_updates/fixtures/{}@{}.wasm", wasm, version);
     let adder = std::fs::read(path).unwrap();
-    tweed::create_and_bind(&adder, &mut world.engine).unwrap();
+    tweed::create_and_bind(&adder, &mut world.engine, None).unwrap();
 }
 
 #[then(expr = "the result should be {int}")]

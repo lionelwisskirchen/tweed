@@ -384,4 +384,7 @@ impl Engine {
     pub fn to_dot(&self) -> String {
         self.linker.to_dot()
     }
+    pub fn get_artifacts(&self) -> Vec<String> {
+        self.linker.get_artifacts()
+    }
 }
