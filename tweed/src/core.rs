@@ -1,3 +1,4 @@
+pub mod custom_types;
 pub mod error;
 pub mod logger;
 pub mod opcode;

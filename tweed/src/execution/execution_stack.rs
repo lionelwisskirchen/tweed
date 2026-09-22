@@ -4,13 +4,15 @@ use crate::core::{error::ExecutionError, values::Value};
 
 use super::executor::Frame;
 
-pub const MAX_VALUE_STACK_SIZE: usize = 0x1000;
-pub const MAX_CALL_STACK_SIZE: usize = 0x800; // Should be smaller than 'MAX_VALUE_STACK_SIZE'
+use crate::core::custom_types::base_stack::BaseStack;
+
+pub const MAX_VALUE_STACK_SIZE: usize = 0x800;
+pub const MAX_CALL_STACK_SIZE: usize = 0x100; // Should be smaller than 'MAX_VALUE_STACK_SIZE'
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 #[derive(Debug)]
 pub struct CallStack {
-    stack: Vec<Frame>,
+    stack: BaseStack<Frame, MAX_CALL_STACK_SIZE>,
 }
 
 impl Default for CallStack {
@@ -21,13 +23,14 @@ impl Default for CallStack {
 
 impl CallStack {
     pub fn new() -> Self {
-        Self { stack: Vec::new() }
+        Self {
+            stack: BaseStack::new(),
+        }
     }
     pub fn push(&mut self, value: Frame) -> Result<()> {
-        if self.stack.len() > MAX_CALL_STACK_SIZE {
-            return Err(ExecutionError::CallStackExhaustion);
-        }
-        self.stack.push(value);
+        self.stack
+            .push(value)
+            .map_err(|_| ExecutionError::CallStackExhaustion)?;
         Ok(())
     }
     pub fn pop(&mut self) -> Option<Frame> {
@@ -41,7 +44,7 @@ impl CallStack {
 
 #[derive(Debug)]
 pub struct ExecutionStack {
-    stack: Vec<Value>,
+    stack: BaseStack<Value, MAX_VALUE_STACK_SIZE>,
 }
 impl Default for ExecutionStack {
     fn default() -> Self {
@@ -51,17 +54,16 @@ impl Default for ExecutionStack {
 
 impl ExecutionStack {
     pub fn new() -> Self {
-        Self { stack: Vec::new() }
+        Self {
+            stack: BaseStack::new(),
+        }
     }
 
     pub fn reset(&mut self) {
         self.stack.clear();
     }
     pub fn push(&mut self, value: Value) -> Result<()> {
-        if self.stack.len() > MAX_VALUE_STACK_SIZE {
-            return Err(ExecutionError::StackExhaustion);
-        }
-        self.stack.push(value);
+        self.stack.push(value)?;
         Ok(())
     }
     pub fn push_vec(&mut self, values: &[Value]) -> Result<()> {
@@ -93,7 +95,8 @@ impl ExecutionStack {
     pub fn len(&self) -> usize {
         self.stack.len()
     }
-    pub fn rest(&mut self) -> Vec<Value> {
+
+    pub fn rest(&mut self) -> BaseStack<Value, MAX_VALUE_STACK_SIZE> {
         self.stack.clone()
     }
     pub fn is_empty(&self) -> bool {
@@ -138,6 +141,7 @@ impl ExecutionStack {
         if count > self.stack.len() {
             return Err(ExecutionError::ExpectedAValueOnTheStack);
         }
-        Ok(self.stack.split_off(self.stack.len() - count))
+        let val = self.stack.split_off(self.stack.len() - count);
+        Ok(val)
     }
 }

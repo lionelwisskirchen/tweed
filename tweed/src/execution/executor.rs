@@ -89,10 +89,11 @@ impl Executor {
     }
     fn execute(&mut self, store: &mut Store) -> Result<Vec<Value>> {
         loop {
-            let Some(mut current_frame) = self.call_stack.pop() else {
-                return self.stack.pop_n(self.stack.len());
-            };
-            self.execute_frame(&mut current_frame, store)?;
+            let current_frame = self.call_stack.pop();
+            match current_frame {
+                Some(mut frame) => self.execute_frame(&mut frame, store)?,
+                None => return self.stack.pop_n(self.stack.len()),
+            }
         }
     }
 

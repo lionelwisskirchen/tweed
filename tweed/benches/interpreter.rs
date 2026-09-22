@@ -4,6 +4,8 @@ use wat;
 
 #[cfg(feature = "std")]
 pub fn criterion_benchmark(c: &mut Criterion) {
+    use std::time::Duration;
+
     let test_values = vec![
         (
             "AHA_MONT64",
@@ -51,6 +53,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     ];
 
     let mut group = c.benchmark_group("Interpreter Benchmark");
+    group
+        .sample_size(1000)
+        .measurement_time(Duration::from_secs(30));
 
     for val in test_values {
         group.bench_with_input(BenchmarkId::new("Tweed", &val.0), &val, |b, _val| {

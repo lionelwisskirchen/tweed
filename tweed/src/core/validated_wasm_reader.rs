@@ -1,5 +1,5 @@
 use super::error::ExecutionError;
-use alloc::vec::Vec;
+use alloc::boxed::Box;
 
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 const CONTINUATION_BIT_MASK: u8 = 0x80;
@@ -16,16 +16,16 @@ const VALUE_BIT_MASK: u8 = 0x7F;
 ///
 /// # Safety
 ///
-/// **Using this reader on unvalidated input can cause undefined behavior.  
+/// **Using this reader on unvalidated input can cause undefined behavior.
 /// It must *never* be used during the validation phase.**
 #[derive(Debug, Default, Clone)]
 pub struct ValidatedWasmReader {
-    bytecode: Vec<u8>,
+    bytecode: Box<[u8]>,
     byte_pointer: usize,
 }
 
 impl ValidatedWasmReader {
-    pub fn new(input: Vec<u8>) -> Self {
+    pub fn new(input: Box<[u8]>) -> Self {
         Self {
             bytecode: input,
             byte_pointer: 0,
@@ -134,7 +134,7 @@ impl ValidatedWasmReader {
     /// during an earlier verification phase.
     ///
     /// Benchmarks indicate that this implementation is currently the
-    /// fastest available decoding variant, when unsafe is allowed.    
+    /// fastest available decoding variant, when unsafe is allowed.
     #[cfg(feature = "unsafe")]
     pub fn next_leb128_i64(&mut self) -> i64 {
         let b0 = unsafe { *self.bytecode.get_unchecked(self.byte_pointer) };
