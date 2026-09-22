@@ -9,5 +9,6 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 strip = true
-opt-level = "z"
+opt-level = "s"
 lto = "fat"
+codegen-units = 1
