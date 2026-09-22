@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 spin = "0.9.8"
-tweed = {path = "../../tweed", default-features = false, features = ["custom_page_size", "tail-call"]}
+tweed = {path = "../../tweed", default-features = false, features = ["custom_page_size", "call-threading"]}
 
 [lib]
 name = "tweed_staticlib"
