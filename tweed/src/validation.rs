@@ -5,3 +5,5 @@ pub mod module;
 pub mod side_table;
 pub mod validation_stack;
 pub mod validator;
+
+pub mod validation_instructions;
