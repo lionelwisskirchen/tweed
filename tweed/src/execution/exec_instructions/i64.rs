@@ -10,6 +10,7 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_i64_const(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let value = context.reader.next_leb128_i64();
         trace!("I64_CONST({})", value);
@@ -17,6 +18,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_popcnt(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         let res = value.count_ones() as i64;
@@ -25,6 +27,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_ctz(&mut self) -> Result<()> {
         let val = self.stack.pop_i64();
         trace!("I64_CTZ({val})");
@@ -33,6 +36,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_shr_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_SHR_S({left}, {right})");
@@ -41,6 +45,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_shr_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_SHR_U({left}, {right})");
@@ -49,6 +54,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_shl(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_SHL({left}, {right})");
@@ -57,6 +63,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_add(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_ADD({left}, {right})");
@@ -64,6 +71,7 @@ impl Executor {
         self.stack.push(result.into())?;
         Ok(())
     }
+    #[inline(always)]
     pub fn execute_i64_sub(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_SUB({left}, {right})");
@@ -72,6 +80,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_mul(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_MUL({left}, {right})");
@@ -80,6 +89,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_div_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_DIV_S({left}, {right})");
@@ -93,6 +103,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_div_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_DIV_U({left}, {right})");
@@ -103,6 +114,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_rem_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_REM_S({left}, {right})");
@@ -115,6 +127,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_rem_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_REM_U({left}, {right})");
@@ -127,6 +140,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_and(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_AND({left}, {right})");
@@ -136,6 +150,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_or(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_OR({left}, {right})");
@@ -145,6 +160,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_xor(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_XOR({left}, {right})");
@@ -154,6 +170,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_rotr(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         let result = left.rotate_right(right as u32);
@@ -162,6 +179,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_rotl(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         let result = left.rotate_left(right as u32);
@@ -170,6 +188,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_clz(&mut self) -> Result<()> {
         let val = self.stack.pop_i64();
         trace!("I64_CLZ({val})");
@@ -178,6 +197,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_extend8_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         trace!("I64_EXTEND8_S({value})");
@@ -186,6 +206,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_extend16_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         trace!("I64_EXTEND16_S({value})");
@@ -194,6 +215,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_extend32_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         trace!("I64_EXTEND32_S({value})");
@@ -202,6 +224,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_extend_i32_u(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         trace!("I64_EXTEND_I32_U({value})");
@@ -209,6 +232,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_extend_i32_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         trace!("I64_EXTEND_I32_S({value})");
@@ -216,6 +240,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_ge_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_GE_U({left}, {right})");
@@ -225,6 +250,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_ge_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_GE_U({left}, {right})");
@@ -233,6 +259,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_gt_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_GT_U({left}, {right})");
@@ -241,6 +268,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_gt_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_GT_U({left}, {right})");
@@ -250,6 +278,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_lt_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_LT_U({left}, {right})");
@@ -258,6 +287,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_lt_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_LT_U({left}, {right})");
@@ -267,6 +297,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_le_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_LE_S({left}, {right})");
@@ -275,6 +306,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_le_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_LE_U({left}, {right})");
@@ -284,6 +316,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_eqz(&mut self) -> Result<()> {
         let val = self.stack.pop_i64();
         trace!("I64_EQZ({val})");
@@ -292,6 +325,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_eq(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_EQ({left}, {right})");
@@ -300,6 +334,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_ne(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i64(), self.stack.pop_i64());
         trace!("I64_NE({left}, {right})");
@@ -308,6 +343,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_store(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i64()).to_le_bytes();
@@ -318,6 +354,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_store8(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i64() as u8).to_le_bytes();
@@ -328,6 +365,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_store16(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i64() as u16).to_le_bytes();
@@ -339,6 +377,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_store32(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i64() as u32).to_le_bytes();
@@ -350,6 +389,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_load(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -360,6 +400,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_load8_s(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -370,6 +411,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_load8_u(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -380,6 +422,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_load16_s(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -390,6 +433,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_load16_u(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -400,6 +444,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_load32_s(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -410,6 +455,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_load32_u(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -420,6 +466,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_trunc_f32_s(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         if value.is_nan() {
@@ -434,6 +481,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_trunc_f32_u(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         if value.is_nan() {
@@ -449,6 +497,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_trunc_f64_s(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         if value.is_nan() {
@@ -464,6 +513,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_trunc_f64_u(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         if value.is_nan() {
@@ -478,6 +528,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_reinterpret_f64(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let bits = value.to_bits();
@@ -487,6 +538,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_trunc_sat_f64_s(&mut self) -> Result<()> {
         let val = self.stack.pop_f64();
         let res = val as i64; // Since Rust 1.45 f64->i64 is saturating
@@ -495,6 +547,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_trunc_sat_f32_s(&mut self) -> Result<()> {
         let val = self.stack.pop_f32();
         let res = val as i64; // Since Rust 1.45 f64->i64 is saturating
@@ -503,6 +556,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_trunc_sat_f64_u(&mut self) -> Result<()> {
         let val = self.stack.pop_f64();
         let res = (val as u64) as i64; // Since Rust 1.45 f64->i64 is saturating
@@ -511,6 +565,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i64_trunc_sat_f32_u(&mut self) -> Result<()> {
         let val = self.stack.pop_f32();
         let res = (val as u64) as i64; // Since Rust 1.45 f64->i64 is saturating

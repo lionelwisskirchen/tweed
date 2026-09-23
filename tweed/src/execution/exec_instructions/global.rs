@@ -6,6 +6,7 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_global_get(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let idx = context.reader.next_leb128_u32() as usize;
         trace!("GLOBAL_GET({})", idx);
@@ -19,6 +20,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_global_set(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let idx = context.reader.next_leb128_u32() as usize;
         let global_addr = context

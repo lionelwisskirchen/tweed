@@ -10,12 +10,14 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_i32_const(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let value = context.reader.next_leb128_i32();
         trace!("I32_CONST({})", value);
         self.stack.push(Value::I32(value))?;
         Ok(())
     }
+    #[inline(always)]
     pub fn execute_i32_popcnt(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         let res = value.count_ones() as i32;
@@ -24,6 +26,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_ctz(&mut self) -> Result<()> {
         let val = self.stack.pop_i32();
         trace!("I32_CTZ({val})");
@@ -32,6 +35,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_shr_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_SHR_S({left}, {right})");
@@ -40,6 +44,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_shr_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_SHR_U({left}, {right})");
@@ -48,6 +53,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_shl(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_SHL({left}, {right})");
@@ -56,6 +62,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_add(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_ADD({left}, {right})");
@@ -64,6 +71,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_mul(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_MUL({left}, {right})");
@@ -72,6 +80,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_div_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_DIV_S({left}, {right})");
@@ -85,6 +94,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_div_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_DIV_U({left}, {right})");
@@ -95,6 +105,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_rem_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_REM_S({left}, {right})");
@@ -107,6 +118,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_rem_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_REM_U({left}, {right})");
@@ -119,6 +131,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_sub(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_SUB({left}, {right})");
@@ -127,6 +140,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_eqz(&mut self) -> Result<()> {
         let val = self.stack.pop_i32();
         trace!("I32_EQZ({val})");
@@ -134,6 +148,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_eq(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_EQ({left}, {right})");
@@ -141,6 +156,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_clz(&mut self) -> Result<()> {
         let val = self.stack.pop_i32();
         trace!("I32_CLZ({val})");
@@ -148,6 +164,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_lt_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_LT_S({left}, {right})");
@@ -156,6 +173,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_le_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_LE_S({left}, {right})");
@@ -163,6 +181,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_lt_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_LT_U({left}, {right})");
@@ -171,6 +190,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_le_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_LE_U({left}, {right})");
@@ -179,6 +199,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_gt_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_GT_U({left}, {right})");
@@ -187,6 +208,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_ge_u(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_GE_U({left}, {right})");
@@ -195,6 +217,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_xor(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_XOR({left}, {right})");
@@ -203,6 +226,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_ne(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_NE({left}, {right})");
@@ -210,6 +234,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_rotr(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         let result = left.rotate_right(right as u32);
@@ -218,6 +243,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_rotl(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         let result = left.rotate_left(right as u32);
@@ -226,6 +252,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_wrap_i64(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         trace!("I32_WRAP_I64({value})");
@@ -233,6 +260,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_extend8_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         trace!("I32_EXTEND8_S({value})");
@@ -241,6 +269,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_extend16_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         trace!("I32_EXTEND16_S({value})");
@@ -249,6 +278,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_gt_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_GT_S({left}, {right})");
@@ -256,6 +286,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_ge_s(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_GE_S({left}, {right})");
@@ -263,6 +294,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_and(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_AND({left}, {right})");
@@ -270,6 +302,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_or(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_i32(), self.stack.pop_i32());
         trace!("I32_OR({left}, {right})");
@@ -277,6 +310,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_store(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i32() as u32).to_le_bytes();
@@ -287,6 +321,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_store8(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i32() as u8).to_le_bytes();
@@ -297,6 +332,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_store16(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_i32() as u16).to_le_bytes();
@@ -308,6 +344,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_load(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -318,6 +355,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_load8_u(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -328,6 +366,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_load8_s(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -338,6 +377,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_load16_u(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -348,6 +388,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_load16_s(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -358,6 +399,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_trunc_f32_s(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         if value.is_nan() {
@@ -373,6 +415,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_trunc_f32_u(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         if value.is_nan() {
@@ -388,6 +431,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_trunc_f64_s(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         if value.is_nan() {
@@ -403,6 +447,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_trunc_f64_u(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         if value.is_nan() {
@@ -417,6 +462,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_reinterpret_f32(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let bits = value.to_bits();
@@ -426,6 +472,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_trunc_sat_f32_s(&mut self) -> Result<()> {
         let val = self.stack.pop_f32();
         let res = val as i32; // Since Rust 1.45 f32->i32 is saturating
@@ -434,6 +481,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_trunc_sat_f32_u(&mut self) -> Result<()> {
         let val = self.stack.pop_f32();
         let res = (val as u32) as i32; // Since Rust 1.45 f32->u32 is saturating
@@ -442,6 +490,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_trunc_sat_f64_s(&mut self) -> Result<()> {
         let val = self.stack.pop_f64();
         let res = val as i32; // Since Rust 1.45 f32->i32 is saturating
@@ -450,6 +499,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_i32_trunc_sat_f64_u(&mut self) -> Result<()> {
         let val = self.stack.pop_f64();
         let res = (val as u32) as i32; // Since Rust 1.45 f32->u32 is saturating

@@ -10,6 +10,7 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_table_get(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let table_idx = context.reader.next_leb128_u32() as usize;
         trace!("TABLE_GET '{table_idx:?}'");
@@ -27,6 +28,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_table_set(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let table_idx = context.reader.next_leb128_u32() as usize;
 
@@ -43,6 +45,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_table_init(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let element_idx = context.reader.next_leb128_u32() as usize;
         let table_idx = context.reader.next_leb128_u32();
@@ -91,6 +94,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_table_size(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let table_idx = context.reader.next_leb128_u32();
         let table_addr = context.instance.tableaddr.get(table_idx as usize).unwrap(); // validated
@@ -101,6 +105,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_table_copy(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let table_idx_x = context.reader.next_leb128_u32(); // Destination
         let table_idx_y = context.reader.next_leb128_u32(); // Source
@@ -145,6 +150,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_table_fill(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let table_idx = context.reader.next_leb128_u32();
         let table_addr = context.instance.tableaddr.get(table_idx as usize).unwrap(); // validated
@@ -162,6 +168,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_table_grow(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let table_idx = context.reader.next_leb128_u32();
         let table_addr = context.instance.tableaddr.get(table_idx as usize).unwrap(); // validated
@@ -193,12 +200,14 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_ref_null(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let ref_type = crate::core::value_types::RefType::from_byte(context.reader.next_byte())
             .ok_or(ExecutionError::UnexpectedValueType)?;
         self.stack.push(Value::RefNull(ref_type))?;
         Ok(())
     }
+    #[inline(always)]
     pub fn execute_ref_func(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let func_idx = context.reader.next_leb128_u32() as usize;
         let store_addr = context.instance.funcaddr.get(func_idx).unwrap(); // Validated
@@ -206,6 +215,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_ref_is_null(&mut self) -> Result<()> {
         let value = self.stack.pop();
         match value {
@@ -215,6 +225,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_elem_drop(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let element_idx = context.reader.next_leb128_u32() as usize;
         // 2. Assert: due to validation, 𝐹.module.elemaddrs[𝑥] exists.

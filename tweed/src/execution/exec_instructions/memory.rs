@@ -10,6 +10,7 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_memory_size(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let idx = context.reader.next_byte();
         let mem = map_memory(idx as usize, context.instance, context.memories).unwrap();
@@ -19,6 +20,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_memory_grow(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let idx = context.reader.next_byte();
         let mem = map_memory(idx as usize, context.instance, context.memories).unwrap();
@@ -35,6 +37,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_data_drop(&mut self, context: &mut ExecutionContext) -> Result<()> {
         // 2. Assert: due to validation, 𝐹.module.dataaddrs[𝑥] exists.
         // 3. Let 𝑎 be the data address 𝐹.module.dataaddrs[𝑥].
@@ -47,6 +50,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_memory_init(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let data_index = context.reader.next_leb128_u32() as usize;
         let memory_index = context.reader.next_byte() as usize;
@@ -90,6 +94,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_memory_copy(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (dest, src) = (context.reader.next_byte(), context.reader.next_byte());
 
@@ -108,6 +113,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_memory_fill(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let idx = context.reader.next_byte();
         let mem = map_memory(idx as usize, context.instance, context.memories).unwrap(); // always 0

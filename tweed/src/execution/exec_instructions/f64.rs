@@ -10,6 +10,7 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_f64_const(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let value = context.reader.next_f64();
         trace!("F64_CONST({})", value);
@@ -17,6 +18,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_store(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_f64()).to_le_bytes();
@@ -27,6 +29,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_load(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -37,6 +40,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_reinterpret_i64(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         let bits = value as u64;
@@ -47,6 +51,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_copysign(&mut self) -> Result<()> {
         let z_2 = self.stack.pop_f64();
         let z_1 = self.stack.pop_f64();
@@ -56,6 +61,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_convert_i32_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         let res = Value::F64(value as f64);
@@ -64,6 +70,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_convert_i32_u(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         let res = Value::F64(value as u32 as f64);
@@ -72,6 +79,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_convert_i64_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         let res = Value::F64(value as f64);
@@ -80,6 +88,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_convert_i64_u(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         let res = Value::F64(value as u64 as f64);
@@ -88,6 +97,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_promote_f32(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let res = value as f64;
@@ -100,6 +110,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_abs(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let res = Value::F64(libm::fabs(value));
@@ -108,6 +119,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_neg(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let bits = value.to_bits();
@@ -118,6 +130,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_ceil(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let res = Value::F64(libm::ceil(value));
@@ -126,6 +139,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_floor(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let res = Value::F64(libm::floor(value));
@@ -135,6 +149,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_trunc(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let res = Value::F64(libm::trunc(value));
@@ -143,6 +158,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_nearest(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let res = Value::F64(libm::rint(value));
@@ -151,6 +167,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_sqrt(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let res = Value::F64(libm::sqrt(value));
@@ -159,6 +176,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_add(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_ADD({left}, {right})");
@@ -176,6 +194,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_sub(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_ADD({left}, {right})");
@@ -193,6 +212,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_mul(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_ADD({left}, {right})");
@@ -210,6 +230,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_div(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_ADD({left}, {right})");
@@ -227,6 +248,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_min(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_MIN({left}, {right})");
@@ -243,6 +265,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_max(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_MAX({left}, {right})");
@@ -259,6 +282,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_eq(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_EQ({left}, {right})");
@@ -268,6 +292,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_ne(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_NE({left}, {right})");
@@ -277,6 +302,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_lt(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_LT({left}, {right})");
@@ -286,6 +312,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_gt(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_GT({left}, {right})");
@@ -295,6 +322,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f64_le(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_LE({left}, {right})");
@@ -303,6 +331,7 @@ impl Executor {
 
         Ok(())
     }
+    #[inline(always)]
     pub fn execute_f64_ge(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f64(), self.stack.pop_f64());
         trace!("F64_GE({left}, {right})");

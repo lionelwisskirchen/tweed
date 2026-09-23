@@ -6,6 +6,7 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_local_get(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let idx = context.reader.next_leb128_u32() as usize;
         trace!("LOCAL_GET({})", idx);
@@ -18,6 +19,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_local_set(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let idx = context.reader.next_leb128_u32() as usize;
         let local = context
@@ -31,6 +33,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_local_tee(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let idx = context.reader.next_leb128_u32() as usize;
         let local = context

@@ -12,18 +12,21 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_block(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("BLOCK");
         context.reader.next_leb128_u32(); // Skip Block type
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_loop(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("LOOP");
         context.reader.next_leb128_u32(); // Skip Block type
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_if(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let bool_val = self.stack.pop();
         trace!("IF({:?})", bool_val);
@@ -36,12 +39,14 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_else(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("ELSE");
         Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_select(&mut self) -> Result<()> {
         let (cond, b, a) = (self.stack.pop_i32(), self.stack.pop(), self.stack.pop());
         trace!("SELECT({cond} ? {a:?} : {b:?})");
@@ -54,6 +59,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_select_t(&mut self, context: &mut ExecutionContext) -> Result<()> {
         context.reader.next_leb128_u32();
 
@@ -71,12 +77,14 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_br(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("BR");
         Self::do_goto(&mut self.stack, context.current_frame, context.reader)?;
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_br_if(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let bool_val = self.stack.pop_i32();
         trace!("BR_IF({bool_val})");
@@ -90,6 +98,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_br_table(&mut self, context: &mut ExecutionContext) -> Result<()> {
         // TODO br_table vec[Branch index] not += branch_index!
         let branch_index = self.stack.pop_i32() as usize;
@@ -102,6 +111,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_return(&mut self, context: &mut ExecutionContext) -> Result<()> {
         trace!("RETURN");
         let count = context.current_frame.return_value.len();
@@ -112,6 +122,7 @@ impl Executor {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
     pub fn execute_call_indirect(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let type_index = context.reader.next_leb128_u32();
         let table_index = context.reader.next_leb128_u32();
@@ -172,6 +183,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_call(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let index = context.reader.next_leb128_u32();
         trace!("CALL({index})");
@@ -216,17 +228,20 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_nop(&self) -> Result<()> {
         trace!("NOP");
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_drop(&mut self) -> Result<()> {
         let val = self.stack.pop();
         trace!("DROP {:?}", val);
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_unreachable(
         _executor: &mut Executor,
         _context: &mut ExecutionContext,

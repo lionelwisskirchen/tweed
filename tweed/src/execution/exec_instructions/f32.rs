@@ -10,6 +10,7 @@ use crate::{
 pub type Result<T> = core::result::Result<T, ExecutionError>;
 
 impl Executor {
+    #[inline(always)]
     pub fn execute_f32_const(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let value = context.reader.next_f32();
         trace!("F32_CONST({})", value);
@@ -17,6 +18,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_store(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let store_data = (self.stack.pop_f32()).to_le_bytes();
@@ -27,6 +29,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_load(&mut self, context: &mut ExecutionContext) -> Result<()> {
         let (_, offset) = context.reader.read_mem_args();
         let address = self.stack.pop_i32() as u32;
@@ -38,6 +41,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_reinterpret_i32(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         let res = Value::F32(f32::from_bits(value as u32));
@@ -46,6 +50,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_demote_f64(&mut self) -> Result<()> {
         let value = self.stack.pop_f64();
         let result = value as f32;
@@ -54,6 +59,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_copysign(&mut self) -> Result<()> {
         let z_2 = self.stack.pop_f32();
         let z_1 = self.stack.pop_f32();
@@ -63,6 +69,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_convert_i32_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         let res = Value::F32(value as f32);
@@ -71,6 +78,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_convert_i32_u(&mut self) -> Result<()> {
         let value = self.stack.pop_i32();
         let res = Value::F32(value as u32 as f32);
@@ -79,6 +87,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_convert_i64_s(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         let res = Value::F32(value as f32);
@@ -87,6 +96,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_convert_i64_u(&mut self) -> Result<()> {
         let value = self.stack.pop_i64();
         let res = Value::F32(value as u64 as f32);
@@ -95,6 +105,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_sub(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_SUB({left}, {right})");
@@ -110,6 +121,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_mul(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_MUL({left}, {right})");
@@ -125,6 +137,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_div(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_DIV({left}, {right})");
@@ -140,6 +153,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_min(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_MIN({left}, {right})");
@@ -156,6 +170,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_max(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_MAX({left}, {right})");
@@ -172,6 +187,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_abs(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let res = Value::F32(libm::fabsf(value));
@@ -180,6 +196,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_neg(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let bits = value.to_bits();
@@ -190,6 +207,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_ceil(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let res = Value::F32(libm::ceilf(value));
@@ -198,6 +216,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_floor(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let res = Value::F32(libm::floorf(value));
@@ -206,6 +225,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_trunc(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let res = Value::F32(libm::truncf(value));
@@ -214,6 +234,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_nearest(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let res = Value::F32(libm::rintf(value));
@@ -222,6 +243,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_sqrt(&mut self) -> Result<()> {
         let value = self.stack.pop_f32();
         let res = Value::F32(libm::sqrtf(value));
@@ -230,6 +252,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_add(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_ADD({left}, {right})");
@@ -244,6 +267,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_eq(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_EQ({left}, {right})");
@@ -252,6 +276,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_ne(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_NE({left}, {right})");
@@ -260,6 +285,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_lt(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_LT({left}, {right})");
@@ -268,6 +294,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_gt(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_GT({left}, {right})");
@@ -276,6 +303,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_le(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_LE({left}, {right})");
@@ -284,6 +312,7 @@ impl Executor {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn execute_f32_ge(&mut self) -> Result<()> {
         let (right, left) = (self.stack.pop_f32(), self.stack.pop_f32());
         trace!("F32_GE({left}, {right})");
